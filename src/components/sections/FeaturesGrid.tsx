@@ -29,7 +29,7 @@ const features = [
     icon: Smartphone,
     title: 'Cross-Platform Sync',
     description:
-      'Seamlessly sync hosts, snippets, and sessions across macOS, Windows, Linux, and iOS.',
+      'Sync hosts, snippets, and sessions across devices. Currently available on macOS — Windows, Linux, and iOS coming soon.',
   },
   {
     icon: LayoutGrid,

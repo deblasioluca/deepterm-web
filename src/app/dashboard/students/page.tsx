@@ -29,7 +29,7 @@ const benefits = [
   },
   {
     title: 'All Platforms',
-    description: 'Use on macOS, Windows, Linux, iOS, and Android',
+    description: 'Available on macOS. Windows, Linux, iOS, and Android coming soon',
     icon: Gift,
   },
 ];

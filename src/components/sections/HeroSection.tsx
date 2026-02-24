@@ -67,17 +67,20 @@ export function HeroSection() {
               <Apple className="w-4 h-4" />
               <span>macOS (Apple Silicon)</span>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 opacity-50">
               <Monitor className="w-4 h-4" />
               <span>Windows</span>
+              <span className="text-xs bg-white/10 px-1.5 py-0.5 rounded">Coming Soon</span>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 opacity-50">
               <Monitor className="w-4 h-4" />
               <span>Linux</span>
+              <span className="text-xs bg-white/10 px-1.5 py-0.5 rounded">Coming Soon</span>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 opacity-50">
               <Smartphone className="w-4 h-4" />
               <span>iOS</span>
+              <span className="text-xs bg-white/10 px-1.5 py-0.5 rounded">Coming Soon</span>
             </div>
           </motion.div>
         </div>
