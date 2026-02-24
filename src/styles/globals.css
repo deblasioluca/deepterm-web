@@ -1,0 +1,264 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --background-primary: #0A0A0F;
+  --background-secondary: #12121A;
+  --background-tertiary: #1A1A2E;
+  --border-color: #2A2A3E;
+  --border-hover: #3A3A5E;
+  --text-primary: #F0F0F5;
+  --text-secondary: #9090A8;
+  --text-tertiary: #606078;
+  --accent-primary: #6C5CE7;
+  --accent-primary-hover: #7C6CF7;
+  --accent-secondary: #00D4AA;
+  --accent-warning: #FDCB6E;
+  --accent-danger: #FF6B6B;
+}
+
+* {
+  box-sizing: border-box;
+  padding: 0;
+  margin: 0;
+}
+
+html,
+body {
+  max-width: 100vw;
+  overflow-x: hidden;
+  font-family: 'Inter', system-ui, sans-serif;
+}
+
+body {
+  background-color: var(--background-primary);
+  color: var(--text-primary);
+}
+
+/* Gradient Text */
+.gradient-text {
+  background: linear-gradient(135deg, #6C5CE7 0%, #00D4AA 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--background-secondary);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--border-color);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--border-hover);
+}
+
+/* Focus States */
+:focus-visible {
+  outline: 2px solid var(--accent-primary);
+  outline-offset: 2px;
+}
+
+/* Selection */
+::selection {
+  background-color: var(--accent-primary);
+  color: white;
+}
+
+/* Smooth Scrolling */
+html {
+  scroll-behavior: smooth;
+}
+
+/* Backdrop Blur Support */
+@supports (backdrop-filter: blur(12px)) {
+  .backdrop-blur-nav {
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+  }
+}
+
+/* Terminal Cursor Animation */
+.terminal-cursor {
+  display: inline-block;
+  width: 10px;
+  height: 20px;
+  background-color: var(--accent-secondary);
+  animation: blink 1s step-end infinite;
+}
+
+@keyframes blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}
+
+/* Card Hover Effect */
+.card-hover {
+  transition: all 0.3s ease;
+}
+
+.card-hover:hover {
+  border-color: var(--border-hover);
+  transform: scale(1.02);
+}
+
+/* Button Glow Effect */
+.btn-glow {
+  box-shadow: 0 0 20px rgba(108, 92, 231, 0.3);
+  transition: box-shadow 0.3s ease;
+}
+
+.btn-glow:hover {
+  box-shadow: 0 0 30px rgba(108, 92, 231, 0.5);
+}
+
+/* Grid Background Pattern */
+.grid-pattern {
+  background-image: 
+    linear-gradient(rgba(108, 92, 231, 0.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(108, 92, 231, 0.03) 1px, transparent 1px);
+  background-size: 50px 50px;
+}
+
+/* Gradient Border */
+.gradient-border {
+  position: relative;
+  background: var(--background-secondary);
+  border-radius: 16px;
+}
+
+.gradient-border::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 16px;
+  padding: 1px;
+  background: linear-gradient(135deg, #6C5CE7 0%, #00D4AA 100%);
+  -webkit-mask: 
+    linear-gradient(#fff 0 0) content-box, 
+    linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  pointer-events: none;
+}
+
+/* ── Documentation Prose ─────────────────────────────────── */
+.docs-prose {
+  color: var(--text-secondary);
+  font-size: 16px;
+  line-height: 1.75;
+}
+
+.docs-prose h3 {
+  color: var(--text-primary);
+  font-size: 20px;
+  font-weight: 600;
+  margin-top: 2rem;
+  margin-bottom: 0.75rem;
+}
+
+.docs-prose p {
+  margin-bottom: 1rem;
+}
+
+.docs-prose strong {
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+.docs-prose em {
+  font-style: italic;
+}
+
+.docs-prose a {
+  color: var(--accent-primary);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  transition: color 0.15s;
+}
+
+.docs-prose a:hover {
+  color: var(--accent-primary-hover);
+}
+
+.docs-prose ul,
+.docs-prose ol {
+  margin-bottom: 1rem;
+  padding-left: 1.5rem;
+}
+
+.docs-prose ul {
+  list-style-type: disc;
+}
+
+.docs-prose ol {
+  list-style-type: decimal;
+}
+
+.docs-prose li {
+  margin-bottom: 0.35rem;
+}
+
+.docs-prose li strong {
+  color: var(--accent-secondary);
+}
+
+.docs-prose code {
+  background: var(--background-tertiary);
+  color: var(--accent-secondary);
+  padding: 0.15em 0.4em;
+  border-radius: 4px;
+  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+  font-size: 0.9em;
+}
+
+.docs-prose kbd {
+  display: inline-block;
+  background: var(--background-tertiary);
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  padding: 0.1em 0.45em;
+  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+  font-size: 0.85em;
+  color: var(--text-primary);
+  box-shadow: 0 1px 0 var(--border-color);
+}
+
+.docs-prose table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-bottom: 1.5rem;
+  font-size: 14px;
+}
+
+.docs-prose thead {
+  border-bottom: 2px solid var(--border-color);
+}
+
+.docs-prose th {
+  text-align: left;
+  padding: 0.6rem 0.75rem;
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+.docs-prose td {
+  padding: 0.5rem 0.75rem;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.docs-prose tr:last-child td {
+  border-bottom: none;
+}

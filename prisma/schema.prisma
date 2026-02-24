@@ -1,0 +1,534 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = "file:./dev.db"
+}
+
+// ============================================
+// ZERO-KNOWLEDGE VAULT SYSTEM MODELS
+// ============================================
+
+// ZK User - extends the regular User with crypto fields
+model ZKUser {
+  id                      String    @id @default(cuid())
+  email                   String    @unique
+  masterPasswordHash      String    // Double-hashed on server with bcrypt
+  protectedSymmetricKey   String    // Encrypted symmetric key blob
+  publicKey               String    // RSA public key (plaintext)
+  encryptedPrivateKey     String    // RSA private key (encrypted with symmetric key)
+  kdfType                 Int       @default(0)  // 0 = PBKDF2, 1 = Argon2id
+  kdfIterations           Int       @default(600000)
+  kdfMemory               Int?      // For Argon2id (KB)
+  kdfParallelism          Int?      // For Argon2id
+  passwordHint            String?
+  emailVerified           Boolean   @default(false)
+  createdAt               DateTime  @default(now())
+  updatedAt               DateTime  @updatedAt
+  
+  // Link to web User for unified account
+  webUserId               String?   @unique
+  webUser                 User?     @relation(fields: [webUserId], references: [id], onDelete: SetNull)
+  
+  // Apple IAP fields
+  appleOriginalTransactionId  String?   @unique  // Apple IAP original transaction ID
+  applePurchaseDate           DateTime?
+  appleExpiresDate            DateTime?
+  appleProductId              String?
+  
+  // Relations
+  zkVaults                ZKVault[]
+  zkVaultItems            ZKVaultItem[]
+  organizationUsers       OrganizationUser[]
+  devices                 Device[]
+  refreshTokens           RefreshToken[]
+  zkAuditLogs             ZKAuditLog[]
+  
+  @@index([email])
+  @@index([webUserId])
+}
+
+// Device tracking for multi-device sync
+model Device {
+  id            String    @id @default(cuid())
+  userId        String
+  name          String
+  deviceType    String    // desktop, mobile, cli, browser
+  identifier    String    @unique // Device unique identifier
+  pushToken     String?   // For push notifications
+  lastActive    DateTime  @default(now())
+  createdAt     DateTime  @default(now())
+  
+  user          ZKUser    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@index([userId])
+}
+
+// JWT Refresh Tokens - stored server-side for revocation
+model RefreshToken {
+  id            String    @id @default(cuid())
+  userId        String
+  deviceId      String?
+  tokenHash     String    @unique // Hash of the refresh token
+  expiresAt     DateTime
+  isRevoked     Boolean   @default(false)
+  createdAt     DateTime  @default(now())
+  lastUsedAt    DateTime  @default(now())
+  
+  user          ZKUser    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@index([userId])
+  @@index([tokenHash])
+}
+
+// Organization (Team) for sharing
+model Organization {
+  id            String    @id @default(cuid())
+  name          String
+  billingEmail  String?
+  plan          String    @default("free")  // free, premium, enterprise
+  maxMembers    Int       @default(5)
+  maxVaults     Int       @default(10)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  
+  members       OrganizationUser[]
+  vaults        ZKVault[]
+  auditLogs     ZKAuditLog[]
+}
+
+// Organization membership with encrypted org key
+model OrganizationUser {
+  id                String    @id @default(cuid())
+  organizationId    String
+  userId            String
+  role              String    @default("member")  // owner, admin, member, readonly
+  encryptedOrgKey   String?   // Org symmetric key encrypted with user's RSA public key
+  status            String    @default("invited") // invited, accepted, confirmed, revoked
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+  
+  organization      Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user              ZKUser       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@unique([organizationId, userId])
+  @@index([organizationId])
+  @@index([userId])
+}
+
+// Zero-Knowledge Vault (Collection)
+model ZKVault {
+  id              String    @id @default(cuid())
+  userId          String?   // Owner (null if org vault)
+  organizationId  String?   // For team vaults
+  name            String    // Encrypted vault name
+  isDefault       Boolean   @default(false) // True for auto-created default vault
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  
+  user            ZKUser?       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organization    Organization? @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  items           ZKVaultItem[]
+  
+  @@index([userId])
+  @@index([organizationId])
+}
+
+// Zero-Knowledge Vault Item (SSH Credentials)
+// type + name moved into encryptedData blob for stronger ZK posture — server sees no metadata
+model ZKVaultItem {
+  id              String    @id @default(cuid())
+  vaultId         String
+  userId          String    // Creator
+  encryptedData   String    // Encrypted JSON blob: { type, name, host, port, username, password, privateKey, passphrase, certificate, notes, tags }
+  revisionDate    DateTime  @default(now())
+  deletedAt       DateTime? // Soft delete
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  
+  vault           ZKVault   @relation(fields: [vaultId], references: [id], onDelete: Cascade)
+  user            ZKUser    @relation(fields: [userId], references: [id])
+  
+  @@index([vaultId])
+  @@index([userId])
+  @@index([revisionDate])
+  @@index([deletedAt])
+}
+
+// Comprehensive Audit Log for ZK operations
+model ZKAuditLog {
+  id              String    @id @default(cuid())
+  userId          String?
+  organizationId  String?
+  eventType       String    // vault_item_created, vault_item_read, login_success, etc.
+  targetType      String?   // vault, vault_item, user, organization
+  targetId        String?
+  ipAddress       String?
+  userAgent       String?
+  deviceInfo      String?   // JSON with device details
+  metadata        String?   // JSON with additional event data
+  timestamp       DateTime  @default(now())
+  
+  user            ZKUser?       @relation(fields: [userId], references: [id])
+  organization    Organization? @relation(fields: [organizationId], references: [id])
+  
+  @@index([userId])
+  @@index([organizationId])
+  @@index([eventType])
+  @@index([timestamp])
+}
+
+// Rate Limiting tracking (backup for Redis)
+model RateLimitEntry {
+  id          String    @id @default(cuid())
+  key         String    // email:ip combination
+  attempts    Int       @default(1)
+  blockedUntil DateTime?
+  windowStart DateTime  @default(now())
+  
+  @@unique([key])
+  @@index([key])
+}
+
+model User {
+  id                  String    @id @default(cuid())
+  name                String
+  email               String    @unique
+  passwordHash        String
+  avatarUrl           String?
+  role                String    @default("member")   // owner, admin, member
+  teamId              String?
+  twoFactorEnabled    Boolean   @default(false)
+  twoFactorSecret     String?
+  twoFactorBackupCodes String?   // JSON array of hashed backup codes
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+
+  team          Team?     @relation(fields: [teamId], references: [id])
+  ideas         Idea[]
+  votes         Vote[]
+  sessions      Session[]
+  passkeys      Passkey[]
+  zkUser        ZKUser?   // Link to ZK vault account
+
+  issues        Issue[]
+}
+
+// WebAuthn Passkey credentials
+model Passkey {
+  id                  String    @id @default(cuid())
+  userId              String
+  credentialId        String    @unique  // Base64URL encoded credential ID
+  publicKey           String              // Base64URL encoded public key
+  counter             Int       @default(0)
+  deviceType          String?             // platform, cross-platform
+  backedUp            Boolean   @default(false)
+  transports          String?             // JSON array of transports
+  name                String    @default("Passkey")  // User-friendly name
+  createdAt           DateTime  @default(now())
+  lastUsedAt          DateTime?
+
+  user                User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model Team {
+  id                    String    @id @default(cuid())
+  name                  String
+  plan                  String    @default("starter")   // starter, pro, team, enterprise
+  ssoEnabled            Boolean   @default(false)
+  ssoDomain             String?
+  ssoProvider           String?
+  createdAt             DateTime  @default(now())
+  
+  // Stripe billing fields
+  stripeCustomerId      String?   @unique
+  stripeSubscriptionId  String?   @unique
+  subscriptionStatus    String?   // active, past_due, canceled, trialing, incomplete
+  currentPeriodStart    DateTime?
+  currentPeriodEnd      DateTime?
+  cancelAtPeriodEnd     Boolean   @default(false)
+  seats                 Int       @default(1)
+
+  members               User[]
+  invoices              Invoice[]
+  invitations           TeamInvitation[]
+  paymentMethods        PaymentMethod[]
+}
+
+model Invoice {
+  id                String   @id @default(cuid())
+  teamId            String
+  stripeInvoiceId   String   @unique
+  amountPaid        Int      // in cents
+  amountDue         Int      // in cents
+  currency          String   @default("usd")
+  status            String   // paid, open, void, uncollectible
+  invoicePdf        String?
+  hostedInvoiceUrl  String?
+  periodStart       DateTime
+  periodEnd         DateTime
+  createdAt         DateTime @default(now())
+
+  team              Team     @relation(fields: [teamId], references: [id], onDelete: Cascade)
+}
+
+model PaymentMethod {
+  id                    String   @id @default(cuid())
+  teamId                String
+  stripePaymentMethodId String   @unique
+  type                  String   // card, paypal, apple_pay, google_pay, link
+  brand                 String?  // visa, mastercard, amex, paypal, apple_pay
+  last4                 String?  // Last 4 digits (cards) or masked email (PayPal)
+  expMonth              Int?     // Card expiry month
+  expYear               Int?     // Card expiry year
+  email                 String?  // PayPal/Link email
+  walletType            String?  // apple_pay, google_pay for wallet payments
+  fingerprint           String?  // Card fingerprint for duplicate detection
+  country               String?  // Card issuing country
+  funding               String?  // credit, debit, prepaid
+  isDefault             Boolean  @default(false)
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  team                  Team     @relation(fields: [teamId], references: [id], onDelete: Cascade)
+
+  @@index([teamId])
+}
+
+model AdminUser {
+  id            String    @id @default(cuid())
+  email         String    @unique
+  passwordHash  String
+  name          String
+  role          String    @default("admin")  // superadmin, admin, support
+  isActive      Boolean   @default(true)
+  lastLoginAt   DateTime?
+  twoFactorEnabled     Boolean  @default(false)
+  twoFactorSecret      String?
+  twoFactorBackupCodes String?  // JSON array of hashed backup codes
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  
+  auditLogs     AuditLog[]
+  passkeys      AdminPasskey[]
+}
+
+// WebAuthn Passkey credentials for Admin users
+model AdminPasskey {
+  id            String    @id @default(cuid())
+  adminUserId   String
+  credentialId  String    @unique  // Base64URL encoded credential ID
+  publicKey     String              // Base64URL encoded public key
+  counter       Int       @default(0)
+  deviceType    String?
+  backedUp      Boolean   @default(false)
+  transports    String?             // JSON array of transports
+  name          String    @default("Passkey")
+  createdAt     DateTime  @default(now())
+  lastUsedAt    DateTime?
+
+  admin         AdminUser @relation(fields: [adminUserId], references: [id], onDelete: Cascade)
+
+  @@index([adminUserId])
+}
+
+// App release metadata (DMG archive + release notes)
+model Release {
+  id            String    @id @default(cuid())
+  platform      String
+  version       String
+  releaseNotes  String
+  sha256        String?
+  minimumOSVersion String @default("14.0")
+  mandatory     Boolean   @default(false)
+  fileFilename  String
+  filePath      String
+  sizeBytes     Int?
+  publishedAt   DateTime  @default(now())
+  createdBy     String?
+
+  @@unique([platform, version])
+  @@index([platform, publishedAt])
+}
+
+// Subscription offerings managed by admin; Draft is hidden until deployed.
+model SubscriptionOffering {
+  id              String   @id @default(cuid())
+  key             String   // e.g. pro, team
+  interval        String   // monthly, yearly
+  stage           String   // draft, live
+  name            String
+  description     String?
+  priceCents      Int
+  currency        String   @default("usd")
+  isActive        Boolean  @default(true)
+  stripeProductId String?
+  stripePriceId   String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@unique([key, interval, stage])
+  @@index([stage])
+}
+
+model AuditLog {
+  id          String    @id @default(cuid())
+  adminId     String
+  action      String    // user.created, team.deleted, subscription.canceled, etc.
+  entityType  String    // user, team, subscription, etc.
+  entityId    String
+  metadata    String?   // JSON string with additional details
+  ipAddress   String?
+  createdAt   DateTime  @default(now())
+
+  admin       AdminUser @relation(fields: [adminId], references: [id])
+
+  @@index([entityType, entityId])
+  @@index([adminId])
+}
+
+model SystemSettings {
+  id        String   @id @default(cuid())
+  key       String   @unique
+  value     String
+  updatedAt DateTime @updatedAt
+}
+
+// Intrusion / security alerts raised by the detection pipeline
+model SecurityAlert {
+  id          String   @id @default(cuid())
+  eventType   String   // admin_access_denied, admin_login_failed, brute_force, invalid_token, rate_limit
+  severity    String   @default("medium") // low, medium, high, critical
+  sourceIp    String
+  path        String?  // request path that triggered the alert
+  userAgent   String?
+  details     String?  // JSON blob with extra context
+  resolved    Boolean  @default(false)
+  resolvedAt  DateTime?
+  createdAt   DateTime @default(now())
+
+  @@index([eventType, createdAt])
+  @@index([sourceIp, createdAt])
+  @@index([resolved, createdAt])
+}
+
+// Legacy Vault + Credential models removed — all vault data is in ZKVault + ZKVaultItem (E2E encrypted)
+
+model Idea {
+  id          String   @id @default(cuid())
+  title       String
+  description String
+  category    String   @default("feature")
+  status      String   @default("consideration")  // consideration, planned, in-progress, beta, launched, declined
+  authorId    String
+  createdAt   DateTime @default(now())
+
+  author      User     @relation(fields: [authorId], references: [id])
+  votes       Vote[]
+}
+
+model Vote {
+  id      String @id @default(cuid())
+  userId  String
+  ideaId  String
+
+  user    User   @relation(fields: [userId], references: [id])
+  idea    Idea   @relation(fields: [ideaId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, ideaId])
+}
+
+model Session {
+  id          String   @id @default(cuid())
+  userId      String
+  device      String
+  ipAddress   String
+  lastActive  DateTime @default(now())
+  createdAt   DateTime @default(now())
+
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Announcement {
+  id          String    @id @default(cuid())
+  title       String
+  content     String
+  type        String    @default("info")  // info, warning, success, danger
+  isActive    Boolean   @default(true)
+  startDate   DateTime?
+  endDate     DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+}
+
+model TeamInvitation {
+  id          String    @id @default(cuid())
+  email       String
+  teamId      String
+  role        String    @default("member")  // admin, member
+  token       String    @unique
+  invitedById String
+  status      String    @default("pending")  // pending, accepted, expired
+  expiresAt   DateTime
+  createdAt   DateTime  @default(now())
+
+  team        Team      @relation(fields: [teamId], references: [id], onDelete: Cascade)
+
+  @@index([email])
+  @@index([teamId])
+}
+
+// User-reported issues (bug reports/support tickets)
+model Issue {
+  id          String   @id @default(cuid())
+  userId      String
+  title       String
+  description String
+  area        String   @default("General")
+  status      String   @default("open") // open, in_progress, waiting_on_user, resolved, closed
+  reporterFeedback String? // up, down
+  reporterFeedbackAt DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  attachments IssueAttachment[]
+  updates     IssueUpdate[]
+
+  @@index([userId, createdAt])
+  @@index([status, updatedAt])
+  @@index([area, updatedAt])
+}
+
+model IssueAttachment {
+  id               String   @id @default(cuid())
+  issueId           String
+  kind             String   // screenshot, log
+  originalFilename String
+  mimeType         String
+  sizeBytes        Int
+  storagePath      String
+  createdAt        DateTime @default(now())
+
+  issue            Issue    @relation(fields: [issueId], references: [id], onDelete: Cascade)
+
+  @@index([issueId])
+}
+
+model IssueUpdate {
+  id          String   @id @default(cuid())
+  issueId      String
+  authorType  String   // user, admin
+  authorEmail String?
+  message     String
+  status      String?  // optional status snapshot when changed
+  createdAt   DateTime @default(now())
+
+  issue       Issue    @relation(fields: [issueId], references: [id], onDelete: Cascade)
+
+  @@index([issueId, createdAt])
+}

@@ -1,0 +1,12 @@
+[2026-01-25 09:38:38.292] [2218] [HailoRT] [error] [driver_os_specific.cpp:44] [list_devices] Can't find hailort driver class. Can happen if the driver is not installed, if the kernel was updated or on some driver failure (then read driver dmesg log)
+[2026-01-25 09:38:38.293] [2218] [HailoRT] [error] [driver_os_specific.cpp:69] [scan_devices] CHECK_SUCCESS failed with status=HAILO_DRIVER_NOT_INSTALLED(64) - Failed listing hailo devices
+[2026-01-25 09:38:38.293] [2218] [HailoRT] [error] [driver_os_specific.cpp:97] [scan_nnc_devices] CHECK_SUCCESS failed with status=HAILO_DRIVER_NOT_INSTALLED(64)
+[2026-01-25 09:38:38.293] [2218] [HailoRT] [error] [hailort_driver.cpp:318] [scan_all_devices] CHECK_SUCCESS failed with status=HAILO_DRIVER_NOT_INSTALLED(64)
+[2026-01-25 09:38:38.293] [2218] [HailoRT] [error] [pcie_device.cpp:36] [scan] CHECK_SUCCESS failed with status=HAILO_DRIVER_NOT_INSTALLED(64)
+[2026-01-25 09:38:38.293] [2218] [HailoRT] [error] [device.cpp:64] [scan] CHECK_SUCCESS failed with status=HAILO_DRIVER_NOT_INSTALLED(64)
+[2026-01-25 09:53:40.851] [6687] [HailoRT] [error] [driver_os_specific.cpp:44] [list_devices] Can't find hailort driver class. Can happen if the driver is not installed, if the kernel was updated or on some driver failure (then read driver dmesg log)
+[2026-01-25 09:53:40.852] [6687] [HailoRT] [error] [driver_os_specific.cpp:69] [scan_devices] CHECK_SUCCESS failed with status=HAILO_DRIVER_NOT_INSTALLED(64) - Failed listing hailo devices
+[2026-01-25 09:53:40.852] [6687] [HailoRT] [error] [driver_os_specific.cpp:97] [scan_nnc_devices] CHECK_SUCCESS failed with status=HAILO_DRIVER_NOT_INSTALLED(64)
+[2026-01-25 09:53:40.852] [6687] [HailoRT] [error] [hailort_driver.cpp:318] [scan_all_devices] CHECK_SUCCESS failed with status=HAILO_DRIVER_NOT_INSTALLED(64)
+[2026-01-25 09:53:40.852] [6687] [HailoRT] [error] [pcie_device.cpp:36] [scan] CHECK_SUCCESS failed with status=HAILO_DRIVER_NOT_INSTALLED(64)
+[2026-01-25 09:53:40.852] [6687] [HailoRT] [error] [device.cpp:64] [scan] CHECK_SUCCESS failed with status=HAILO_DRIVER_NOT_INSTALLED(64)

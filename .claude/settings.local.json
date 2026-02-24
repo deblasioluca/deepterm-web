@@ -1,0 +1,21 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(xargs:*)",
+      "Bash(pm2 logs:*)",
+      "Bash(wc:*)",
+      "Bash(npm run build:*)",
+      "Bash(pm2 restart:*)",
+      "Bash(ss:*)",
+      "Bash(pm2 list:*)",
+      "Bash(systemctl:*)",
+      "Bash(systemctl is-active:*)",
+      "Bash(dig:*)",
+      "Bash(host:*)",
+      "Bash(curl:*)",
+      "Bash(du:*)",
+      "Bash(ls:*)",
+      "Bash(zip:*)"
+    ]
+  }
+}
