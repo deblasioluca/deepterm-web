@@ -14682,3 +14682,118 @@
 2026-02-24 13:31:57 +01:00: 
 2026-02-24 13:31:57 +01:00:  ✓ Starting...
 2026-02-24 13:31:57 +01:00:  ✓ Ready in 432ms
+2026-02-24 13:32:49 +01:00: [GitHub Webhook] Received event=push delivery=ed6d7b8a-117c-11f1-8d53-d6db8d5a3879
+2026-02-24 13:32:49 +01:00: [GitHub Webhook] push to deblasioluca/deepterm-web/main by deblasioluca: 1 commit(s) – "Add POST /api/app/ideas/submit endpoint"
+2026-02-24 13:46:00 +01:00: App idea submit error: SyntaxError: No number after minus sign in JSON at position 1
+2026-02-24 13:46:00 +01:00:     at JSON.parse (<anonymous>)
+2026-02-24 13:46:00 +01:00:     at parseJSONFromBytes (node:internal/deps/undici/undici:5852:19)
+2026-02-24 13:46:00 +01:00:     at successSteps (node:internal/deps/undici/undici:5833:27)
+2026-02-24 13:46:00 +01:00:     at fullyReadBody (node:internal/deps/undici/undici:4725:9)
+2026-02-24 13:46:00 +01:00:     at processTicksAndRejections (node:internal/process/task_queues:95:5)
+2026-02-24 13:46:00 +01:00:     at consumeBody (node:internal/deps/undici/undici:5842:7)
+2026-02-24 13:46:00 +01:00:     at x (/home/macan/deepterm/.next/server/app/api/app/ideas/submit/route.js:1:1482)
+2026-02-24 13:46:00 +01:00:     at /home/macan/deepterm/node_modules/next/dist/compiled/next-server/webpack:/next/dist/esm/server/future/route-modules/app-route/module.js:195:37
+2026-02-24 13:46:00 +01:00:     at e_.execute (/home/macan/deepterm/node_modules/next/dist/compiled/next-server/webpack:/next/dist/esm/server/future/route-modules/app-route/module.js:124:26)
+2026-02-24 13:46:00 +01:00:     at e_.handle (/home/macan/deepterm/node_modules/next/dist/compiled/next-server/webpack:/next/dist/esm/server/future/route-modules/app-route/module.js:270:30)
+2026-02-24 13:48:09 +01:00: [node-red] Failed to notify triage: This operation was aborted
+2026-02-24 13:49:34 +01:00: App idea submit error: SyntaxError: No number after minus sign in JSON at position 1
+2026-02-24 13:49:34 +01:00:     at JSON.parse (<anonymous>)
+2026-02-24 13:49:34 +01:00:     at parseJSONFromBytes (node:internal/deps/undici/undici:5852:19)
+2026-02-24 13:49:34 +01:00:     at successSteps (node:internal/deps/undici/undici:5833:27)
+2026-02-24 13:49:34 +01:00:     at fullyReadBody (node:internal/deps/undici/undici:4725:9)
+2026-02-24 13:49:34 +01:00:     at processTicksAndRejections (node:internal/process/task_queues:95:5)
+2026-02-24 13:49:34 +01:00:     at consumeBody (node:internal/deps/undici/undici:5842:7)
+2026-02-24 13:49:34 +01:00:     at x (/home/macan/deepterm/.next/server/app/api/app/ideas/submit/route.js:1:1482)
+2026-02-24 13:49:34 +01:00:     at /home/macan/deepterm/node_modules/next/dist/compiled/next-server/webpack:/next/dist/esm/server/future/route-modules/app-route/module.js:195:37
+2026-02-24 13:49:34 +01:00:     at e_.execute (/home/macan/deepterm/node_modules/next/dist/compiled/next-server/webpack:/next/dist/esm/server/future/route-modules/app-route/module.js:124:26)
+2026-02-24 13:49:34 +01:00:     at e_.handle (/home/macan/deepterm/node_modules/next/dist/compiled/next-server/webpack:/next/dist/esm/server/future/route-modules/app-route/module.js:270:30)
+2026-02-24 14:07:23 +01:00: Node-RED triage notify failed: TypeError: fetch failed
+2026-02-24 14:07:23 +01:00:     at node:internal/deps/undici/undici:14902:13
+2026-02-24 14:07:23 +01:00:     at y (/home/macan/deepterm/.next/server/app/api/app/ideas/submit/route.js:1:1172)
+2026-02-24 14:07:23 +01:00:     at x (/home/macan/deepterm/.next/server/app/api/app/ideas/submit/route.js:1:3860)
+2026-02-24 14:07:23 +01:00:     at /home/macan/deepterm/node_modules/next/dist/compiled/next-server/webpack:/next/dist/esm/server/future/route-modules/app-route/module.js:195:37
+2026-02-24 14:07:23 +01:00:     at e_.execute (/home/macan/deepterm/node_modules/next/dist/compiled/next-server/webpack:/next/dist/esm/server/future/route-modules/app-route/module.js:124:26)
+2026-02-24 14:07:23 +01:00:     at e_.handle (/home/macan/deepterm/node_modules/next/dist/compiled/next-server/webpack:/next/dist/esm/server/future/route-modules/app-route/module.js:270:30)
+2026-02-24 14:07:23 +01:00:     at doRender (/home/macan/deepterm/node_modules/next/src/server/base-server.ts:2251:30)
+2026-02-24 14:07:23 +01:00:     at cacheEntry.responseCache.get.routeKind (/home/macan/deepterm/node_modules/next/src/server/base-server.ts:2569:24)
+2026-02-24 14:07:23 +01:00:     at NextNodeServer.renderToResponseWithComponentsImpl (/home/macan/deepterm/node_modules/next/src/server/base-server.ts:2432:24)
+2026-02-24 14:07:23 +01:00:     at NextNodeServer.renderPageComponent (/home/macan/deepterm/node_modules/next/src/server/base-server.ts:3016:16) {
+2026-02-24 14:07:23 +01:00:   [cause]: HeadersTimeoutError: Headers Timeout Error
+2026-02-24 14:07:23 +01:00:       at FastTimer.onParserTimeout [as _onTimeout] (node:internal/deps/undici/undici:6363:32)
+2026-02-24 14:07:23 +01:00:       at Timeout.onTick [as _onTimeout] (node:internal/deps/undici/undici:2326:17)
+2026-02-24 14:07:23 +01:00:       at listOnTimeout (node:internal/timers:581:17)
+2026-02-24 14:07:23 +01:00:       at processTimers (node:internal/timers:519:7) {
+2026-02-24 14:07:23 +01:00:     code: 'UND_ERR_HEADERS_TIMEOUT',
+2026-02-24 14:07:23 +01:00:     [Symbol(undici.error.UND_ERR)]: true,
+2026-02-24 14:07:23 +01:00:     [Symbol(undici.error.UND_ERR_HEADERS_TIMEOUT)]: true
+2026-02-24 14:07:23 +01:00:   }
+2026-02-24 14:07:23 +01:00: }
+2026-02-24 14:22:29 +01:00: Node-RED triage notify failed: TypeError: fetch failed
+2026-02-24 14:22:29 +01:00:     at node:internal/deps/undici/undici:14902:13
+2026-02-24 14:22:29 +01:00:     at y (/home/macan/deepterm/.next/server/app/api/app/ideas/submit/route.js:1:1172)
+2026-02-24 14:22:29 +01:00:     at x (/home/macan/deepterm/.next/server/app/api/app/ideas/submit/route.js:1:3860)
+2026-02-24 14:22:29 +01:00:     at /home/macan/deepterm/node_modules/next/dist/compiled/next-server/webpack:/next/dist/esm/server/future/route-modules/app-route/module.js:195:37
+2026-02-24 14:22:29 +01:00:     at e_.execute (/home/macan/deepterm/node_modules/next/dist/compiled/next-server/webpack:/next/dist/esm/server/future/route-modules/app-route/module.js:124:26)
+2026-02-24 14:22:29 +01:00:     at e_.handle (/home/macan/deepterm/node_modules/next/dist/compiled/next-server/webpack:/next/dist/esm/server/future/route-modules/app-route/module.js:270:30)
+2026-02-24 14:22:29 +01:00:     at doRender (/home/macan/deepterm/node_modules/next/src/server/base-server.ts:2251:30)
+2026-02-24 14:22:29 +01:00:     at cacheEntry.responseCache.get.routeKind (/home/macan/deepterm/node_modules/next/src/server/base-server.ts:2569:24)
+2026-02-24 14:22:29 +01:00:     at NextNodeServer.renderToResponseWithComponentsImpl (/home/macan/deepterm/node_modules/next/src/server/base-server.ts:2432:24)
+2026-02-24 14:22:29 +01:00:     at NextNodeServer.renderPageComponent (/home/macan/deepterm/node_modules/next/src/server/base-server.ts:3016:16) {
+2026-02-24 14:22:29 +01:00:   [cause]: HeadersTimeoutError: Headers Timeout Error
+2026-02-24 14:22:29 +01:00:       at FastTimer.onParserTimeout [as _onTimeout] (node:internal/deps/undici/undici:6363:32)
+2026-02-24 14:22:29 +01:00:       at Timeout.onTick [as _onTimeout] (node:internal/deps/undici/undici:2326:17)
+2026-02-24 14:22:29 +01:00:       at listOnTimeout (node:internal/timers:581:17)
+2026-02-24 14:22:29 +01:00:       at processTimers (node:internal/timers:519:7) {
+2026-02-24 14:22:29 +01:00:     code: 'UND_ERR_HEADERS_TIMEOUT',
+2026-02-24 14:22:29 +01:00:     [Symbol(undici.error.UND_ERR)]: true,
+2026-02-24 14:22:29 +01:00:     [Symbol(undici.error.UND_ERR_HEADERS_TIMEOUT)]: true
+2026-02-24 14:22:29 +01:00:   }
+2026-02-24 14:22:29 +01:00: }
+2026-02-24 14:32:47 +01:00: Node-RED triage notify failed: TypeError: fetch failed
+2026-02-24 14:32:47 +01:00:     at node:internal/deps/undici/undici:14902:13
+2026-02-24 14:32:47 +01:00:     at y (/home/macan/deepterm/.next/server/app/api/app/ideas/submit/route.js:1:1172)
+2026-02-24 14:32:47 +01:00:     at x (/home/macan/deepterm/.next/server/app/api/app/ideas/submit/route.js:1:3860)
+2026-02-24 14:32:47 +01:00:     at /home/macan/deepterm/node_modules/next/dist/compiled/next-server/webpack:/next/dist/esm/server/future/route-modules/app-route/module.js:195:37
+2026-02-24 14:32:47 +01:00:     at e_.execute (/home/macan/deepterm/node_modules/next/dist/compiled/next-server/webpack:/next/dist/esm/server/future/route-modules/app-route/module.js:124:26)
+2026-02-24 14:32:47 +01:00:     at e_.handle (/home/macan/deepterm/node_modules/next/dist/compiled/next-server/webpack:/next/dist/esm/server/future/route-modules/app-route/module.js:270:30)
+2026-02-24 14:32:47 +01:00:     at doRender (/home/macan/deepterm/node_modules/next/src/server/base-server.ts:2251:30)
+2026-02-24 14:32:47 +01:00:     at cacheEntry.responseCache.get.routeKind (/home/macan/deepterm/node_modules/next/src/server/base-server.ts:2569:24)
+2026-02-24 14:32:47 +01:00:     at NextNodeServer.renderToResponseWithComponentsImpl (/home/macan/deepterm/node_modules/next/src/server/base-server.ts:2432:24)
+2026-02-24 14:32:47 +01:00:     at NextNodeServer.renderPageComponent (/home/macan/deepterm/node_modules/next/src/server/base-server.ts:3016:16) {
+2026-02-24 14:32:47 +01:00:   [cause]: HeadersTimeoutError: Headers Timeout Error
+2026-02-24 14:32:47 +01:00:       at FastTimer.onParserTimeout [as _onTimeout] (node:internal/deps/undici/undici:6363:32)
+2026-02-24 14:32:47 +01:00:       at Timeout.onTick [as _onTimeout] (node:internal/deps/undici/undici:2326:17)
+2026-02-24 14:32:47 +01:00:       at listOnTimeout (node:internal/timers:581:17)
+2026-02-24 14:32:47 +01:00:       at processTimers (node:internal/timers:519:7) {
+2026-02-24 14:32:47 +01:00:     code: 'UND_ERR_HEADERS_TIMEOUT',
+2026-02-24 14:32:47 +01:00:     [Symbol(undici.error.UND_ERR)]: true,
+2026-02-24 14:32:47 +01:00:     [Symbol(undici.error.UND_ERR_HEADERS_TIMEOUT)]: true
+2026-02-24 14:32:47 +01:00:   }
+2026-02-24 14:32:47 +01:00: }
+2026-02-24 14:35:49 +01:00: Node-RED triage notify failed: TypeError: fetch failed
+2026-02-24 14:35:49 +01:00:     at node:internal/deps/undici/undici:14902:13
+2026-02-24 14:35:49 +01:00:     at y (/home/macan/deepterm/.next/server/app/api/app/ideas/submit/route.js:1:1172)
+2026-02-24 14:35:49 +01:00:     at x (/home/macan/deepterm/.next/server/app/api/app/ideas/submit/route.js:1:3860)
+2026-02-24 14:35:49 +01:00:     at /home/macan/deepterm/node_modules/next/dist/compiled/next-server/webpack:/next/dist/esm/server/future/route-modules/app-route/module.js:195:37
+2026-02-24 14:35:49 +01:00:     at e_.execute (/home/macan/deepterm/node_modules/next/dist/compiled/next-server/webpack:/next/dist/esm/server/future/route-modules/app-route/module.js:124:26)
+2026-02-24 14:35:49 +01:00:     at e_.handle (/home/macan/deepterm/node_modules/next/dist/compiled/next-server/webpack:/next/dist/esm/server/future/route-modules/app-route/module.js:270:30)
+2026-02-24 14:35:49 +01:00:     at doRender (/home/macan/deepterm/node_modules/next/src/server/base-server.ts:2251:30)
+2026-02-24 14:35:49 +01:00:     at cacheEntry.responseCache.get.routeKind (/home/macan/deepterm/node_modules/next/src/server/base-server.ts:2569:24)
+2026-02-24 14:35:49 +01:00:     at NextNodeServer.renderToResponseWithComponentsImpl (/home/macan/deepterm/node_modules/next/src/server/base-server.ts:2432:24)
+2026-02-24 14:35:49 +01:00:     at NextNodeServer.renderPageComponent (/home/macan/deepterm/node_modules/next/src/server/base-server.ts:3016:16) {
+2026-02-24 14:35:49 +01:00:   [cause]: HeadersTimeoutError: Headers Timeout Error
+2026-02-24 14:35:49 +01:00:       at FastTimer.onParserTimeout [as _onTimeout] (node:internal/deps/undici/undici:6363:32)
+2026-02-24 14:35:49 +01:00:       at Timeout.onTick [as _onTimeout] (node:internal/deps/undici/undici:2326:17)
+2026-02-24 14:35:49 +01:00:       at listOnTimeout (node:internal/timers:581:17)
+2026-02-24 14:35:49 +01:00:       at processTimers (node:internal/timers:519:7) {
+2026-02-24 14:35:49 +01:00:     code: 'UND_ERR_HEADERS_TIMEOUT',
+2026-02-24 14:35:49 +01:00:     [Symbol(undici.error.UND_ERR)]: true,
+2026-02-24 14:35:49 +01:00:     [Symbol(undici.error.UND_ERR_HEADERS_TIMEOUT)]: true
+2026-02-24 14:35:49 +01:00:   }
+2026-02-24 14:35:49 +01:00: }
+2026-02-24 14:36:57 +01:00:   ▲ Next.js 14.2.35
+2026-02-24 14:36:57 +01:00:   - Local:        http://localhost:3000
+2026-02-24 14:36:57 +01:00:   - Network:      http://0.0.0.0:3000
+2026-02-24 14:36:57 +01:00: 
+2026-02-24 14:36:57 +01:00:  ✓ Starting...
+2026-02-24 14:36:57 +01:00:  ✓ Ready in 422ms

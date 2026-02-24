@@ -148,8 +148,8 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    // ── Notify Node-RED → WhatsApp ──
-    await notifyNodeRed({
+    // ── Notify Node-RED → WhatsApp (fire-and-forget) ──
+    notifyNodeRed({
       event: 'new-idea',
       id: idea.id,
       title: idea.title,

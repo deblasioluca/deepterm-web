@@ -890,3 +890,11 @@
 2026-02-24 13:31:57 +01:00: 
 2026-02-24 13:31:57 +01:00:  ✓ Starting...
 2026-02-24 13:31:57 +01:00:  ✓ Ready in 432ms
+2026-02-24 13:32:49 +01:00: [GitHub Webhook] Received event=push delivery=ed6d7b8a-117c-11f1-8d53-d6db8d5a3879
+2026-02-24 13:32:49 +01:00: [GitHub Webhook] push to deblasioluca/deepterm-web/main by deblasioluca: 1 commit(s) – "Add POST /api/app/ideas/submit endpoint"
+2026-02-24 14:36:57 +01:00:   ▲ Next.js 14.2.35
+2026-02-24 14:36:57 +01:00:   - Local:        http://localhost:3000
+2026-02-24 14:36:57 +01:00:   - Network:      http://0.0.0.0:3000
+2026-02-24 14:36:57 +01:00: 
+2026-02-24 14:36:57 +01:00:  ✓ Starting...
+2026-02-24 14:36:57 +01:00:  ✓ Ready in 422ms
