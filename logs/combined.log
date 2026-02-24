@@ -14645,3 +14645,11 @@
 2026-02-24 12:56:19 +01:00: 
 2026-02-24 12:56:19 +01:00:  ✓ Starting...
 2026-02-24 12:56:20 +01:00:  ✓ Ready in 427ms
+2026-02-24 12:57:06 +01:00: [GitHub Webhook] Received event=push delivery=f06e2866-1177-11f1-997d-ad53a01e38a9
+2026-02-24 12:57:06 +01:00: [GitHub Webhook] push to deblasioluca/deepterm-web/main by deblasioluca: 1 commit(s) – "Add GitHub Issues panel to cockpit with drill-down"
+2026-02-24 13:07:35 +01:00:   ▲ Next.js 14.2.35
+2026-02-24 13:07:35 +01:00:   - Local:        http://localhost:3000
+2026-02-24 13:07:35 +01:00:   - Network:      http://0.0.0.0:3000
+2026-02-24 13:07:35 +01:00: 
+2026-02-24 13:07:35 +01:00:  ✓ Starting...
+2026-02-24 13:07:35 +01:00:  ✓ Ready in 439ms
