@@ -21,6 +21,7 @@ import {
   MessageSquare,
   Loader2,
   Key,
+  Activity,
 } from 'lucide-react';
 
 const navItems = [
@@ -28,6 +29,11 @@ const navItems = [
     label: 'Overview',
     href: '/admin',
     icon: LayoutDashboard,
+  },
+  {
+    label: 'Cockpit',
+    href: '/admin/cockpit',
+    icon: Activity,
   },
   {
     label: 'Users',
