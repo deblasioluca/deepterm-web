@@ -14541,3 +14541,107 @@
 2026-02-24 10:32:45 +01:00: [GitHub Webhook] Ping received — webhook is active
 2026-02-24 10:34:57 +01:00: [GitHub Webhook] Received event=ping delivery=test-123
 2026-02-24 10:34:57 +01:00: [GitHub Webhook] Ping received — webhook is active
+2026-02-24 10:35:48 +01:00: [GitHub Webhook] Received event=push delivery=32e8b8d2-1164-11f1-8ae4-f195eb30eb3c
+2026-02-24 10:35:48 +01:00: [GitHub Webhook] push to deblasioluca/deepterm-web/main by deblasioluca: 1 commit(s) – "Add GitHub webhook receiver"
+2026-02-24 10:41:35 +01:00: [GitHub Webhook] Received event=push delivery=01f38404-1165-11f1-9d15-3d4a173f56aa
+2026-02-24 10:41:35 +01:00: [GitHub Webhook] push to deblasioluca/deepterm/main by deblasioluca: 1 commit(s) – "Add AI architect review to PR workflow"
+2026-02-24 10:41:37 +01:00: [GitHub Webhook] Received event=workflow_run delivery=02c2b580-1165-11f1-8c92-e13c2a4880ac
+2026-02-24 10:41:37 +01:00: [GitHub Webhook] workflow_run .github/workflows/pr-check.yml on main: failure (0s)
+2026-02-24 10:41:42 +01:00: [node-red] Failed to notify build-status: This operation was aborted
+2026-02-24 10:44:42 +01:00: [GitHub Webhook] Received event=push delivery=71074e3e-1165-11f1-8d53-853746e1f1dd
+2026-02-24 10:44:42 +01:00: [GitHub Webhook] push to deblasioluca/deepterm/test/ai-review by deblasioluca: 1 commit(s) – "Test AI review workflow"
+2026-02-24 10:50:58 +01:00: [GitHub Webhook] Received event=push delivery=5162c062-1166-11f1-994f-ca7d2db5f9e0
+2026-02-24 10:50:58 +01:00: [GitHub Webhook] push to deblasioluca/deepterm/test/ai-review by deblasioluca: 1 commit(s) – "Add AI architect review to PR workflow"
+2026-02-24 10:54:37 +01:00: [GitHub Webhook] Received event=pull_request delivery=d3eae8c0-1166-11f1-9762-04ab45c4caaf
+2026-02-24 10:54:37 +01:00: [GitHub Webhook] pull_request opened on deblasioluca/deepterm: PR #1 opened: Add AI architect review to PR workflow
+2026-02-24 11:19:11 +01:00: [GitHub Webhook] Received event=push delivery=42dca680-116a-11f1-83f4-054d113a0e57
+2026-02-24 11:19:11 +01:00: [GitHub Webhook] push to deblasioluca/deepterm/test/ai-review by deblasioluca: 0 commit(s) – ""
+2026-02-24 11:19:12 +01:00: [GitHub Webhook] Received event=pull_request delivery=42f87220-116a-11f1-9450-bf10b5ebddd1
+2026-02-24 11:19:12 +01:00: [GitHub Webhook] pull_request closed on deblasioluca/deepterm: PR #1 closed: Add AI architect review to PR workflow
+2026-02-24 11:19:13 +01:00: [GitHub Webhook] Received event=push delivery=43bc6982-116a-11f1-8d5e-e419676a0a4a
+2026-02-24 11:19:13 +01:00: [GitHub Webhook] push to deblasioluca/deepterm/test/ai-review by deblasioluca: 1 commit(s) – "Test AI review workflow"
+2026-02-24 11:19:15 +01:00: [GitHub Webhook] Received event=workflow_run delivery=448e7b70-116a-11f1-844e-5c10b5a3847e
+2026-02-24 11:19:15 +01:00: [GitHub Webhook] workflow_run .github/workflows/pr-check.yml on test/ai-review: failure (0s)
+2026-02-24 11:19:20 +01:00: [node-red] Failed to notify build-status: This operation was aborted
+2026-02-24 11:19:49 +01:00: [GitHub Webhook] Received event=pull_request delivery=59427850-116a-11f1-9ef6-5d0ab77deea4
+2026-02-24 11:19:49 +01:00: [GitHub Webhook] pull_request opened on deblasioluca/deepterm: PR #2 opened: Test AI review workflow
+2026-02-24 11:32:13 +01:00: [GitHub Webhook] Received event=push delivery=1488ae44-116c-11f1-9391-3934e0f5fe04
+2026-02-24 11:32:13 +01:00: [GitHub Webhook] push to deblasioluca/deepterm/test/ai-review by deblasioluca: 1 commit(s) – "Test AI review workflow"
+2026-02-24 11:32:14 +01:00: [GitHub Webhook] Received event=pull_request delivery=14f58190-116c-11f1-98c6-344b53ca7c2d
+2026-02-24 11:32:14 +01:00: [GitHub Webhook] pull_request synchronize on deblasioluca/deepterm: PR #2 synchronize: Test AI review workflow
+2026-02-24 11:32:18 +01:00: [GitHub Webhook] Received event=workflow_run delivery=17302f50-116c-11f1-8de2-6b341d48411c
+2026-02-24 11:32:21 +01:00: [GitHub Webhook] Received event=workflow_run delivery=1929dc70-116c-11f1-8a14-0e01b1db2c65
+2026-02-24 11:33:42 +01:00: [GitHub Webhook] Received event=workflow_run delivery=496964a0-116c-11f1-95df-2350b76c9adb
+2026-02-24 11:34:10 +01:00: [GitHub Webhook] Received event=workflow_run delivery=5a1790b0-116c-11f1-8fba-ce6cfc408280
+2026-02-24 11:34:10 +01:00: [GitHub Webhook] workflow_run PR Check on test/ai-review: failure (1m 53s)
+2026-02-24 11:34:15 +01:00: [node-red] Failed to notify build-status: This operation was aborted
+2026-02-24 11:38:45 +01:00: [GitHub Webhook] Received event=push delivery=fe76fe7a-116c-11f1-8b0e-5aa72014ae86
+2026-02-24 11:38:45 +01:00: [GitHub Webhook] push to deblasioluca/deepterm/test/ai-review by deblasioluca: 1 commit(s) – "Retrigger CI"
+2026-02-24 11:38:47 +01:00: [GitHub Webhook] Received event=pull_request delivery=ff012000-116c-11f1-9025-852210b538dd
+2026-02-24 11:38:47 +01:00: [GitHub Webhook] pull_request synchronize on deblasioluca/deepterm: PR #2 synchronize: Test AI review workflow
+2026-02-24 11:38:50 +01:00: [GitHub Webhook] Received event=workflow_run delivery=01545ed0-116d-11f1-94ef-1b0254ae7c15
+2026-02-24 11:38:54 +01:00: [GitHub Webhook] Received event=workflow_run delivery=036ba610-116d-11f1-8931-b0fbb3fdb545
+2026-02-24 11:40:13 +01:00: [GitHub Webhook] Received event=workflow_run delivery=329fd8c0-116d-11f1-8c3f-75e7bbab269f
+2026-02-24 11:40:40 +01:00: [GitHub Webhook] Received event=workflow_run delivery=428a8dc0-116d-11f1-8043-32e633e82d4c
+2026-02-24 11:40:40 +01:00: [GitHub Webhook] workflow_run PR Check on test/ai-review: success (1m 50s)
+2026-02-24 11:40:45 +01:00: [node-red] Failed to notify build-status: This operation was aborted
+2026-02-24 11:46:37 +01:00: [GitHub Webhook] Received event=push delivery=177538f0-116e-11f1-9fc9-ed9a0e9a954e
+2026-02-24 11:46:37 +01:00: [GitHub Webhook] push to deblasioluca/deepterm/test/ai-review by deblasioluca: 1 commit(s) – "Fix: add PR write permission for AI review"
+2026-02-24 11:46:38 +01:00: [GitHub Webhook] Received event=pull_request delivery=17e319b0-116e-11f1-8524-614585ae893c
+2026-02-24 11:46:38 +01:00: [GitHub Webhook] pull_request synchronize on deblasioluca/deepterm: PR #2 synchronize: Test AI review workflow
+2026-02-24 11:46:41 +01:00: [GitHub Webhook] Received event=workflow_run delivery=1a0165d0-116e-11f1-9981-b8a4914afaca
+2026-02-24 11:46:45 +01:00: [GitHub Webhook] Received event=workflow_run delivery=1bc8b850-116e-11f1-8c6e-da7cb6974c45
+2026-02-24 11:48:03 +01:00: [GitHub Webhook] Received event=workflow_run delivery=4a8b1660-116e-11f1-9ec4-6fb4ac328940
+2026-02-24 11:48:28 +01:00: [GitHub Webhook] Received event=workflow_run delivery=59e439c0-116e-11f1-89f8-07db43afa988
+2026-02-24 11:48:28 +01:00: [GitHub Webhook] workflow_run PR Check on test/ai-review: success (1m 47s)
+2026-02-24 11:48:33 +01:00: [node-red] Failed to notify build-status: This operation was aborted
+2026-02-24 11:56:45 +01:00: [GitHub Webhook] Received event=pull_request delivery=81f9a660-116f-11f1-97a4-4868f40b5e39
+2026-02-24 11:56:45 +01:00: [GitHub Webhook] pull_request closed on deblasioluca/deepterm: PR #2 merged: Test AI review workflow
+2026-02-24 11:56:45 +01:00: [GitHub Webhook] Received event=push delivery=82426e22-116f-11f1-9575-35ef43b06dc4
+2026-02-24 11:56:45 +01:00: [GitHub Webhook] push to deblasioluca/deepterm/main by deblasioluca: 4 commit(s) – "Merge pull request #2 from deblasioluca/test/ai-review"
+2026-02-24 12:05:02 +01:00:   ▲ Next.js 14.2.35
+2026-02-24 12:05:02 +01:00:   - Local:        http://localhost:3000
+2026-02-24 12:05:02 +01:00:   - Network:      http://0.0.0.0:3000
+2026-02-24 12:05:02 +01:00: 
+2026-02-24 12:05:02 +01:00:  ✓ Starting...
+2026-02-24 12:05:02 +01:00:  ✓ Ready in 435ms
+2026-02-24 12:06:11 +01:00: [GitHub Webhook] Received event=push delivery=d3aff436-1170-11f1-81df-e5663a4c2857
+2026-02-24 12:06:11 +01:00: [GitHub Webhook] push to deblasioluca/deepterm-web/main by deblasioluca: 1 commit(s) – "Fix platform claims: macOS available, others coming soon"
+2026-02-24 12:08:32 +01:00:   ▲ Next.js 14.2.35
+2026-02-24 12:08:32 +01:00:   - Local:        http://localhost:3000
+2026-02-24 12:08:32 +01:00:   - Network:      http://0.0.0.0:3000
+2026-02-24 12:08:32 +01:00: 
+2026-02-24 12:08:32 +01:00:  ✓ Starting...
+2026-02-24 12:08:32 +01:00:  ✓ Ready in 429ms
+2026-02-24 12:10:04 +01:00:   ▲ Next.js 14.2.35
+2026-02-24 12:10:04 +01:00:   - Local:        http://localhost:3000
+2026-02-24 12:10:04 +01:00:   - Network:      http://0.0.0.0:3000
+2026-02-24 12:10:04 +01:00: 
+2026-02-24 12:10:04 +01:00:  ✓ Starting...
+2026-02-24 12:10:04 +01:00:  ✓ Ready in 432ms
+2026-02-24 12:12:28 +01:00:   ▲ Next.js 14.2.35
+2026-02-24 12:12:28 +01:00:   - Local:        http://localhost:3000
+2026-02-24 12:12:28 +01:00:   - Network:      http://0.0.0.0:3000
+2026-02-24 12:12:28 +01:00: 
+2026-02-24 12:12:28 +01:00:  ✓ Starting...
+2026-02-24 12:12:28 +01:00:  ✓ Ready in 434ms
+2026-02-24 12:37:37 +01:00:   ▲ Next.js 14.2.35
+2026-02-24 12:37:37 +01:00:   - Local:        http://localhost:3000
+2026-02-24 12:37:37 +01:00:   - Network:      http://0.0.0.0:3000
+2026-02-24 12:37:37 +01:00: 
+2026-02-24 12:37:37 +01:00:  ✓ Starting...
+2026-02-24 12:37:37 +01:00:  ✓ Ready in 421ms
+2026-02-24 12:38:53 +01:00: [GitHub Webhook] Received event=push delivery=649f0ee2-1175-11f1-949d-a7e69fd04c70
+2026-02-24 12:38:53 +01:00: [GitHub Webhook] push to deblasioluca/deepterm-web/main by deblasioluca: 1 commit(s) – "Add cockpit shell at /admin/cockpit"
+2026-02-24 12:47:25 +01:00:   ▲ Next.js 14.2.35
+2026-02-24 12:47:25 +01:00:   - Local:        http://localhost:3000
+2026-02-24 12:47:25 +01:00:   - Network:      http://0.0.0.0:3000
+2026-02-24 12:47:25 +01:00: 
+2026-02-24 12:47:25 +01:00:  ✓ Starting...
+2026-02-24 12:47:25 +01:00:  ✓ Ready in 429ms
+2026-02-24 12:56:19 +01:00:   ▲ Next.js 14.2.35
+2026-02-24 12:56:19 +01:00:   - Local:        http://localhost:3000
+2026-02-24 12:56:19 +01:00:   - Network:      http://0.0.0.0:3000
+2026-02-24 12:56:19 +01:00: 
+2026-02-24 12:56:19 +01:00:  ✓ Starting...
+2026-02-24 12:56:20 +01:00:  ✓ Ready in 427ms

@@ -90,16 +90,66 @@ async function getQuickStats() {
   };
 }
 
+async function getGithubIssues() {
+  const ghToken = process.env.GITHUB_TOKEN;
+  if (!ghToken) return { open: 0, closed: 0, items: [] };
+
+  try {
+    const headers = { Authorization: `Bearer ${ghToken}`, Accept: 'application/vnd.github+json' };
+
+    // Fetch open issues (excluding PRs)
+    const openRes = await fetch(
+      'https://api.github.com/repos/deblasioluca/deepterm/issues?state=open&per_page=50&sort=updated&direction=desc',
+      { headers }
+    );
+    const openItems = openRes.ok ? await openRes.json() : [];
+
+    // Fetch recently closed
+    const closedRes = await fetch(
+      'https://api.github.com/repos/deblasioluca/deepterm/issues?state=closed&per_page=10&sort=updated&direction=desc',
+      { headers }
+    );
+    const closedItems = closedRes.ok ? await closedRes.json() : [];
+
+    // Filter out pull requests (GitHub API returns PRs as issues too)
+    const filterIssues = (items: any[]) => items.filter((i: any) => !i.pull_request);
+
+    const openIssues = filterIssues(openItems);
+    const closedIssues = filterIssues(closedItems);
+
+    const allIssues = [...openIssues, ...closedIssues].map((issue: any) => ({
+      number: issue.number,
+      title: issue.title,
+      state: issue.state,
+      labels: issue.labels?.map((l: any) => ({ name: l.name, color: l.color })) || [],
+      milestone: issue.milestone?.title || null,
+      assignee: issue.assignee?.login || null,
+      createdAt: issue.created_at,
+      updatedAt: issue.updated_at,
+      url: issue.html_url,
+    }));
+
+    return {
+      open: openIssues.length,
+      closed: closedIssues.length,
+      items: allIssues,
+    };
+  } catch {
+    return { open: 0, closed: 0, items: [] };
+  }
+}
+
 export async function GET() {
   try {
-    const [health, builds, events, stats] = await Promise.all([
+    const [health, builds, events, stats, githubIssues] = await Promise.all([
       getSystemHealth(),
       getRecentBuilds(),
       getRecentEvents(),
       getQuickStats(),
+      getGithubIssues(),
     ]);
 
-    return NextResponse.json({ health, builds, events, stats, timestamp: new Date().toISOString() });
+    return NextResponse.json({ health, builds, events, stats, githubIssues, timestamp: new Date().toISOString() });
   } catch (error) {
     console.error('Cockpit API error:', error);
     return NextResponse.json({ error: 'Failed to load cockpit data' }, { status: 500 });

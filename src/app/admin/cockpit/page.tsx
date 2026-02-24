@@ -22,6 +22,10 @@ import {
   ExternalLink,
   Wifi,
   WifiOff,
+  ChevronDown,
+  ChevronUp,
+  Tag,
+  CircleDot,
 } from 'lucide-react';
 
 interface HealthData {
@@ -61,11 +65,35 @@ interface QuickStats {
   users: number;
 }
 
+interface GithubLabel {
+  name: string;
+  color: string;
+}
+
+interface GithubIssue {
+  number: number;
+  title: string;
+  state: string;
+  labels: GithubLabel[];
+  milestone: string | null;
+  assignee: string | null;
+  createdAt: string;
+  updatedAt: string;
+  url: string;
+}
+
+interface GithubIssuesData {
+  open: number;
+  closed: number;
+  items: GithubIssue[];
+}
+
 interface CockpitData {
   health: HealthData;
   builds: CiBuild[];
   events: GithubEvent[];
   stats: QuickStats;
+  githubIssues: GithubIssuesData;
   timestamp: string;
 }
 
@@ -123,11 +151,28 @@ function EventIcon({ type }: { type: string }) {
   return <GitBranch className="w-4 h-4 text-zinc-400" />;
 }
 
+function LabelBadge({ label }: { label: GithubLabel }) {
+  return (
+    <span
+      className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium border"
+      style={{
+        backgroundColor: `#${label.color}20`,
+        borderColor: `#${label.color}40`,
+        color: `#${label.color}`,
+      }}
+    >
+      {label.name}
+    </span>
+  );
+}
+
 export default function CockpitPage() {
   const [data, setData] = useState<CockpitData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [autoRefresh, setAutoRefresh] = useState(true);
+  const [issueFilter, setIssueFilter] = useState<'open' | 'closed' | 'all'>('open');
+  const [issuesExpanded, setIssuesExpanded] = useState(false);
 
   const fetchData = useCallback(async () => {
     try {
@@ -172,7 +217,7 @@ export default function CockpitPage() {
 
   if (!data) return null;
 
-  const { health, builds, events, stats } = data;
+  const { health, builds, events, stats, githubIssues } = data;
 
   return (
     <div className="space-y-6">
@@ -237,6 +282,110 @@ export default function CockpitPage() {
           <div className="text-2xl font-bold text-white">{stats.users}</div>
           <div className="text-xs text-zinc-500 mt-1">registered</div>
         </div>
+      </div>
+
+      {/* GitHub Issues */}
+      <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-5">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-sm font-semibold text-zinc-300 flex items-center gap-2">
+            <CircleDot className="w-4 h-4 text-green-400" /> GitHub Issues
+            <span className="text-xs font-normal text-zinc-500 ml-1">
+              {githubIssues.open} open · {githubIssues.closed} recently closed
+            </span>
+          </h2>
+          <div className="flex items-center gap-2">
+            <div className="flex bg-zinc-800 rounded-lg border border-zinc-700 p-0.5">
+              {(['open', 'closed', 'all'] as const).map((f) => (
+                <button
+                  key={f}
+                  onClick={() => setIssueFilter(f)}
+                  className={`px-2.5 py-1 rounded-md text-xs font-medium transition ${
+                    issueFilter === f
+                      ? 'bg-zinc-700 text-zinc-200'
+                      : 'text-zinc-500 hover:text-zinc-300'
+                  }`}
+                >
+                  {f.charAt(0).toUpperCase() + f.slice(1)}
+                </button>
+              ))}
+            </div>
+            <button
+              onClick={() => setIssuesExpanded(!issuesExpanded)}
+              className="flex items-center gap-1 px-2.5 py-1 bg-zinc-800 border border-zinc-700 rounded-lg text-xs text-zinc-400 hover:text-zinc-300 transition"
+            >
+              {issuesExpanded ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+              {issuesExpanded ? 'Collapse' : 'Expand'}
+            </button>
+          </div>
+        </div>
+
+        {(() => {
+          const filtered = githubIssues.items.filter((i) =>
+            issueFilter === 'all' ? true : i.state === issueFilter
+          );
+          const displayed = issuesExpanded ? filtered : filtered.slice(0, 8);
+
+          if (filtered.length === 0) {
+            return <p className="text-zinc-500 text-sm">No {issueFilter} issues found.</p>;
+          }
+
+          return (
+            <div className="space-y-1.5">
+              {displayed.map((issue) => (
+                <div
+                  key={issue.number}
+                  className="flex items-start gap-3 p-2.5 bg-zinc-800/40 rounded-lg border border-zinc-700/30 hover:bg-zinc-800/60 transition"
+                >
+                  <div className="mt-0.5">
+                    {issue.state === 'open' ? (
+                      <CircleDot className="w-4 h-4 text-green-400" />
+                    ) : (
+                      <CheckCircle2 className="w-4 h-4 text-purple-400" />
+                    )}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <a
+                        href={issue.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-xs text-zinc-200 hover:text-white transition font-medium truncate"
+                      >
+                        #{issue.number} {issue.title}
+                      </a>
+                    </div>
+                    <div className="flex items-center gap-2 mt-1 flex-wrap">
+                      {issue.labels.map((label) => (
+                        <LabelBadge key={label.name} label={label} />
+                      ))}
+                      {issue.milestone && (
+                        <span className="text-[10px] text-zinc-500 flex items-center gap-0.5">
+                          <Tag className="w-2.5 h-2.5" /> {issue.milestone}
+                        </span>
+                      )}
+                      {issue.assignee && (
+                        <span className="text-[10px] text-zinc-500">
+                          → {issue.assignee}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                  <div className="text-right shrink-0">
+                    <span className="text-xs text-zinc-500">{formatTimeAgo(issue.updatedAt)}</span>
+                  </div>
+                </div>
+              ))}
+              {!issuesExpanded && filtered.length > 8 && (
+                <button
+                  onClick={() => setIssuesExpanded(true)}
+                  className="w-full py-2 text-xs text-zinc-500 hover:text-zinc-300 transition"
+                >
+                  Show all {filtered.length} issues...
+                </button>
+              )}
+            </div>
+          );
+        })()}
       </div>
 
       {/* System Health */}
