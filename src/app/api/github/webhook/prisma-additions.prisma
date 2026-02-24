@@ -1,0 +1,38 @@
+
+// ============================================
+// CI / GITHUB INTEGRATION MODELS
+// ============================================
+
+// Stores GitHub Actions workflow run results (from workflow_run webhook)
+model CiBuild {
+  id            String   @id @default(cuid())
+  runId         String   @unique          // GitHub Actions run ID
+  repo          String                     // e.g. deblasioluca/deepterm
+  branch        String
+  workflow      String                     // e.g. pr-check, release
+  conclusion    String                     // success, failure, cancelled, skipped
+  commitMessage String   @default("")
+  duration      String?                    // e.g. "2m 34s"
+  url           String   @default("")      // Link to GitHub Actions run
+  triggeredAt   DateTime @default(now())
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([repo, branch, createdAt])
+  @@index([conclusion, createdAt])
+}
+
+// Stores GitHub push/PR events for the cockpit activity feed
+model GithubEvent {
+  id        String   @id @default(cuid())
+  eventType String                         // push, pull_request.opened, etc.
+  repo      String
+  branch    String   @default("")
+  actor     String                         // GitHub username
+  summary   String   @default("")
+  url       String   @default("")
+  createdAt DateTime @default(now())
+
+  @@index([repo, createdAt])
+  @@index([eventType, createdAt])
+}

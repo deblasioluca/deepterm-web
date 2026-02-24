@@ -532,3 +532,39 @@ model IssueUpdate {
 
   @@index([issueId, createdAt])
 }
+
+// ============================================
+// CI / GITHUB INTEGRATION MODELS
+// ============================================
+
+model CiBuild {
+  id            String   @id @default(cuid())
+  runId         String   @unique
+  repo          String
+  branch        String
+  workflow      String
+  conclusion    String
+  commitMessage String   @default("")
+  duration      String?
+  url           String   @default("")
+  triggeredAt   DateTime @default(now())
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([repo, branch, createdAt])
+  @@index([conclusion, createdAt])
+}
+
+model GithubEvent {
+  id        String   @id @default(cuid())
+  eventType String
+  repo      String
+  branch    String   @default("")
+  actor     String
+  summary   String   @default("")
+  url       String   @default("")
+  createdAt DateTime @default(now())
+
+  @@index([repo, createdAt])
+  @@index([eventType, createdAt])
+}

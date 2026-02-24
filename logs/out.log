@@ -759,3 +759,19 @@
 2026-02-24 09:56:32 +01:00: 
 2026-02-24 09:56:32 +01:00:  ✓ Starting...
 2026-02-24 09:56:32 +01:00:  ✓ Ready in 431ms
+2026-02-24 10:25:09 +01:00:   ▲ Next.js 14.2.35
+2026-02-24 10:25:09 +01:00:   - Local:        http://localhost:3000
+2026-02-24 10:25:09 +01:00:   - Network:      http://0.0.0.0:3000
+2026-02-24 10:25:09 +01:00: 
+2026-02-24 10:25:09 +01:00:  ✓ Starting...
+2026-02-24 10:25:09 +01:00:  ✓ Ready in 426ms
+2026-02-24 10:31:48 +01:00:   ▲ Next.js 14.2.35
+2026-02-24 10:31:48 +01:00:   - Local:        http://localhost:3000
+2026-02-24 10:31:48 +01:00:   - Network:      http://0.0.0.0:3000
+2026-02-24 10:31:48 +01:00: 
+2026-02-24 10:31:48 +01:00:  ✓ Starting...
+2026-02-24 10:31:48 +01:00:  ✓ Ready in 434ms
+2026-02-24 10:32:45 +01:00: [GitHub Webhook] Received event=ping delivery=c61571c8-1163-11f1-862e-2c226d8f806a
+2026-02-24 10:32:45 +01:00: [GitHub Webhook] Ping received — webhook is active
+2026-02-24 10:34:57 +01:00: [GitHub Webhook] Received event=ping delivery=test-123
+2026-02-24 10:34:57 +01:00: [GitHub Webhook] Ping received — webhook is active
