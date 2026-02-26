@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { getLimitsForPlan, getFeaturesForPlan } from '@/lib/plan-limits';
 
 const APP_API_KEY = process.env.APP_API_KEY || '';
 
@@ -10,36 +11,16 @@ const TIER_METADATA: Record<TierKey, {
   name: string;
   description: string;
   highlights: string[];
-  features: Record<string, boolean>;
-  limits: Record<string, number>;
 }> = {
   starter: {
     name: 'Starter',
     description: 'For individuals getting started with DeepTerm.',
     highlights: [
-      '5 SSH hosts',
+      '3 SSH hosts',
       'Basic terminal',
       'Single device',
       'Local vault',
     ],
-    features: {
-      unlimitedHosts: false,
-      aiAssistant: false,
-      cloudVault: false,
-      allDevices: false,
-      sftpClient: false,
-      portForwarding: false,
-      prioritySupport: false,
-      teamVaults: false,
-      sso: false,
-      auditLogs: false,
-      roleBasedAccess: false,
-    },
-    limits: {
-      maxHosts: 5,
-      maxVaults: 1,
-      maxDevices: 1,
-    },
   },
   pro: {
     name: 'Pro',
@@ -53,24 +34,6 @@ const TIER_METADATA: Record<TierKey, {
       'Port forwarding',
       'Priority support',
     ],
-    features: {
-      unlimitedHosts: true,
-      aiAssistant: true,
-      cloudVault: true,
-      allDevices: true,
-      sftpClient: true,
-      portForwarding: true,
-      prioritySupport: true,
-      teamVaults: false,
-      sso: false,
-      auditLogs: false,
-      roleBasedAccess: false,
-    },
-    limits: {
-      maxHosts: -1,
-      maxVaults: 10,
-      maxDevices: -1,
-    },
   },
   team: {
     name: 'Team',
@@ -83,24 +46,6 @@ const TIER_METADATA: Record<TierKey, {
       'Admin controls',
       'Audit logs',
     ],
-    features: {
-      unlimitedHosts: true,
-      aiAssistant: true,
-      cloudVault: true,
-      allDevices: true,
-      sftpClient: true,
-      portForwarding: true,
-      prioritySupport: true,
-      teamVaults: true,
-      sso: true,
-      auditLogs: true,
-      roleBasedAccess: true,
-    },
-    limits: {
-      maxHosts: -1,
-      maxVaults: -1,
-      maxDevices: -1,
-    },
   },
   business: {
     name: 'Business',
@@ -113,24 +58,6 @@ const TIER_METADATA: Record<TierKey, {
       'Dedicated support',
       'SLA guarantee',
     ],
-    features: {
-      unlimitedHosts: true,
-      aiAssistant: true,
-      cloudVault: true,
-      allDevices: true,
-      sftpClient: true,
-      portForwarding: true,
-      prioritySupport: true,
-      teamVaults: true,
-      sso: true,
-      auditLogs: true,
-      roleBasedAccess: true,
-    },
-    limits: {
-      maxHosts: -1,
-      maxVaults: -1,
-      maxDevices: -1,
-    },
   },
 };
 
@@ -175,6 +102,8 @@ export async function GET(request: NextRequest) {
     const tiers = TIER_ORDER.map((key) => {
       const meta = TIER_METADATA[key];
       const isStarter = key === 'starter';
+      const limits = getLimitsForPlan(key);
+      const features = getFeaturesForPlan(key);
 
       const monthlyOffering = offeringMap[`${key}::monthly`];
       const yearlyOffering = offeringMap[`${key}::yearly`];
@@ -184,8 +113,14 @@ export async function GET(request: NextRequest) {
         name: meta.name,
         description: meta.description,
         highlights: meta.highlights,
-        features: meta.features,
-        limits: meta.limits,
+        features,
+        limits: {
+          maxHosts: limits.maxHosts,
+          maxKeys: limits.maxKeys,
+          maxIdentities: limits.maxIdentities,
+          maxVaults: limits.maxVaults,
+          maxDevices: limits.maxDevices,
+        },
         pricing: {
           monthly: monthlyOffering
             ? {
