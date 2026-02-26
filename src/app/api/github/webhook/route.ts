@@ -28,8 +28,8 @@ const WEBHOOK_SECRET = process.env.GITHUB_WEBHOOK_SECRET || '';
 
 function verifySignature(payload: string, signature: string | null): boolean {
   if (!WEBHOOK_SECRET) {
-    console.warn('[GitHub Webhook] GITHUB_WEBHOOK_SECRET not set — skipping verification');
-    return true; // Allow in dev; in production, always set the secret
+    console.error('[GitHub Webhook] GITHUB_WEBHOOK_SECRET not set — rejecting all requests');
+    return false;
   }
 
   if (!signature) {
@@ -42,10 +42,12 @@ function verifySignature(payload: string, signature: string | null): boolean {
     .update(payload, 'utf-8')
     .digest('hex');
 
-  return crypto.timingSafeEqual(
-    Buffer.from(signature),
-    Buffer.from(expected),
-  );
+  const sigBuf = Buffer.from(signature);
+  const expectedBuf = Buffer.from(expected);
+  if (sigBuf.length !== expectedBuf.length) {
+    return false;
+  }
+  return crypto.timingSafeEqual(sigBuf, expectedBuf);
 }
 
 // ── Event handlers ─────────────────────────────────────────
@@ -181,6 +183,42 @@ async function handlePullRequest(payload: any): Promise<void> {
     });
   } catch (err) {
     console.error('[GitHub Webhook] DB write failed:', err);
+  }
+
+  // ── Auto-update Story status based on PR events ──
+  // Match "[Story #123]" or "closes #123" in title or body
+  const prBody = pr.body || '';
+  const storyMatch = title.match(/\[Story\s*#(\d+)\]/i);
+  const closesMatch = prBody.match(/closes?\s*#(\d+)/i) || title.match(/closes?\s*#(\d+)/i);
+  const issueNumber = storyMatch ? parseInt(storyMatch[1]) : closesMatch ? parseInt(closesMatch[1]) : null;
+
+  if (issueNumber) {
+    try {
+      // Find Story linked to this GitHub issue
+      const story = await prisma.story.findFirst({
+        where: { githubIssueNumber: issueNumber },
+      });
+
+      if (story) {
+        if (action === 'opened' && story.status === 'planned') {
+          // PR opened → mark Story as in_progress
+          await prisma.story.update({
+            where: { id: story.id },
+            data: { status: 'in_progress' },
+          });
+          console.log(`[GitHub Webhook] Story "${story.title}" → in_progress (PR #${pr.number} opened)`);
+        } else if (action === 'closed' && merged && story.status === 'in_progress') {
+          // PR merged → mark Story as done
+          await prisma.story.update({
+            where: { id: story.id },
+            data: { status: 'done' },
+          });
+          console.log(`[GitHub Webhook] Story "${story.title}" → done (PR #${pr.number} merged)`);
+        }
+      }
+    } catch (err) {
+      console.error('[GitHub Webhook] Story status update failed:', err);
+    }
   }
 }
 

@@ -212,6 +212,11 @@ Request
 │ Organization  │────▶│OrganizationUser  │
 │               │     │(role + status)   │
 └───────────────┘     └──────────────────┘
+
+┌──────────┐     ┌──────────────┐
+│   Epic   │────▶│    Story     │
+│(planning)│     │(deliverable) │
+└──────────┘     └──────────────┘
 ```
 
 ### Key Models
@@ -230,6 +235,8 @@ Request
 | **SubscriptionOffering** | Plan pricing | Admin-managed pricing (draft/live stages) with Stripe price IDs |
 | **Release** | App versions | Platform-specific release metadata, checksums, download paths |
 | **Issue** | Bug reports | In-app submitted issues with attachments and status tracking |
+| **Epic** | Planning initiatives | Large bodies of work (e.g., "Auth v2"), status/priority/sort order |
+| **Story** | Planning deliverables | Smaller units within an Epic, linked to GitHub issue numbers |
 
 ### Encryption at Rest
 
@@ -348,6 +355,14 @@ The server stores only `encryptedData` — no `type` or `name` columns exist on 
 │   │   └── passkey/        GET, POST      Admin passkey management
 │   ├── downloads/          GET, POST      Manage app downloads
 │   ├── feedback/           GET            View user feedback
+│   ├── cockpit/            GET            Aggregated cockpit data (health, builds, events, stats, planning)
+│   │   ├── actions/        POST           Triage, CI triggers, releases, WhatsApp test
+│   │   └── planning/
+│   │       ├── epics/      GET, POST      List/create epics
+│   │       │   └── [id]/   PATCH, DELETE  Update/delete epic
+│   │       ├── stories/    GET, POST      List/create stories
+│   │       │   └── [id]/   PATCH, DELETE  Update/delete story
+│   │       └── reorder/    POST           Batch sort order update
 │   ├── issues/             GET, PATCH     Manage support issues
 │   ├── licenses/           GET, PATCH     Manage user licenses
 │   ├── releases/           GET, POST, DELETE  App release management
@@ -384,6 +399,15 @@ The server stores only `encryptedData` — no `type` or `name` columns exist on 
 │
 ├── ideas/                  GET, POST      Feature ideas
 │   └── [id]/               GET, PATCH, DELETE, POST (vote)
+│
+├── internal/
+│   ├── ai-dev/
+│   │   ├── tasks/          GET            Stories for AI Dev Mac (x-api-key)
+│   │   └── task-status/    POST           Update Story status (x-api-key)
+│   ├── node-red/
+│   │   ├── triage-response/ POST          WhatsApp triage callback (x-api-key)
+│   │   └── command/        POST           System info query (x-api-key)
+│   └── security-event/     POST           Security event logging
 │
 ├── issues/                 GET, POST      Support issues
 │   └── [id]/               GET, PATCH     Issue details & updates
@@ -433,6 +457,71 @@ The server stores only `encryptedData` — no `type` or `name` columns exist on 
     └── vaults/             GET, POST      List/create vaults
         └── [id]/           GET, PATCH, DELETE
 ```
+
+---
+
+## Admin Cockpit Architecture
+
+The admin cockpit (`/admin/cockpit`) is a real-time operations dashboard, structured into 7 tabs. All data is fetched in a single `GET /api/admin/cockpit` call and rendered client-side — tab switching is instant with no re-fetching. Auto-refresh runs every 30 seconds.
+
+### Tab Structure
+
+| Tab | Purpose | Data Source |
+|-----|---------|-------------|
+| **Overview** | Quick stats (issues, ideas, releases, users), revenue metrics, compact health summary | DB aggregates + Stripe data |
+| **Backlog** | GitHub Issues with state (open/closed/all) and label filtering | GitHub API (live) |
+| **Triage** | Pending bug reports and feature ideas with approve/defer/reject actions | `Issue` + `Idea` models |
+| **Planning** | Epic/Story management — bundling, prioritization, status workflow, release | `Epic` + `Story` models |
+| **System Health** | Raspberry Pi, CI Mac runner, Node-RED status with uptime/memory details | Process stats + HTTP probes |
+| **Builds** | Recent CI build history with conclusions and durations | `CiBuild` model |
+| **Activity** | GitHub push, PR, and workflow events | `GithubEvent` model |
+
+### Planning Data Model
+
+```
+Epic (1) ──────▶ (N) Story
+  │                    │
+  ├── title            ├── title
+  ├── description      ├── description
+  ├── status           ├── status
+  ├── priority         ├── priority
+  ├── sortOrder        ├── sortOrder
+  └── stories[]        ├── epicId (nullable — unassigned stories)
+                       └── githubIssueNumber (links to GitHub issue)
+```
+
+**Status workflow:** `backlog` → `planned` → `in_progress` → `done` → `released`
+
+**Priority levels:** `critical`, `high`, `medium`, `low`
+
+Stories can optionally link to a GitHub issue number for traceability between the backlog and planning views. Deleting an Epic un-parents its stories (`onDelete: SetNull`) rather than deleting them.
+
+### File Structure
+
+```
+src/app/admin/cockpit/
+├── page.tsx                          # Main page: header, tab bar, data fetching
+├── types.ts                          # All TypeScript interfaces
+├── utils.ts                          # formatUptime(), formatTimeAgo()
+└── components/
+    ├── shared.tsx                    # StatusBadge, PriorityBadge, LabelBadge, etc.
+    ├── OverviewTab.tsx               # Stats + Revenue + Health summary
+    ├── GithubIssuesTab.tsx           # Backlog with label/state filters
+    ├── TriageQueueTab.tsx            # Pending items with action buttons
+    ├── PlanningTab.tsx               # Epic/Story CRUD, reorder, release
+    ├── SystemHealthTab.tsx           # Pi, CI Mac, Node-RED detail cards
+    ├── BuildsTab.tsx                 # CI builds list
+    └── GithubActivityTab.tsx         # GitHub events timeline
+```
+
+### Quick Actions (Shared Across Tabs)
+
+| Action | What it does |
+|--------|-------------|
+| **Trigger CI Build** | Dispatches a GitHub Actions workflow via API |
+| **Test WhatsApp** | Sends a test notification through Node-RED |
+| **Triage approve/defer/reject** | Updates Issue/Idea status, notifies Node-RED |
+| **Release Epic/Story** | Sets status to `released`, notifies Node-RED |
 
 ---
 

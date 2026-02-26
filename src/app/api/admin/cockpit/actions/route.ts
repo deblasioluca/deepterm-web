@@ -149,6 +149,64 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ ok: true, message: 'Test notification sent' });
       }
 
+      // ── Release story (with CI check) ──
+      case 'release-story': {
+        const { storyId, force } = body;
+        const story = await prisma.story.findUnique({ where: { id: storyId } });
+        if (!story) return NextResponse.json({ error: 'Story not found' }, { status: 404 });
+
+        // If story has a linked GitHub issue, verify CI passed
+        if (story.githubIssueNumber && !force) {
+          const ghToken = process.env.GITHUB_TOKEN;
+          if (ghToken) {
+            try {
+              // Get PRs that reference this issue
+              const searchRes = await fetch(
+                `https://api.github.com/search/issues?q=repo:deblasioluca/deepterm+is:pr+is:merged+${story.githubIssueNumber}+in:body`,
+                { headers: { Authorization: `Bearer ${ghToken}`, Accept: 'application/vnd.github+json' } }
+              );
+              if (searchRes.ok) {
+                const searchData = await searchRes.json();
+                if (searchData.total_count === 0) {
+                  return NextResponse.json({
+                    error: 'No merged PRs found for this Story\'s GitHub issue. Use force:true to override.',
+                    issueNumber: story.githubIssueNumber,
+                  }, { status: 409 });
+                }
+              }
+            } catch {
+              // GitHub API failure — warn but allow release
+            }
+          }
+        }
+
+        await prisma.story.update({
+          where: { id: storyId },
+          data: { status: 'released' },
+        });
+        await notifyNodeRed('/deepterm/planning', {
+          event: 'story-released',
+          storyId,
+          title: story.title,
+          githubIssueNumber: story.githubIssueNumber,
+        });
+        return NextResponse.json({ ok: true, message: 'Story released' });
+      }
+
+      // ── Release epic + all done stories ──
+      case 'release-epic': {
+        const { epicId } = body;
+        await prisma.$transaction([
+          prisma.epic.update({ where: { id: epicId }, data: { status: 'released' } }),
+          prisma.story.updateMany({ where: { epicId, status: 'done' }, data: { status: 'released' } }),
+        ]);
+        await notifyNodeRed('/deepterm/planning', {
+          event: 'epic-released',
+          epicId,
+        });
+        return NextResponse.json({ ok: true, message: 'Epic released' });
+      }
+
       default:
         return NextResponse.json({ error: `Unknown action: ${action}` }, { status: 400 });
     }

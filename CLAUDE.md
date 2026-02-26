@@ -559,6 +559,20 @@ const platforms = [
 | **Nginx config** | `nginx/deepterm.conf` |
 | **Docker config** | `docker-compose.yml` + `Dockerfile` |
 | **Setup script** | `setup.sh` |
+| **Cockpit actions** | `src/app/api/admin/cockpit/actions/route.ts` |
+| **Planning API (epics)** | `src/app/api/admin/cockpit/planning/epics/` |
+| **Planning API (stories)** | `src/app/api/admin/cockpit/planning/stories/` |
+| **AI Dev Mac tasks** | `src/app/api/internal/ai-dev/tasks/route.ts` |
+| **AI Dev Mac status** | `src/app/api/internal/ai-dev/task-status/route.ts` |
+
+### Internal API — AI Dev Mac
+
+| Endpoint | Method | Auth | Purpose |
+|----------|--------|------|---------|
+| `/api/internal/ai-dev/tasks` | GET | `x-api-key` | Fetch planned/in-progress Stories with GitHub issue context |
+| `/api/internal/ai-dev/task-status` | POST | `x-api-key` | Update Story status (planned → in_progress → done) |
+
+**Env var:** `AI_DEV_API_KEY` (falls back to `NODE_RED_API_KEY` if not set).
 
 ### What uses what?
 
