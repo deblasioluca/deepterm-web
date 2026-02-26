@@ -9,6 +9,7 @@ import {
   handleCorsPreflightRequest,
   addCorsHeaders,
 } from '@/lib/zk';
+import { checkVaultItemLimit } from '@/lib/zk/vault-limits';
 
 export async function OPTIONS() {
   return handleCorsPreflightRequest();
@@ -180,6 +181,15 @@ export async function POST(request: NextRequest) {
         );
         return addCorsHeaders(response);
       }
+    }
+
+    // Check vault item limit before creating
+    const limitCheck = await checkVaultItemLimit(auth.userId);
+    if (!limitCheck.allowed) {
+      return errorResponse(
+        `Vault item limit reached (${limitCheck.maxVaultItems} items on ${limitCheck.plan} plan). Upgrade for more.`,
+        403
+      );
     }
 
     // Create the item
