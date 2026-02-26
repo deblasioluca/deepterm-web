@@ -54,18 +54,19 @@ function IssueCard({
           )}
         </div>
         <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-1.5">
-            <span className="text-xs text-zinc-200 font-medium leading-tight line-clamp-2">
+          <div className="flex items-start gap-1.5">
+            <span className="text-xs text-zinc-200 font-medium leading-tight line-clamp-2 flex-1">
               #{issue.number} {issue.title}
             </span>
             <a
               href={issue.url}
               target="_blank"
               rel="noopener noreferrer"
-              className="text-zinc-500 hover:text-zinc-300 transition shrink-0"
+              className="mt-0.5 p-0.5 text-zinc-600 hover:text-zinc-300 transition shrink-0 rounded hover:bg-zinc-700/50"
               onClick={(e) => e.stopPropagation()}
+              title="Open on GitHub"
             >
-              <ExternalLink className="w-2.5 h-2.5" />
+              <ExternalLink className="w-3 h-3" />
             </a>
           </div>
           {issue.body && !expanded && (
