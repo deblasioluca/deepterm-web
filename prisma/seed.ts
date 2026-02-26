@@ -7,8 +7,14 @@ async function main() {
   console.log('🌱 Starting database seed...');
 
   // Create admin users
-  const adminPasswordHash = await bcrypt.hash('admin123', 10);
-  
+  const adminPassword = process.env.ADMIN_DEFAULT_PASSWORD;
+  if (!adminPassword) {
+    console.error('ADMIN_DEFAULT_PASSWORD env var is required for seeding.');
+    console.error('Generate one with: openssl rand -base64 24');
+    process.exit(1);
+  }
+  const adminPasswordHash = await bcrypt.hash(adminPassword, 12);
+
   const superAdmin = await prisma.adminUser.upsert({
     where: { email: 'admin@deepterm.net' },
     update: {},
@@ -21,7 +27,7 @@ async function main() {
     },
   });
 
-  console.log('✅ Created admin user:', superAdmin.email, '(password: admin123)');
+  console.log('Created admin user:', superAdmin.email);
 
   // Create team
   const team = await prisma.team.create({

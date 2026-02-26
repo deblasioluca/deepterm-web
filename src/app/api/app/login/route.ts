@@ -5,7 +5,7 @@ import { verifyToken, verifyBackupCode } from '@/lib/2fa';
 import { getAuthFromRequest } from '@/lib/zk/middleware';
 
 // API Key for app authentication
-const APP_API_KEY = process.env.APP_API_KEY || process.env.X_API_KEY || 'deepterm-app-secret-key';
+const APP_API_KEY = process.env.APP_API_KEY || '';
 
 // License plan features
 const PLAN_FEATURES: Record<string, {

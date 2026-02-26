@@ -5,7 +5,7 @@ import { verifyToken, verifyBackupCode } from '@/lib/2fa';
 import { getAuthFromRequest } from '@/lib/zk/middleware';
 
 // API Key for app authentication
-const APP_API_KEY = process.env.APP_API_KEY || process.env.X_API_KEY || 'deepterm-app-secret-key';
+const APP_API_KEY = process.env.APP_API_KEY || '';
 
 // License plan features
 const PLAN_FEATURES: Record<string, {
@@ -122,14 +122,14 @@ export async function POST(request: NextRequest) {
 
       // Determine license status
       const team = user.team;
-      let plan = 'free';
-      let subscriptionStatus = 'active';
-      let expiresAt: Date | null = null;
+      let plan = user.plan || 'free';
+      let subscriptionStatus = plan !== 'free' ? 'active' : 'active';
+      let expiresAt: Date | null = user.subscriptionExpiresAt || null;
 
       if (team) {
-        plan = team.plan || 'starter';
+        plan = team.plan || plan;
         subscriptionStatus = team.subscriptionStatus || 'active';
-        expiresAt = team.currentPeriodEnd;
+        expiresAt = team.currentPeriodEnd || expiresAt;
       }
 
       const isSubscriptionValid =
@@ -236,21 +236,21 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Determine license status
+    // Determine license status (individual plan or team plan)
     const team = user.team;
-    let plan = 'free';
-    let subscriptionStatus = 'active';
-    let expiresAt: Date | null = null;
+    let plan = user.plan || 'free';
+    let subscriptionStatus = plan !== 'free' ? 'active' : 'active';
+    let expiresAt: Date | null = user.subscriptionExpiresAt || null;
 
     if (team) {
-      plan = team.plan || 'starter';
+      plan = team.plan || plan;
       subscriptionStatus = team.subscriptionStatus || 'active';
-      expiresAt = team.currentPeriodEnd;
+      expiresAt = team.currentPeriodEnd || expiresAt;
     }
 
     // Check if subscription is valid
-    const isSubscriptionValid = 
-      subscriptionStatus === 'active' || 
+    const isSubscriptionValid =
+      subscriptionStatus === 'active' ||
       subscriptionStatus === 'trialing' ||
       (subscriptionStatus === 'past_due' && expiresAt && expiresAt > new Date());
 
@@ -341,14 +341,14 @@ export async function GET(request: NextRequest) {
       }
 
       const team = user.team;
-      let plan = 'free';
-      let subscriptionStatus = 'active';
-      let expiresAt: Date | null = null;
+      let plan = user.plan || 'free';
+      let subscriptionStatus = plan !== 'free' ? 'active' : 'active';
+      let expiresAt: Date | null = user.subscriptionExpiresAt || null;
 
       if (team) {
-        plan = team.plan || 'starter';
+        plan = team.plan || plan;
         subscriptionStatus = team.subscriptionStatus || 'active';
-        expiresAt = team.currentPeriodEnd;
+        expiresAt = team.currentPeriodEnd || expiresAt;
       }
 
       const isSubscriptionValid =
@@ -393,21 +393,21 @@ export async function GET(request: NextRequest) {
       });
     }
 
-    // Determine license status
+    // Determine license status (individual plan or team plan)
     const team = user.team;
-    let plan = 'free';
-    let subscriptionStatus = 'active';
-    let expiresAt: Date | null = null;
+    let plan = user.plan || 'free';
+    let subscriptionStatus = plan !== 'free' ? 'active' : 'active';
+    let expiresAt: Date | null = user.subscriptionExpiresAt || null;
 
     if (team) {
-      plan = team.plan || 'starter';
+      plan = team.plan || plan;
       subscriptionStatus = team.subscriptionStatus || 'active';
-      expiresAt = team.currentPeriodEnd;
+      expiresAt = team.currentPeriodEnd || expiresAt;
     }
 
     // Check if subscription is valid
-    const isSubscriptionValid = 
-      subscriptionStatus === 'active' || 
+    const isSubscriptionValid =
+      subscriptionStatus === 'active' ||
       subscriptionStatus === 'trialing' ||
       (subscriptionStatus === 'past_due' && expiresAt && expiresAt > new Date());
 

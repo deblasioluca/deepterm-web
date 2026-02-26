@@ -12,7 +12,7 @@ import crypto from 'crypto';
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-const APP_API_KEY = process.env.APP_API_KEY || process.env.X_API_KEY || 'deepterm-app-secret-key';
+const APP_API_KEY = process.env.APP_API_KEY || '';
 
 const MAX_SCREENSHOTS = 5;
 const MAX_TOTAL_BYTES = 25 * 1024 * 1024; // 25MB total attachments

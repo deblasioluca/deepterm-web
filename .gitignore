@@ -5,3 +5,9 @@ prisma/*.db
 prisma/*.db-journal
 public/downloads/
 
+
+# Runtime logs
+logs/
+
+# Local Claude settings (may contain API keys)
+.claude/settings.local.json

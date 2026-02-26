@@ -14,7 +14,7 @@ import { prisma } from '@/lib/prisma';
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-const NODE_RED_API_KEY = process.env.NODE_RED_API_KEY || 'change-me-to-a-secure-key';
+const NODE_RED_API_KEY = process.env.NODE_RED_API_KEY || '';
 
 export async function POST(request: NextRequest) {
   // ── Auth ──

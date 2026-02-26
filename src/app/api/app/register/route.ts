@@ -4,7 +4,7 @@ import { prisma } from '@/lib/prisma';
 import { sendNewUserNotification, sendWelcomeEmail } from '@/lib/email';
 
 // API Key for app authentication (should be set in environment)
-const APP_API_KEY = process.env.APP_API_KEY || process.env.X_API_KEY || 'deepterm-app-secret-key';
+const APP_API_KEY = process.env.APP_API_KEY || '';
 
 // POST - Register a new user from the app
 export async function POST(request: NextRequest) {

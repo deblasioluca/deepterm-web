@@ -7,7 +7,7 @@ import { getAuthFromRequest } from '@/lib/zk/middleware';
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-const APP_API_KEY = process.env.APP_API_KEY || process.env.X_API_KEY || 'deepterm-app-secret-key';
+const APP_API_KEY = process.env.APP_API_KEY || '';
 const NODE_RED_URL = process.env.NODE_RED_URL || 'http://192.168.1.30:1880';
 
 const VALID_CATEGORIES = ['feature', 'improvement', 'integration', 'ui', 'other'];

@@ -206,6 +206,16 @@ model User {
   createdAt           DateTime  @default(now())
   updatedAt           DateTime  @updatedAt
 
+  // Stripe billing (individual user plan)
+  plan                  String    @default("free")      // free, pro
+  stripeCustomerId      String?   @unique
+  stripeSubscriptionId  String?
+
+  // App Store billing
+  appStoreOriginalTransactionId  String?   @unique
+  subscriptionSource             String    @default("none")  // "none", "stripe", "appstore"
+  subscriptionExpiresAt          DateTime?
+
   team          Team?     @relation(fields: [teamId], references: [id])
   ideas         Idea[]
   votes         Vote[]
@@ -567,4 +577,57 @@ model GithubEvent {
 
   @@index([repo, createdAt])
   @@index([eventType, createdAt])
+}
+
+// Payment events for revenue tracking
+model PaymentEvent {
+  id        String   @id @default(cuid())
+  email     String
+  event     String   // payment-success, payment-failed, subscription-cancelled
+  plan      String
+  amount    Int?     // in cents
+  details   String?
+  createdAt DateTime @default(now())
+
+  @@index([email, createdAt])
+  @@index([event, createdAt])
+}
+
+// ============================================
+// PLANNING / PROJECT MANAGEMENT MODELS
+// ============================================
+
+model Epic {
+  id          String   @id @default(cuid())
+  title       String
+  description String   @default("")
+  status      String   @default("backlog") // backlog, planned, in_progress, done, released
+  priority    String   @default("medium")  // critical, high, medium, low
+  sortOrder   Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  stories     Story[]
+
+  @@index([status])
+  @@index([sortOrder])
+}
+
+model Story {
+  id                String   @id @default(cuid())
+  epicId            String?
+  title             String
+  description       String   @default("")
+  status            String   @default("backlog") // backlog, planned, in_progress, done, released
+  priority          String   @default("medium")  // critical, high, medium, low
+  githubIssueNumber Int?
+  sortOrder         Int      @default(0)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  epic              Epic?    @relation(fields: [epicId], references: [id], onDelete: SetNull)
+
+  @@index([epicId])
+  @@index([status])
+  @@index([sortOrder])
 }

@@ -61,6 +61,27 @@ export async function POST(
       const voteCount = await prisma.vote.count({
         where: { ideaId },
       });
+      
+      // ── Vote threshold → WhatsApp notification ──
+      const VOTE_THRESHOLD = 5;
+      if (voteCount === VOTE_THRESHOLD) {
+        try {
+          await fetch('http://192.168.1.30:1880/deepterm/idea-popular', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              event: 'idea-popular',
+              id: idea.id,
+              title: idea.title,
+              voteCount,
+              threshold: VOTE_THRESHOLD,
+              url: `${process.env.NEXT_PUBLIC_APP_URL || 'https://deepterm.net'}/dashboard/ideas`,
+            }),
+          });
+        } catch (err) {
+          console.error('Failed to notify Node-RED (idea-popular):', err);
+        }
+      }
 
       return NextResponse.json({ 
         voted: true, 

@@ -104,9 +104,7 @@ export async function POST(request: NextRequest) {
 }
 
 async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
-  const teamId = session.metadata?.teamId;
-  
-  if (!teamId || !session.subscription) {
+  if (!session.subscription) {
     return;
   }
 
@@ -114,15 +112,46 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
     session.subscription as string
   );
 
+  // teamId lives on subscription_data.metadata (from /api/stripe/checkout)
+  // or may be absent (from /api/checkout which uses email-based lookup)
+  let teamId = session.metadata?.teamId || subscription.metadata?.teamId;
+
+  const email = session.customer_email || session.metadata?.email || '';
+  const plan = await getPlanFromPriceId(subscription.items.data[0].price.id);
+
+  // If no teamId, look up user by email and create/get a team
+  if (!teamId && email) {
+    const user = await prisma.user.findFirst({ where: { email } });
+    if (user) {
+      if (user.teamId) {
+        teamId = user.teamId;
+      } else {
+        // Create a team for this user
+        const team = await prisma.team.create({
+          data: {
+            name: `${user.name || email}'s Team`,
+            stripeCustomerId: session.customer as string,
+            members: { connect: { id: user.id } },
+          },
+        });
+        teamId = team.id;
+      }
+    }
+  }
+
+  if (!teamId) {
+    console.error('[Stripe Webhook] No teamId and no user found for:', email);
+    return;
+  }
+
   // Access subscription period dates
   const periodStart = (subscription as any).current_period_start;
   const periodEnd = (subscription as any).current_period_end;
 
-  const plan = await getPlanFromPriceId(subscription.items.data[0].price.id);
-
   await prisma.team.update({
     where: { id: teamId },
     data: {
+      stripeCustomerId: session.customer as string,
       stripeSubscriptionId: subscription.id,
       subscriptionStatus: subscription.status,
       plan,
@@ -133,13 +162,18 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
     },
   });
 
+  // Sync plan to all team members
+  await syncTeamMemberPlans(teamId, plan, session.customer as string, subscription.id);
+
   // Notify Node-RED → WhatsApp (fire-and-forget)
   notifyPayment({
     event: 'subscription-created',
-    email: session.customer_email || '',
+    email,
     plan,
     amount: session.amount_total || 0,
   });
+
+  console.log(`[Stripe Webhook] checkout.session.completed: team=${teamId} plan=${plan} email=${email}`);
 }
 
 async function handleSubscriptionUpdated(subscription: Stripe.Subscription) {
@@ -156,18 +190,23 @@ async function handleSubscriptionUpdated(subscription: Stripe.Subscription) {
   const periodStart = (subscription as any).current_period_start;
   const periodEnd = (subscription as any).current_period_end;
 
+  const plan = await getPlanFromPriceId(subscription.items.data[0].price.id);
+
   await prisma.team.update({
     where: { id: team.id },
     data: {
       stripeSubscriptionId: subscription.id,
       subscriptionStatus: subscription.status,
-      plan: await getPlanFromPriceId(subscription.items.data[0].price.id),
+      plan,
       seats: subscription.items.data[0].quantity || 1,
       currentPeriodStart: periodStart ? new Date(periodStart * 1000) : null,
       currentPeriodEnd: periodEnd ? new Date(periodEnd * 1000) : null,
       cancelAtPeriodEnd: subscription.cancel_at_period_end,
     },
   });
+
+  // Sync plan to all team members
+  await syncTeamMemberPlans(team.id, plan, subscription.customer as string, subscription.id);
 }
 
 async function handleSubscriptionDeleted(subscription: Stripe.Subscription) {
@@ -189,6 +228,9 @@ async function handleSubscriptionDeleted(subscription: Stripe.Subscription) {
       cancelAtPeriodEnd: false,
     },
   });
+
+  // Reset team members to free plan
+  await syncTeamMemberPlans(team.id, 'free', null, null);
 
   // Notify Node-RED → WhatsApp (fire-and-forget)
   notifyPayment({
@@ -450,6 +492,26 @@ function extractPaymentMethodData(paymentMethod: Stripe.PaymentMethod) {
         walletType: null,
         email: paymentMethod.billing_details?.email || null,
       };
+  }
+}
+
+async function syncTeamMemberPlans(
+  teamId: string,
+  plan: string,
+  stripeCustomerId: string | null,
+  stripeSubscriptionId: string | null
+) {
+  try {
+    await prisma.user.updateMany({
+      where: { teamId },
+      data: {
+        plan,
+        stripeCustomerId,
+        stripeSubscriptionId,
+      },
+    });
+  } catch (err) {
+    console.error('[Stripe Webhook] Failed to sync team member plans:', err);
   }
 }
 

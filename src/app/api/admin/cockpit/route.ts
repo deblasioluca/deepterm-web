@@ -181,18 +181,61 @@ async function getTriageQueue() {
   };
 }
 
+async function getPlanningData() {
+  try {
+    const [epics, unassignedStories] = await Promise.all([
+      prisma.epic.findMany({
+        orderBy: { sortOrder: 'asc' },
+        include: { stories: { orderBy: { sortOrder: 'asc' } } },
+      }),
+      prisma.story.findMany({
+        where: { epicId: null },
+        orderBy: { sortOrder: 'asc' },
+      }),
+    ]);
+    return { epics, unassignedStories };
+  } catch {
+    return { epics: [], unassignedStories: [] };
+  }
+}
+
+async function getRevenue() {
+  try {
+    const [totalUsers, proUsers, recentPayments] = await Promise.all([
+      prisma.user.count(),
+      prisma.user.count({ where: { plan: 'pro' } }),
+      prisma.paymentEvent.findMany({
+        orderBy: { createdAt: 'desc' },
+        take: 10,
+      }),
+    ]);
+
+    return {
+      totalUsers,
+      proUsers,
+      freeUsers: totalUsers - proUsers,
+      conversionRate: totalUsers > 0 ? ((proUsers / totalUsers) * 100).toFixed(1) : '0',
+      recentPayments,
+    };
+  } catch {
+    return { totalUsers: 0, proUsers: 0, freeUsers: 0, conversionRate: '0', recentPayments: [] };
+  }
+}
+
 export async function GET() {
   try {
-    const [health, builds, events, stats, githubIssues, triageQueue] = await Promise.all([
+    const [health, builds, events, stats, githubIssues, triageQueue, revenue, planning] = await Promise.all([
       getSystemHealth(),
       getRecentBuilds(),
       getRecentEvents(),
       getQuickStats(),
       getGithubIssues(),
       getTriageQueue(),
+      getRevenue(),
+      getPlanningData(),
     ]);
 
-    return NextResponse.json({ health, builds, events, stats, githubIssues, triageQueue, timestamp: new Date().toISOString() });
+    return NextResponse.json({ health, builds, events, stats, githubIssues, triageQueue, revenue, planning, timestamp: new Date().toISOString() });
   } catch (error) {
     console.error('Cockpit API error:', error);
     return NextResponse.json({ error: 'Failed to load cockpit data' }, { status: 500 });
