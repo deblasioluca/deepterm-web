@@ -1,51 +1,37 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { cookies } from 'next/headers';
+import { PLAN_LIMITS, PLAN_FEATURES as PLAN_FEATURES_SOURCE, type PlanKey } from '@/lib/plan-limits';
 
-// License plan features configuration
+// Admin-facing plan features — derived from the single source of truth in plan-limits.ts
+// Adds maxTeamMembers which is admin-specific (not relevant to app or ZK API)
+const ADMIN_TEAM_MEMBERS: Record<string, number> = {
+  starter: 0,
+  pro: 10,
+  team: 50,
+  business: -1,
+  enterprise: -1,
+};
+
 const PLAN_FEATURES: Record<string, {
   maxVaults: number;
   maxCredentials: number;
+  maxKeys: number;
+  maxIdentities: number;
   maxTeamMembers: number;
   ssoEnabled: boolean;
   prioritySupport: boolean;
-}> = {
-  free: {
-    maxVaults: 1,
-    maxCredentials: 10,
-    maxTeamMembers: 0,
-    ssoEnabled: false,
-    prioritySupport: false,
-  },
-  starter: {
-    maxVaults: 5,
-    maxCredentials: 50,
-    maxTeamMembers: 3,
-    ssoEnabled: false,
-    prioritySupport: false,
-  },
-  pro: {
-    maxVaults: 20,
-    maxCredentials: 200,
-    maxTeamMembers: 10,
-    ssoEnabled: false,
-    prioritySupport: true,
-  },
-  team: {
-    maxVaults: 100,
-    maxCredentials: 1000,
-    maxTeamMembers: 50,
-    ssoEnabled: true,
-    prioritySupport: true,
-  },
-  enterprise: {
-    maxVaults: -1,
-    maxCredentials: -1,
-    maxTeamMembers: -1,
-    ssoEnabled: true,
-    prioritySupport: true,
-  },
-};
+}> = Object.fromEntries(
+  (Object.keys(PLAN_LIMITS) as PlanKey[]).map(key => [key, {
+    maxVaults: PLAN_LIMITS[key].maxVaults,
+    maxCredentials: PLAN_LIMITS[key].maxHosts, // maxCredentials = maxHosts (connections)
+    maxKeys: PLAN_LIMITS[key].maxKeys,
+    maxIdentities: PLAN_LIMITS[key].maxIdentities,
+    maxTeamMembers: ADMIN_TEAM_MEMBERS[key] ?? 0,
+    ssoEnabled: PLAN_FEATURES_SOURCE[key].sso,
+    prioritySupport: PLAN_FEATURES_SOURCE[key].prioritySupport,
+  }])
+);
 
 // Helper to verify admin session
 async function verifyAdmin() {
@@ -153,7 +139,7 @@ export async function GET(request: NextRequest) {
           expiresAt: team.currentPeriodEnd,
           stripeSubscriptionId: team.stripeSubscriptionId,
           createdAt: team.createdAt,
-          features: PLAN_FEATURES[team.plan] || PLAN_FEATURES.free,
+          features: PLAN_FEATURES[team.plan] || PLAN_FEATURES.starter,
         });
       }
     }
@@ -166,7 +152,7 @@ export async function GET(request: NextRequest) {
           type: 'user',
           name: user.name,
           email: user.email,
-          plan: 'free',
+          plan: 'starter',
           status: 'active',
           seats: 1,
           memberCount: 1,
@@ -175,7 +161,7 @@ export async function GET(request: NextRequest) {
           expiresAt: null,
           stripeSubscriptionId: null,
           createdAt: user.createdAt,
-          features: PLAN_FEATURES.free,
+          features: PLAN_FEATURES.starter,
         });
       }
     }
