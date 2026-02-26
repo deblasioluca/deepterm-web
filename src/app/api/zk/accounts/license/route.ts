@@ -7,6 +7,7 @@ import {
   handleCorsPreflightRequest,
   addCorsHeaders,
 } from '@/lib/zk';
+import { getLimitsForPlan, getFeaturesForPlan } from '@/lib/plan-limits';
 
 export async function OPTIONS() {
   return handleCorsPreflightRequest();
@@ -144,105 +145,17 @@ function getPlanPriority(plan: string): number {
 }
 
 function getPlanFeatures(plan: string): Record<string, boolean> {
-  const features: Record<string, Record<string, boolean>> = {
-    starter: {
-      unlimitedHosts: false,
-      aiAssistant: false,
-      cloudVault: false,
-      allDevices: false,
-      sftpClient: false,
-      portForwarding: false,
-      prioritySupport: false,
-      teamVaults: false,
-      sso: false,
-      auditLogs: false,
-      roleBasedAccess: false,
-    },
-    pro: {
-      unlimitedHosts: true,
-      aiAssistant: true,
-      cloudVault: true,
-      allDevices: true,
-      sftpClient: true,
-      portForwarding: true,
-      prioritySupport: true,
-      teamVaults: false,
-      sso: false,
-      auditLogs: false,
-      roleBasedAccess: false,
-    },
-    team: {
-      unlimitedHosts: true,
-      aiAssistant: true,
-      cloudVault: true,
-      allDevices: true,
-      sftpClient: true,
-      portForwarding: true,
-      prioritySupport: true,
-      teamVaults: true,
-      sso: true,
-      auditLogs: true,
-      roleBasedAccess: true,
-    },
-    enterprise: {
-      unlimitedHosts: true,
-      aiAssistant: true,
-      cloudVault: true,
-      allDevices: true,
-      sftpClient: true,
-      portForwarding: true,
-      prioritySupport: true,
-      teamVaults: true,
-      sso: true,
-      auditLogs: true,
-      roleBasedAccess: true,
-    },
-    business: {
-      unlimitedHosts: true,
-      aiAssistant: true,
-      cloudVault: true,
-      allDevices: true,
-      sftpClient: true,
-      portForwarding: true,
-      prioritySupport: true,
-      teamVaults: true,
-      sso: true,
-      auditLogs: true,
-      roleBasedAccess: true,
-    },
-  };
-
-  return features[plan] || features.starter;
+  return getFeaturesForPlan(plan) as unknown as Record<string, boolean>;
 }
 
 function getPlanLimits(plan: string): Record<string, number> {
-  const limits: Record<string, Record<string, number>> = {
-    starter: {
-      maxHosts: 5,
-      maxVaults: 1,
-      maxDevices: 1,
-    },
-    pro: {
-      maxHosts: -1, // unlimited
-      maxVaults: 10,
-      maxDevices: -1, // unlimited
-    },
-    team: {
-      maxHosts: -1,
-      maxVaults: -1,
-      maxDevices: -1,
-    },
-    enterprise: {
-      maxHosts: -1,
-      maxVaults: -1,
-      maxDevices: -1,
-    },
-    business: {
-      maxHosts: -1,
-      maxVaults: -1,
-      maxDevices: -1,
-    },
+  const limits = getLimitsForPlan(plan);
+  return {
+    maxHosts: limits.maxHosts,
+    maxKeys: limits.maxKeys,
+    maxIdentities: limits.maxIdentities,
+    maxVaults: limits.maxVaults,
+    maxDevices: limits.maxDevices,
+    maxVaultItems: limits.maxVaultItems,
   };
-
-  return limits[plan] || limits.starter;
 }

@@ -9,6 +9,7 @@ import {
   handleCorsPreflightRequest,
   addCorsHeaders,
 } from '@/lib/zk';
+import { checkVaultItemLimit } from '@/lib/zk/vault-limits';
 
 export async function OPTIONS() {
   return handleCorsPreflightRequest();
@@ -79,6 +80,33 @@ export async function POST(request: NextRequest) {
       conflicts: [] as { id: string; currentRevisionDate: string; operation: string }[],
       errors: [] as { id?: string; clientId?: string; error: string; operation: string }[],
     };
+
+    // Enforce vault item limits for creates
+    if (create.length > 0) {
+      const limitCheck = await checkVaultItemLimit(auth.userId);
+      if (!limitCheck.allowed) {
+        // Reject all creates — user is at or over limit
+        for (const item of create) {
+          results.errors.push({
+            clientId: item.clientId,
+            error: `Vault item limit reached (${limitCheck.maxVaultItems}). Upgrade your plan.`,
+            operation: 'create',
+          });
+        }
+        // Clear create array so the loop below is skipped
+        create.length = 0;
+      } else if (limitCheck.remaining !== -1 && create.length > limitCheck.remaining) {
+        // Partially reject — allow up to remaining slots
+        const rejected = create.splice(limitCheck.remaining);
+        for (const item of rejected) {
+          results.errors.push({
+            clientId: item.clientId,
+            error: `Vault item limit (${limitCheck.maxVaultItems}) would be exceeded. ${limitCheck.remaining} slots remaining.`,
+            operation: 'create',
+          });
+        }
+      }
+    }
 
     // Process creates
     for (const item of create) {

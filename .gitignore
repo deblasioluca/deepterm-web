@@ -11,3 +11,4 @@ logs/
 
 # Local Claude settings (may contain API keys)
 .claude/settings.local.json
+._*
