@@ -1,19 +1,22 @@
 'use client';
 
 import { useState } from 'react';
-import { CircleDot, CheckCircle2, ChevronDown, ChevronUp, Tag } from 'lucide-react';
-import type { GithubIssuesData, GithubLabel } from '../types';
+import { CircleDot, CheckCircle2, ChevronDown, ChevronUp, Tag, RefreshCw } from 'lucide-react';
+import type { GithubIssuesData, GithubLabel, RunAction } from '../types';
 import { formatTimeAgo } from '../utils';
 import { LabelBadge } from './shared';
 
 interface GithubIssuesTabProps {
   githubIssues: GithubIssuesData;
+  runAction: RunAction;
+  actionLoading: string | null;
 }
 
-export default function GithubIssuesTab({ githubIssues }: GithubIssuesTabProps) {
+export default function GithubIssuesTab({ githubIssues, runAction, actionLoading }: GithubIssuesTabProps) {
   const [issueFilter, setIssueFilter] = useState<'open' | 'closed' | 'all'>('open');
   const [labelFilter, setLabelFilter] = useState<string | null>(null);
   const [issuesExpanded, setIssuesExpanded] = useState(false);
+  const [expandedIssue, setExpandedIssue] = useState<number | null>(null);
 
   // Deduplicated labels across all issues for filter pills
   const allLabels: GithubLabel[] = [];
@@ -45,6 +48,19 @@ export default function GithubIssuesTab({ githubIssues }: GithubIssuesTabProps) 
           </span>
         </h2>
         <div className="flex items-center gap-2">
+          {githubIssues.lastSyncedAt && (
+            <span className="text-[10px] text-zinc-600">
+              Synced {formatTimeAgo(githubIssues.lastSyncedAt)}
+            </span>
+          )}
+          <button
+            onClick={() => runAction('sync-github-issues')}
+            disabled={actionLoading !== null}
+            className="flex items-center gap-1 px-2.5 py-1 bg-zinc-800 border border-zinc-700 rounded-lg text-xs text-zinc-400 hover:text-zinc-300 transition disabled:opacity-50"
+          >
+            <RefreshCw className={`w-3 h-3 ${actionLoading === 'sync-github-issues' ? 'animate-spin' : ''}`} />
+            Sync
+          </button>
           <div className="flex bg-zinc-800 rounded-lg border border-zinc-700 p-0.5">
             {(['open', 'closed', 'all'] as const).map((f) => (
               <button
@@ -106,45 +122,63 @@ export default function GithubIssuesTab({ githubIssues }: GithubIssuesTabProps) 
           {displayed.map((issue) => (
             <div
               key={issue.number}
-              className="flex items-start gap-3 p-2.5 bg-zinc-800/40 rounded-lg border border-zinc-700/30 hover:bg-zinc-800/60 transition"
+              className="p-2.5 bg-zinc-800/40 rounded-lg border border-zinc-700/30 hover:bg-zinc-800/60 transition cursor-pointer"
+              onClick={() => setExpandedIssue(expandedIssue === issue.number ? null : issue.number)}
             >
-              <div className="mt-0.5">
-                {issue.state === 'open' ? (
-                  <CircleDot className="w-4 h-4 text-green-400" />
-                ) : (
-                  <CheckCircle2 className="w-4 h-4 text-purple-400" />
-                )}
-              </div>
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2">
-                  <a
-                    href={issue.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-xs text-zinc-200 hover:text-white transition font-medium truncate"
-                  >
-                    #{issue.number} {issue.title}
-                  </a>
-                </div>
-                <div className="flex items-center gap-2 mt-1 flex-wrap">
-                  {issue.labels.map((label) => (
-                    <LabelBadge key={label.name} label={label} />
-                  ))}
-                  {issue.milestone && (
-                    <span className="text-[10px] text-zinc-500 flex items-center gap-0.5">
-                      <Tag className="w-2.5 h-2.5" /> {issue.milestone}
-                    </span>
-                  )}
-                  {issue.assignee && (
-                    <span className="text-[10px] text-zinc-500">
-                      → {issue.assignee}
-                    </span>
+              <div className="flex items-start gap-3">
+                <div className="mt-0.5">
+                  {issue.state === 'open' ? (
+                    <CircleDot className="w-4 h-4 text-green-400" />
+                  ) : (
+                    <CheckCircle2 className="w-4 h-4 text-purple-400" />
                   )}
                 </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <a
+                      href={issue.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-xs text-zinc-200 hover:text-white transition font-medium truncate"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      #{issue.number} {issue.title}
+                    </a>
+                  </div>
+                  {issue.body && expandedIssue !== issue.number && (
+                    <p className="text-[11px] text-zinc-500 mt-0.5 line-clamp-2">
+                      {issue.body.replace(/[#*`>\[\]]/g, '').slice(0, 200)}
+                    </p>
+                  )}
+                  <div className="flex items-center gap-2 mt-1 flex-wrap">
+                    {issue.labels.map((label) => (
+                      <LabelBadge key={label.name} label={label} />
+                    ))}
+                    {issue.milestone && (
+                      <span className="text-[10px] text-zinc-500 flex items-center gap-0.5">
+                        <Tag className="w-2.5 h-2.5" /> {issue.milestone}
+                      </span>
+                    )}
+                    {issue.assignee && (
+                      <span className="text-[10px] text-zinc-500">
+                        → {issue.assignee}
+                      </span>
+                    )}
+                  </div>
+                </div>
+                <div className="text-right shrink-0">
+                  <span className="text-xs text-zinc-500">{formatTimeAgo(issue.updatedAt)}</span>
+                </div>
               </div>
-              <div className="text-right shrink-0">
-                <span className="text-xs text-zinc-500">{formatTimeAgo(issue.updatedAt)}</span>
-              </div>
+
+              {/* Expanded body */}
+              {expandedIssue === issue.number && issue.body && (
+                <div className="mt-2 pt-2 border-t border-zinc-700/30 ml-7">
+                  <pre className="text-[11px] text-zinc-400 whitespace-pre-wrap font-sans leading-relaxed max-h-60 overflow-y-auto">
+                    {issue.body}
+                  </pre>
+                </div>
+              )}
             </div>
           ))}
           {!issuesExpanded && filtered.length > 8 && (

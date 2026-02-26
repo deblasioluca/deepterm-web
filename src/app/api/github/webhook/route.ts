@@ -222,6 +222,44 @@ async function handlePullRequest(payload: any): Promise<void> {
   }
 }
 
+async function handleIssues(payload: any): Promise<void> {
+  const issue = payload.issue;
+  if (!issue) return;
+
+  const action = payload.action;
+
+  // Skip pull requests (they also fire issue events)
+  if (issue.pull_request) return;
+
+  const repo = payload.repository?.full_name || 'unknown';
+  console.log(`[GitHub Webhook] issues.${action} #${issue.number} on ${repo}: ${issue.title}`);
+
+  // Upsert into local DB
+  try {
+    const { upsertGithubIssue } = await import('@/lib/github-sync');
+    await upsertGithubIssue(issue);
+    console.log(`[GitHub Webhook] Synced issue #${issue.number} (${action})`);
+  } catch (err) {
+    console.error(`[GitHub Webhook] Failed to sync issue #${issue.number}:`, err);
+  }
+
+  // Log to activity feed
+  try {
+    await prisma.githubEvent.create({
+      data: {
+        eventType: `issues.${action}`,
+        repo,
+        branch: '',
+        actor: payload.sender?.login || 'unknown',
+        summary: `Issue #${issue.number} ${action}: ${issue.title}`.slice(0, 500),
+        url: issue.html_url || '',
+      },
+    });
+  } catch (err) {
+    console.error('[GitHub Webhook] DB write failed:', err);
+  }
+}
+
 // ── Main handler ───────────────────────────────────────────
 
 export async function POST(request: NextRequest) {
@@ -256,6 +294,9 @@ export async function POST(request: NextRequest) {
         break;
       case 'pull_request':
         await handlePullRequest(payload);
+        break;
+      case 'issues':
+        await handleIssues(payload);
         break;
       case 'ping':
         console.log('[GitHub Webhook] Ping received — webhook is active');

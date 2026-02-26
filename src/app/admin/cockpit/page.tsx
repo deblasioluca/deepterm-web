@@ -214,7 +214,7 @@ export default function CockpitPage() {
         <OverviewTab stats={stats} revenue={revenue} health={health} builds={builds} />
       )}
       {activeTab === 'backlog' && (
-        <GithubIssuesTab githubIssues={githubIssues} />
+        <GithubIssuesTab githubIssues={githubIssues} runAction={runAction} actionLoading={actionLoading} />
       )}
       {activeTab === 'triage' && (
         <TriageQueueTab triageQueue={triageQueue} runAction={runAction} actionLoading={actionLoading} />

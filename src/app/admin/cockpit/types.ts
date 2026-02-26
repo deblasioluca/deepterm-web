@@ -43,6 +43,7 @@ export interface GithubLabel {
 export interface GithubIssue {
   number: number;
   title: string;
+  body: string;
   state: string;
   labels: GithubLabel[];
   milestone: string | null;
@@ -56,6 +57,7 @@ export interface GithubIssuesData {
   open: number;
   closed: number;
   items: GithubIssue[];
+  lastSyncedAt: string | null;
 }
 
 export interface TriageIssue {

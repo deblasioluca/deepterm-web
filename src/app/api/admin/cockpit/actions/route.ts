@@ -132,7 +132,34 @@ export async function POST(req: NextRequest) {
           }
         }
 
+        // Keep local DB in sync after GitHub updates
+        try {
+          const ghToken2 = process.env.GITHUB_TOKEN;
+          if (ghToken2) {
+            const issueRes = await fetch(
+              `https://api.github.com/repos/deblasioluca/deepterm/issues/${issueNumber}`,
+              { headers: { Authorization: `Bearer ${ghToken2}`, Accept: 'application/vnd.github+json' } }
+            );
+            if (issueRes.ok) {
+              const { upsertGithubIssue } = await import('@/lib/github-sync');
+              await upsertGithubIssue(await issueRes.json());
+            }
+          }
+        } catch {
+          // Non-critical — webhook will catch up
+        }
+
         return NextResponse.json({ ok: true });
+      }
+
+      // ── Sync GitHub issues to local DB ──
+      case 'sync-github-issues': {
+        const { syncAllGithubIssues } = await import('@/lib/github-sync');
+        const result = await syncAllGithubIssues();
+        return NextResponse.json({
+          ok: true,
+          message: `Synced ${result.synced} issues${result.errors > 0 ? ` (${result.errors} errors)` : ''}`,
+        });
       }
 
       // ── WhatsApp test message ──

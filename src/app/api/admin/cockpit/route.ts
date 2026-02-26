@@ -91,51 +91,54 @@ async function getQuickStats() {
 }
 
 async function getGithubIssues() {
-  const ghToken = process.env.GITHUB_TOKEN;
-  if (!ghToken) return { open: 0, closed: 0, items: [] };
-
   try {
-    const headers = { Authorization: `Bearer ${ghToken}`, Accept: 'application/vnd.github+json' };
+    // Auto-sync on first load (empty DB)
+    const count = await prisma.githubIssue.count();
+    if (count === 0) {
+      try {
+        const { syncAllGithubIssues } = await import('@/lib/github-sync');
+        await syncAllGithubIssues();
+      } catch (err) {
+        console.error('[Cockpit] Initial GitHub sync failed:', err);
+      }
+    }
 
-    // Fetch open issues (excluding PRs)
-    const openRes = await fetch(
-      'https://api.github.com/repos/deblasioluca/deepterm/issues?state=open&per_page=50&sort=updated&direction=desc',
-      { headers }
-    );
-    const openItems = openRes.ok ? await openRes.json() : [];
+    const [openIssues, closedIssues] = await Promise.all([
+      prisma.githubIssue.findMany({
+        where: { state: 'open' },
+        orderBy: { githubUpdatedAt: 'desc' },
+        take: 50,
+      }),
+      prisma.githubIssue.findMany({
+        where: { state: 'closed' },
+        orderBy: { githubUpdatedAt: 'desc' },
+        take: 10,
+      }),
+    ]);
 
-    // Fetch recently closed
-    const closedRes = await fetch(
-      'https://api.github.com/repos/deblasioluca/deepterm/issues?state=closed&per_page=10&sort=updated&direction=desc',
-      { headers }
-    );
-    const closedItems = closedRes.ok ? await closedRes.json() : [];
-
-    // Filter out pull requests (GitHub API returns PRs as issues too)
-    const filterIssues = (items: any[]) => items.filter((i: any) => !i.pull_request);
-
-    const openIssues = filterIssues(openItems);
-    const closedIssues = filterIssues(closedItems);
-
-    const allIssues = [...openIssues, ...closedIssues].map((issue: any) => ({
+    const allIssues = [...openIssues, ...closedIssues].map((issue) => ({
       number: issue.number,
       title: issue.title,
+      body: issue.body,
       state: issue.state,
-      labels: issue.labels?.map((l: any) => ({ name: l.name, color: l.color })) || [],
-      milestone: issue.milestone?.title || null,
-      assignee: issue.assignee?.login || null,
-      createdAt: issue.created_at,
-      updatedAt: issue.updated_at,
-      url: issue.html_url,
+      labels: (() => { try { return JSON.parse(issue.labels); } catch { return []; } })(),
+      milestone: issue.milestone,
+      assignee: issue.assignee,
+      createdAt: issue.githubCreatedAt.toISOString(),
+      updatedAt: issue.githubUpdatedAt.toISOString(),
+      url: issue.url,
     }));
+
+    const latestSync = openIssues[0]?.syncedAt || closedIssues[0]?.syncedAt || null;
 
     return {
       open: openIssues.length,
       closed: closedIssues.length,
       items: allIssues,
+      lastSyncedAt: latestSync?.toISOString() || null,
     };
   } catch {
-    return { open: 0, closed: 0, items: [] };
+    return { open: 0, closed: 0, items: [], lastSyncedAt: null };
   }
 }
 
