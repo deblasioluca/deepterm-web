@@ -7,8 +7,8 @@
  * since only the app can decrypt and inspect item types.
  */
 
-import { prisma } from @/lib/prisma;
-import { getLimitsForPlan } from @/lib/plan-limits;
+import { prisma } from '@/lib/prisma';
+import { getLimitsForPlan } from '@/lib/plan-limits';
 
 interface VaultLimitCheck {
   allowed: boolean;
@@ -41,11 +41,11 @@ export async function checkVaultItemLimit(userId: string): Promise<VaultLimitChe
   });
 
   // Determine effective plan
-  const isActive = zkUser?.webUser?.team?.subscriptionStatus === active
-    || zkUser?.webUser?.team?.subscriptionStatus === trialing;
+  const isActive = zkUser?.webUser?.team?.subscriptionStatus === 'active'
+    || zkUser?.webUser?.team?.subscriptionStatus === 'trialing';
   const plan = isActive
-    ? (zkUser?.webUser?.team?.plan || starter)
-    : starter;
+    ? (zkUser?.webUser?.team?.plan || 'starter')
+    : 'starter';
 
   const limits = getLimitsForPlan(plan);
 
