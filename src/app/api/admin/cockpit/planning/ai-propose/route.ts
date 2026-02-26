@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { getAnthropic } from '@/lib/claude';
+import { callAI } from '@/lib/ai-client';
 import { getRepoContext } from '@/lib/repo-context';
 
 export const dynamic = 'force-dynamic';
@@ -177,22 +177,19 @@ export async function POST() {
 
     const userMessage = `Analyze the following backlog and propose Epics with Stories:\n\n${contextParts.join('\n\n')}`;
 
-    const client = getAnthropic();
-    console.log('[AI Propose] Calling Claude API with repo context...');
-    const response = await client.messages.create({
-      model: 'claude-opus-4-6',
-      max_tokens: 4096,
-      system: SYSTEM_PROMPT,
-      messages: [{ role: 'user', content: userMessage }],
-    });
-    console.log('[AI Propose] Claude responded, stop_reason:', response.stop_reason);
+    console.log('[AI Propose] Calling AI with repo context...');
+    const aiResponse = await callAI(
+      'planning.propose',
+      SYSTEM_PROMPT,
+      [{ role: 'user', content: userMessage }],
+      { maxTokens: 4096 }
+    );
+    console.log('[AI Propose] AI responded via', aiResponse.provider, aiResponse.model);
 
-    // Extract text from response (skip thinking blocks)
-    const textBlocks = response.content.filter(b => b.type === 'text');
-    if (textBlocks.length === 0) {
+    const fullText = aiResponse.content;
+    if (!fullText) {
       return NextResponse.json({ error: 'No text response from AI' }, { status: 500 });
     }
-    const fullText = textBlocks.map(b => b.type === 'text' ? b.text : '').join('\n');
 
     // Extract JSON from the response — Claude may wrap it in markdown or add explanation text
     let parsed: { proposals?: unknown[]; summary?: string };

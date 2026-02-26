@@ -627,7 +627,9 @@ model Epic {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  stories     Story[]
+  stories              Story[]
+  deliberations        Deliberation[]
+  implementationReport ImplementationReport?
 
   @@index([status])
   @@index([sortOrder])
@@ -645,9 +647,240 @@ model Story {
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
 
-  epic              Epic?    @relation(fields: [epicId], references: [id], onDelete: SetNull)
+  epic                 Epic?    @relation(fields: [epicId], references: [id], onDelete: SetNull)
+  deliberations        Deliberation[]
+  implementationReport ImplementationReport?
 
   @@index([epicId])
   @@index([status])
   @@index([sortOrder])
+}
+
+// ============================================
+// AI DELIBERATION SYSTEM
+// ============================================
+
+/// A deliberation session attached to a Story or Epic.
+/// Tracks the full lifecycle: proposals → debate → vote → decision.
+model Deliberation {
+  id            String   @id @default(cuid())
+  type          String   // "implementation" | "architecture_review"
+  status        String   @default("proposing") // proposing | debating | voting | decided | implementing | failed
+  storyId       String?
+  epicId        String?
+  title         String   @default("")
+  instructions  String   @default("")
+  summary            String   @default("")
+  managementSummary  String   @default("")  // Concise executive summary (TL;DR)
+  error              String?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  story         Story?   @relation(fields: [storyId], references: [id], onDelete: SetNull)
+  epic          Epic?    @relation(fields: [epicId], references: [id], onDelete: SetNull)
+  proposals     DeliberationProposal[]
+  debates       DeliberationDebate[]
+  votes         DeliberationVote[]
+
+  @@index([storyId])
+  @@index([epicId])
+  @@index([type, status])
+}
+
+/// One agent's proposal within a deliberation.
+model DeliberationProposal {
+  id              String   @id @default(cuid())
+  deliberationId  String
+  agentName       String
+  agentModel      String
+  content         String   // Full proposal markdown
+  strengths       String   @default("") // Self-identified strengths
+  risks           String   @default("") // Self-identified risks
+  effort          String   @default("") // Estimated effort (hours/days)
+  createdAt       DateTime @default(now())
+
+  deliberation    Deliberation @relation(fields: [deliberationId], references: [id], onDelete: Cascade)
+
+  @@index([deliberationId])
+}
+
+/// A debate round — one agent responds to others' proposals.
+model DeliberationDebate {
+  id                    String   @id @default(cuid())
+  deliberationId        String
+  round                 Int
+  agentName             String
+  agentModel            String
+  content               String
+  referencesProposalIds String   @default("") // Comma-separated proposal IDs being discussed
+  createdAt             DateTime @default(now())
+
+  deliberation    Deliberation @relation(fields: [deliberationId], references: [id], onDelete: Cascade)
+
+  @@index([deliberationId, round])
+}
+
+/// Agent votes after debate concludes.
+model DeliberationVote {
+  id                String   @id @default(cuid())
+  deliberationId    String
+  agentName         String
+  agentModel        String
+  votedFor          String   // agentName of preferred proposal (for display)
+  votedProposalId   String?  // ID of the proposal voted for
+  reasoning         String
+  createdAt         DateTime @default(now())
+
+  deliberation    Deliberation @relation(fields: [deliberationId], references: [id], onDelete: Cascade)
+
+  @@index([deliberationId])
+}
+
+/// Implementation report attached to a Story/Epic.
+model ImplementationReport {
+  id               String   @id @default(cuid())
+  storyId          String?  @unique
+  epicId           String?  @unique
+  status           String   @default("pending") // pending | in_progress | complete
+  testsAdded       String   @default("[]")
+  testsUpdated     String   @default("[]")
+  docsUpdated      String   @default("[]")
+  helpPagesUpdated String   @default("[]")
+  filesChanged     String   @default("[]")
+  prNumbers        String   @default("[]")
+  summary          String   @default("")
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  story           Story?   @relation(fields: [storyId], references: [id], onDelete: SetNull)
+  epic            Epic?    @relation(fields: [epicId], references: [id], onDelete: SetNull)
+
+  @@index([storyId])
+  @@index([epicId])
+}
+
+// ============================================
+// AI PROVIDER MANAGEMENT
+// ============================================
+
+/// AI/LLM provider configuration — API keys stored encrypted.
+model AIProvider {
+  id            String    @id @default(cuid())
+  name          String
+  slug          String    @unique
+  encryptedKey  String    @default("")
+  baseUrl       String?
+  isEnabled     Boolean   @default(true)
+  isValid       Boolean   @default(false)
+  lastValidated DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  models        AIModel[]
+
+  @@index([slug])
+  @@index([isEnabled])
+}
+
+/// Available model for a provider.
+model AIModel {
+  id              String   @id @default(cuid())
+  providerId      String
+  modelId         String
+  displayName     String
+  capabilities    String   @default("[]")
+  contextWindow   Int      @default(128000)
+  costPer1kInput  Float    @default(0)
+  costPer1kOutput Float    @default(0)
+  isEnabled       Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  provider        AIProvider @relation(fields: [providerId], references: [id], onDelete: Cascade)
+  assignments     AIActivityAssignment[]
+
+  @@unique([providerId, modelId])
+  @@index([providerId])
+  @@index([isEnabled])
+}
+
+/// Maps an AI activity to a specific model.
+model AIActivityAssignment {
+  id                   String   @id @default(cuid())
+  activity             String   @unique
+  modelId              String
+  temperature          Float    @default(0.7)
+  maxTokens            Int      @default(4096)
+  systemPromptOverride String?  // Optional: override the default system prompt for this activity
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  model       AIModel  @relation(fields: [modelId], references: [id], onDelete: Cascade)
+
+  @@index([activity])
+  @@index([modelId])
+}
+
+// ============================================
+// AI TOKEN USAGE TRACKING
+// ============================================
+
+/// Every AI API call is logged here.
+model AIUsageLog {
+  id             String   @id @default(cuid())
+  provider       String
+  model          String
+  activity       String
+  category       String
+
+  inputTokens    Int      @default(0)
+  outputTokens   Int      @default(0)
+  totalTokens    Int      @default(0)
+
+  costCents      Float    @default(0)
+
+  deliberationId String?
+  agentLoopId    String?
+  storyId        String?
+  epicId         String?
+
+  durationMs     Int      @default(0)
+  success        Boolean  @default(true)
+  errorMessage   String?
+
+  createdAt      DateTime @default(now())
+
+  @@index([provider])
+  @@index([activity])
+  @@index([category])
+  @@index([createdAt])
+  @@index([deliberationId])
+  @@index([agentLoopId])
+  @@index([storyId])
+  @@index([epicId])
+}
+
+/// Daily/monthly aggregates for fast dashboard queries.
+model AIUsageAggregate {
+  id            String @id @default(cuid())
+  period        String
+  periodType    String
+  provider      String
+  model         String
+  activity      String
+  category      String
+
+  callCount     Int    @default(0)
+  inputTokens   Int    @default(0)
+  outputTokens  Int    @default(0)
+  totalTokens   Int    @default(0)
+  costCents     Float  @default(0)
+  avgDurationMs Int    @default(0)
+  errorCount    Int    @default(0)
+
+  @@unique([period, periodType, provider, model, activity])
+  @@index([period])
+  @@index([periodType])
+  @@index([provider])
+  @@index([category])
 }

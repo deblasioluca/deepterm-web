@@ -16,6 +16,9 @@ import {
   Zap,
   LayoutDashboard,
   Map,
+  Eye,
+  BarChart3,
+  Workflow,
 } from 'lucide-react';
 import type { CockpitData } from './types';
 import { formatTimeAgo } from './utils';
@@ -26,15 +29,21 @@ import PlanningTab from './components/PlanningTab';
 import SystemHealthTab from './components/SystemHealthTab';
 import BuildsTab from './components/BuildsTab';
 import GithubActivityTab from './components/GithubActivityTab';
+import ReviewsTab from './components/ReviewsTab';
+import AIUsageTab from './components/AIUsageTab';
+import PipelinesTab from './components/PipelinesTab';
 
 const TABS = [
   { key: 'overview', label: 'Overview', icon: LayoutDashboard },
   { key: 'backlog', label: 'Backlog', icon: CircleDot },
   { key: 'triage', label: 'Triage', icon: Zap },
   { key: 'planning', label: 'Planning', icon: Map },
+  { key: 'pipelines', label: 'Pipelines', icon: Workflow },
+  { key: 'reviews', label: 'Reviews', icon: Eye },
   { key: 'health', label: 'System Health', icon: Activity },
   { key: 'builds', label: 'Builds', icon: Cpu },
   { key: 'activity', label: 'Activity', icon: GitBranch },
+  { key: 'ai-usage', label: 'AI Usage', icon: BarChart3 },
 ] as const;
 
 type TabKey = typeof TABS[number]['key'];
@@ -114,7 +123,7 @@ export default function CockpitPage() {
     }
   };
 
-  const { health, builds, events, stats, githubIssues, triageQueue, revenue, planning } = data;
+  const { health, builds, events, stats, githubIssues, triageQueue, revenue, planning, pipelines } = data;
 
   const triageCount = triageQueue.issues.length + triageQueue.ideas.length;
 
@@ -228,6 +237,12 @@ export default function CockpitPage() {
           onDataChange={fetchData}
         />
       )}
+      {activeTab === 'pipelines' && (
+        <PipelinesTab pipelines={pipelines} runAction={runAction} actionLoading={actionLoading} />
+      )}
+      {activeTab === 'reviews' && (
+        <ReviewsTab onDataChange={fetchData} />
+      )}
       {activeTab === 'health' && (
         <SystemHealthTab health={health} builds={builds} />
       )}
@@ -236,6 +251,9 @@ export default function CockpitPage() {
       )}
       {activeTab === 'activity' && (
         <GithubActivityTab events={events} />
+      )}
+      {activeTab === 'ai-usage' && (
+        <AIUsageTab />
       )}
     </div>
   );

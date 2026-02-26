@@ -14,10 +14,14 @@ import {
   X,
   Check,
   Loader2,
+  Brain,
+  FileText,
 } from 'lucide-react';
 import type { PlanningData, Epic, Story, GithubIssuesData, RunAction } from '../types';
 import { formatTimeAgo } from '../utils';
 import { PriorityBadge, WorkflowStatusBadge } from './shared';
+import DeliberationPanel from './DeliberationPanel';
+import ImplementationReport from './ImplementationReport';
 
 const STATUSES = ['backlog', 'planned', 'in_progress', 'done', 'released'] as const;
 const PRIORITIES = ['critical', 'high', 'medium', 'low'] as const;
@@ -40,6 +44,9 @@ export default function PlanningTab({ planning, githubIssues, runAction, actionL
   const [editingEpic, setEditingEpic] = useState<string | null>(null);
   const [editingStory, setEditingStory] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [deliberatingFor, setDeliberatingFor] = useState<{ id: string; type: 'story' | 'epic'; deliberationId?: string } | null>(null);
+  const [reportFor, setReportFor] = useState<{ id: string; type: 'story' | 'epic' } | null>(null);
+  const [startingDeliberation, setStartingDeliberation] = useState<string | null>(null);
 
   // Sync from parent on auto-refresh
   useEffect(() => {
@@ -211,6 +218,36 @@ export default function PlanningTab({ planning, githubIssues, runAction, actionL
     });
   };
 
+  // --- Deliberation helpers ---
+
+  const startDeliberation = async (targetId: string, targetType: 'story' | 'epic') => {
+    setStartingDeliberation(targetId);
+    try {
+      const body: Record<string, string> = { type: 'implementation' };
+      if (targetType === 'story') body.storyId = targetId;
+      else body.epicId = targetId;
+      const res = await fetch('/api/admin/cockpit/deliberation', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      if (res.ok) {
+        const result = await res.json();
+        setDeliberatingFor({ id: targetId, type: targetType, deliberationId: result.id });
+      }
+    } finally {
+      setStartingDeliberation(null);
+    }
+  };
+
+  const openDeliberation = (targetId: string, targetType: 'story' | 'epic', activeDeliberationId?: string | null) => {
+    if (activeDeliberationId) {
+      setDeliberatingFor({ id: targetId, type: targetType, deliberationId: activeDeliberationId });
+    } else {
+      startDeliberation(targetId, targetType);
+    }
+  };
+
   // --- Filter ---
   const filteredEpics = statusFilter
     ? epics.filter((e) => e.status === statusFilter || e.stories.some((s) => s.status === statusFilter))
@@ -308,7 +345,37 @@ export default function PlanningTab({ planning, githubIssues, runAction, actionL
                 <span className="text-xs text-zinc-500">
                   {doneCount}/{epic.stories.length} stories
                 </span>
+                {(epic.deliberationCount ?? 0) > 0 && (
+                  <span className="px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-purple-500/20 text-purple-400 border border-purple-500/30">
+                    {epic.deliberationCount} delib
+                  </span>
+                )}
+                {epic.hasReport && (
+                  <span className="px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
+                    report
+                  </span>
+                )}
+                {(epic.aiCostCents ?? 0) > 0 && (
+                  <span className="text-[10px] text-zinc-500" title="AI cost">
+                    ${((epic.aiCostCents ?? 0) / 100).toFixed(2)}
+                  </span>
+                )}
                 <div className="flex items-center gap-1">
+                  <button
+                    onClick={() => openDeliberation(epic.id, 'epic', epic.activeDeliberationId)}
+                    disabled={startingDeliberation === epic.id}
+                    className="p-1 rounded text-purple-400 hover:bg-purple-500/10 transition disabled:opacity-50"
+                    title="Deliberate"
+                  >
+                    {startingDeliberation === epic.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Brain className="w-3.5 h-3.5" />}
+                  </button>
+                  <button
+                    onClick={() => setReportFor({ id: epic.id, type: 'epic' })}
+                    className="p-1 rounded text-emerald-400 hover:bg-emerald-500/10 transition"
+                    title="Implementation Report"
+                  >
+                    <FileText className="w-3.5 h-3.5" />
+                  </button>
                   {epic.status === 'done' && (
                     <button
                       onClick={() => runAction('release-epic', { epicId: epic.id })}
@@ -335,6 +402,27 @@ export default function PlanningTab({ planning, githubIssues, runAction, actionL
               </div>
             )}
 
+            {/* Inline Deliberation Panel for Epic */}
+            {deliberatingFor?.id === epic.id && deliberatingFor.deliberationId && (
+              <div className="border-t border-zinc-800 p-3">
+                <DeliberationPanel
+                  deliberationId={deliberatingFor.deliberationId}
+                  onClose={() => setDeliberatingFor(null)}
+                />
+              </div>
+            )}
+
+            {/* Inline Report for Epic */}
+            {reportFor?.id === epic.id && (
+              <div className="border-t border-zinc-800 p-3">
+                <ImplementationReport
+                  targetId={epic.id}
+                  targetType="epic"
+                  onClose={() => setReportFor(null)}
+                />
+              </div>
+            )}
+
             {/* Stories */}
             {expanded && (
               <div className="border-t border-zinc-800">
@@ -357,6 +445,15 @@ export default function PlanningTab({ planning, githubIssues, runAction, actionL
                         onDelete={() => deleteStory(story.id)}
                         onReorder={(dir) => reorderStories(epic.id, filteredStories, storyIdx, dir)}
                         onRelease={() => runAction('release-story', { storyId: story.id })}
+                        onDeliberate={() => openDeliberation(story.id, 'story', story.activeDeliberationId)}
+                        onReport={() => setReportFor({ id: story.id, type: 'story' })}
+                        isDeliberating={deliberatingFor?.id === story.id}
+                        isStartingDeliberation={startingDeliberation === story.id}
+                        showDelibPanel={deliberatingFor?.id === story.id && !!deliberatingFor.deliberationId}
+                        deliberationId={deliberatingFor?.id === story.id ? deliberatingFor.deliberationId : undefined}
+                        showReportPanel={reportFor?.id === story.id}
+                        onCloseDelib={() => setDeliberatingFor(null)}
+                        onCloseReport={() => setReportFor(null)}
                       />
                     ))}
                   </div>
@@ -407,6 +504,15 @@ export default function PlanningTab({ planning, githubIssues, runAction, actionL
                 onDelete={() => deleteStory(story.id)}
                 onReorder={(dir) => reorderStories(null, filteredUnassigned, idx, dir)}
                 onRelease={() => runAction('release-story', { storyId: story.id })}
+                onDeliberate={() => openDeliberation(story.id, 'story', story.activeDeliberationId)}
+                onReport={() => setReportFor({ id: story.id, type: 'story' })}
+                isDeliberating={deliberatingFor?.id === story.id}
+                isStartingDeliberation={startingDeliberation === story.id}
+                showDelibPanel={deliberatingFor?.id === story.id && !!deliberatingFor.deliberationId}
+                deliberationId={deliberatingFor?.id === story.id ? deliberatingFor.deliberationId : undefined}
+                showReportPanel={reportFor?.id === story.id}
+                onCloseDelib={() => setDeliberatingFor(null)}
+                onCloseReport={() => setReportFor(null)}
               />
             ))}
           </div>
@@ -460,9 +566,18 @@ interface StoryRowProps {
   onDelete: () => void;
   onReorder: (direction: -1 | 1) => void;
   onRelease: () => void;
+  onDeliberate: () => void;
+  onReport: () => void;
+  isDeliberating: boolean;
+  isStartingDeliberation: boolean;
+  showDelibPanel: boolean;
+  deliberationId?: string;
+  showReportPanel: boolean;
+  onCloseDelib: () => void;
+  onCloseReport: () => void;
 }
 
-function StoryRow({ story, idx, totalStories, editing, saving, actionLoading, onEdit, onCancelEdit, onSave, onDelete, onReorder, onRelease }: StoryRowProps) {
+function StoryRow({ story, idx, totalStories, editing, saving, actionLoading, onEdit, onCancelEdit, onSave, onDelete, onReorder, onRelease, onDeliberate, onReport, isStartingDeliberation, showDelibPanel, deliberationId, showReportPanel, onCloseDelib, onCloseReport }: StoryRowProps) {
   if (editing) {
     return (
       <div className="p-3 pl-10">
@@ -478,46 +593,86 @@ function StoryRow({ story, idx, totalStories, editing, saving, actionLoading, on
   }
 
   return (
-    <div className="flex items-center gap-2 p-2.5 pl-10 hover:bg-zinc-800/30 transition">
-      <PriorityBadge priority={story.priority} />
-      <span className="text-xs text-zinc-200 flex-1 truncate">{story.title}</span>
-      <WorkflowStatusBadge status={story.status} />
-      {story.githubIssueNumber && (
-        <a
-          href={`https://github.com/deblasioluca/deepterm/issues/${story.githubIssueNumber}`}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="text-xs text-blue-400 hover:text-blue-300 flex items-center gap-0.5"
-        >
-          #{story.githubIssueNumber}
-          <ExternalLink className="w-2.5 h-2.5" />
-        </a>
-      )}
-      <div className="flex items-center gap-0.5">
-        {story.status === 'done' && (
-          <button
-            onClick={onRelease}
-            disabled={actionLoading !== null}
-            className="p-1 rounded text-purple-400 hover:bg-purple-500/10 transition disabled:opacity-50"
-            title="Release"
+    <>
+      <div className="flex items-center gap-2 p-2.5 pl-10 hover:bg-zinc-800/30 transition">
+        <PriorityBadge priority={story.priority} />
+        <span className="text-xs text-zinc-200 flex-1 truncate">{story.title}</span>
+        <WorkflowStatusBadge status={story.status} />
+        {story.githubIssueNumber && (
+          <a
+            href={`https://github.com/deblasioluca/deepterm/issues/${story.githubIssueNumber}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-xs text-blue-400 hover:text-blue-300 flex items-center gap-0.5"
           >
-            <Rocket className="w-3 h-3" />
-          </button>
+            #{story.githubIssueNumber}
+            <ExternalLink className="w-2.5 h-2.5" />
+          </a>
         )}
-        <button onClick={() => onReorder(-1)} disabled={idx === 0} className="p-1 text-zinc-500 hover:text-zinc-300 disabled:opacity-30">
-          <ArrowUp className="w-3 h-3" />
-        </button>
-        <button onClick={() => onReorder(1)} disabled={idx === totalStories - 1} className="p-1 text-zinc-500 hover:text-zinc-300 disabled:opacity-30">
-          <ArrowDown className="w-3 h-3" />
-        </button>
-        <button onClick={onEdit} className="p-1 text-zinc-500 hover:text-zinc-300">
-          <Pencil className="w-3 h-3" />
-        </button>
-        <button onClick={onDelete} className="p-1 text-zinc-500 hover:text-red-400">
-          <Trash2 className="w-3 h-3" />
-        </button>
+        {(story.deliberationCount ?? 0) > 0 && (
+          <span className="px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-purple-500/20 text-purple-400 border border-purple-500/30">
+            {story.deliberationCount}
+          </span>
+        )}
+        {story.hasReport && (
+          <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" title="Has report" />
+        )}
+        {(story.aiCostCents ?? 0) > 0 && (
+          <span className="text-[10px] text-zinc-500" title="AI cost">
+            ${((story.aiCostCents ?? 0) / 100).toFixed(2)}
+          </span>
+        )}
+        <div className="flex items-center gap-0.5">
+          <button
+            onClick={onDeliberate}
+            disabled={isStartingDeliberation}
+            className="p-1 rounded text-purple-400 hover:bg-purple-500/10 transition disabled:opacity-50"
+            title="Deliberate"
+          >
+            {isStartingDeliberation ? <Loader2 className="w-3 h-3 animate-spin" /> : <Brain className="w-3 h-3" />}
+          </button>
+          <button
+            onClick={onReport}
+            className="p-1 rounded text-emerald-400 hover:bg-emerald-500/10 transition"
+            title="Implementation Report"
+          >
+            <FileText className="w-3 h-3" />
+          </button>
+          {story.status === 'done' && (
+            <button
+              onClick={onRelease}
+              disabled={actionLoading !== null}
+              className="p-1 rounded text-purple-400 hover:bg-purple-500/10 transition disabled:opacity-50"
+              title="Release"
+            >
+              <Rocket className="w-3 h-3" />
+            </button>
+          )}
+          <button onClick={() => onReorder(-1)} disabled={idx === 0} className="p-1 text-zinc-500 hover:text-zinc-300 disabled:opacity-30">
+            <ArrowUp className="w-3 h-3" />
+          </button>
+          <button onClick={() => onReorder(1)} disabled={idx === totalStories - 1} className="p-1 text-zinc-500 hover:text-zinc-300 disabled:opacity-30">
+            <ArrowDown className="w-3 h-3" />
+          </button>
+          <button onClick={onEdit} className="p-1 text-zinc-500 hover:text-zinc-300">
+            <Pencil className="w-3 h-3" />
+          </button>
+          <button onClick={onDelete} className="p-1 text-zinc-500 hover:text-red-400">
+            <Trash2 className="w-3 h-3" />
+          </button>
+        </div>
       </div>
-    </div>
+      {showDelibPanel && deliberationId && (
+        <div className="p-3 pl-10 border-t border-zinc-800/50">
+          <DeliberationPanel deliberationId={deliberationId} onClose={onCloseDelib} />
+        </div>
+      )}
+      {showReportPanel && (
+        <div className="p-3 pl-10 border-t border-zinc-800/50">
+          <ImplementationReport targetId={story.id} targetType="story" onClose={onCloseReport} />
+        </div>
+      )}
+    </>
   );
 }
 

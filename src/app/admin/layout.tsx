@@ -22,6 +22,7 @@ import {
   Loader2,
   Key,
   Activity,
+  Brain,
 } from 'lucide-react';
 
 const navItems = [
@@ -79,6 +80,11 @@ const navItems = [
     label: 'Announcements',
     href: '/admin/announcements',
     icon: Bell,
+  },
+  {
+    label: 'AI Config',
+    href: '/admin/ai',
+    icon: Brain,
   },
   {
     label: 'Settings',

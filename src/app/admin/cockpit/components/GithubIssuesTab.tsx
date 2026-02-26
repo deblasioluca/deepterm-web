@@ -33,7 +33,27 @@ function extractBodyMarkdown(raw: string): string {
     } catch { /* not valid JSON, fall through */ }
   }
 
-  // Case 3: Plain markdown — return as-is
+  // Case 3: Broken/truncated JSON — starts with ```json but JSON is malformed.
+  // Extract the "body" value directly by finding its start position.
+  if (trimmed.startsWith('```json')) {
+    const bodyKeyIdx = raw.indexOf('"body"');
+    if (bodyKeyIdx !== -1) {
+      // Find the opening quote of the value: "body": "..."
+      const colonIdx = raw.indexOf(':', bodyKeyIdx + 6);
+      const valueQuoteIdx = raw.indexOf('"', colonIdx + 1);
+      if (valueQuoteIdx !== -1) {
+        const valueContent = raw.substring(valueQuoteIdx + 1);
+        // Un-escape JSON string escapes (\n, \", \\, \t)
+        return valueContent
+          .replace(/\\n/g, '\n')
+          .replace(/\\\\/g, '\\')
+          .replace(/\\"/g, '"')
+          .replace(/\\t/g, '\t');
+      }
+    }
+  }
+
+  // Case 4: Plain markdown — return as-is
   return raw;
 }
 

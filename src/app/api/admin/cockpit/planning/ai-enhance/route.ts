@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getAnthropic } from '@/lib/claude';
+import { callAI } from '@/lib/ai-client';
 import { getRepoContext } from '@/lib/repo-context';
 
 export const dynamic = 'force-dynamic';
@@ -51,21 +51,19 @@ ${body || '(empty — please write a proper description based on the title)'}
 
 ${repoContext ? `\n---\n\n# Repository Context\n\n${repoContext}` : ''}`;
 
-    const client = getAnthropic();
-    console.log('[AI Enhance] Calling Claude API with repo context...');
-    const response = await client.messages.create({
-      model: 'claude-sonnet-4-6',
-      max_tokens: 2048,
-      system: SYSTEM_PROMPT,
-      messages: [{ role: 'user', content: userMessage }],
-    });
-    console.log('[AI Enhance] Claude responded, stop_reason:', response.stop_reason);
+    console.log('[AI Enhance] Calling AI with repo context...');
+    const aiResponse = await callAI(
+      'planning.enhance',
+      SYSTEM_PROMPT,
+      [{ role: 'user', content: userMessage }],
+      { maxTokens: 2048 }
+    );
+    console.log('[AI Enhance] AI responded via', aiResponse.provider, aiResponse.model);
 
-    const textBlocks = response.content.filter(b => b.type === 'text');
-    if (textBlocks.length === 0) {
+    const fullText = aiResponse.content;
+    if (!fullText) {
       return NextResponse.json({ error: 'No text response from AI' }, { status: 500 });
     }
-    const fullText = textBlocks.map(b => b.type === 'text' ? b.text : '').join('\n');
 
     // Parse JSON from response
     let parsed: { title?: string; body?: string; summary?: string };

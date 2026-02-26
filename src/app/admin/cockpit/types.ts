@@ -114,6 +114,10 @@ export interface Epic {
   stories: Story[];
   createdAt: string;
   updatedAt: string;
+  deliberationCount?: number;
+  activeDeliberationId?: string | null;
+  hasReport?: boolean;
+  aiCostCents?: number;
 }
 
 export interface Story {
@@ -127,11 +131,52 @@ export interface Story {
   sortOrder: number;
   createdAt: string;
   updatedAt: string;
+  deliberationCount?: number;
+  activeDeliberationId?: string | null;
+  hasReport?: boolean;
+  aiCostCents?: number;
 }
 
 export interface PlanningData {
   epics: Epic[];
   unassignedStories: Story[];
+}
+
+// ── Pipeline types ──
+
+export interface PipelineDag {
+  dagId: string;
+  description: string;
+  schedule: string | null;
+  isPaused: boolean;
+  tags: string[];
+  nextRun: string | null;
+}
+
+export interface PipelineRun {
+  dagId: string;
+  runId: string;
+  state: string;
+  startDate: string | null;
+  endDate: string | null;
+  conf: Record<string, unknown>;
+}
+
+export interface PipelineTask {
+  taskId: string;
+  state: string;
+  startDate: string | null;
+  endDate: string | null;
+  duration: number | null;
+  tryNumber: number;
+}
+
+export interface PipelineData {
+  connected: boolean;
+  dags: PipelineDag[];
+  activeRuns: PipelineRun[];
+  recentRuns: PipelineRun[];
+  errorMessage?: string;
 }
 
 export interface CockpitData {
@@ -143,7 +188,158 @@ export interface CockpitData {
   triageQueue: TriageQueue;
   revenue: RevenueData;
   planning: PlanningData;
+  pipelines?: PipelineData;
   timestamp: string;
 }
 
 export type RunAction = (action: string, payload?: Record<string, unknown>) => Promise<void>;
+
+// ── Deliberation types ──
+
+export interface DeliberationProposalData {
+  id: string;
+  agentName: string;
+  agentModel: string;
+  content: string;
+  strengths: string;
+  risks: string;
+  effort: string;
+  createdAt: string;
+}
+
+export interface DeliberationDebateData {
+  id: string;
+  round: number;
+  agentName: string;
+  agentModel: string;
+  content: string;
+  referencesProposalIds: string;
+  createdAt: string;
+}
+
+export interface DeliberationVoteData {
+  id: string;
+  agentName: string;
+  agentModel: string;
+  votedFor: string;
+  votedProposalId: string | null;
+  reasoning: string;
+  createdAt: string;
+}
+
+export interface DeliberationSummary {
+  id: string;
+  type: string;
+  status: string;
+  storyId: string | null;
+  epicId: string | null;
+  title: string;
+  createdAt: string;
+  updatedAt: string;
+  _count?: { proposals: number; debates: number; votes: number };
+}
+
+export interface DeliberationDetail extends DeliberationSummary {
+  instructions: string;
+  summary: string;
+  managementSummary: string;
+  error: string | null;
+  proposals: DeliberationProposalData[];
+  debates: DeliberationDebateData[];
+  votes: DeliberationVoteData[];
+  story?: { id: string; title: string; status: string; priority: string; githubIssueNumber: number | null } | null;
+  epic?: { id: string; title: string; status: string; priority: string } | null;
+}
+
+// ── AI Usage types ──
+
+export interface AIUsageLogEntry {
+  id: string;
+  provider: string;
+  model: string;
+  activity: string;
+  category: string;
+  inputTokens: number;
+  outputTokens: number;
+  totalTokens: number;
+  costCents: number;
+  deliberationId: string | null;
+  agentLoopId: string | null;
+  storyId: string | null;
+  epicId: string | null;
+  durationMs: number;
+  success: boolean;
+  errorMessage: string | null;
+  createdAt: string;
+}
+
+export interface AIUsageSummary {
+  period: { start: string; end: string };
+  totals: {
+    calls: number;
+    inputTokens: number;
+    outputTokens: number;
+    totalTokens: number;
+    costCents: number;
+    costDollars: string;
+    avgDurationMs: number;
+    errorCount: number;
+    errorRate: string;
+  };
+  byProvider: Array<{
+    provider: string;
+    calls: number;
+    totalTokens: number;
+    costCents: number;
+    costDollars: string;
+  }>;
+  byCategory: Array<{
+    category: string;
+    calls: number;
+    totalTokens: number;
+    costCents: number;
+    costDollars: string;
+  }>;
+  byActivity: Array<{
+    activity: string;
+    model: string;
+    calls: number;
+    totalTokens: number;
+    costCents: number;
+  }>;
+  topConsumers: Array<{
+    storyId: string;
+    title: string;
+    calls: number;
+    totalTokens: number;
+    costCents: number;
+    costDollars: string;
+  }>;
+}
+
+export interface AIUsageTimeline {
+  granularity: string;
+  points: Array<{
+    date: string;
+    tokens: number;
+    costCents: number;
+    calls: number;
+    errors: number;
+  }>;
+}
+
+export interface ImplementationReportData {
+  id: string;
+  storyId: string | null;
+  epicId: string | null;
+  status: string;
+  testsAdded: string;
+  testsUpdated: string;
+  docsUpdated: string;
+  helpPagesUpdated: string;
+  filesChanged: string;
+  prNumbers: string;
+  summary: string;
+  createdAt: string;
+  updatedAt: string;
+}

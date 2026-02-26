@@ -234,6 +234,22 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ ok: true, message: 'Epic released' });
       }
 
+      // ── Trigger Airflow DAG ──
+      case 'trigger-dag': {
+        const { dagId, conf } = body;
+        if (!dagId) return NextResponse.json({ error: 'dagId is required' }, { status: 400 });
+        const { airflowJSON: afJSON } = await import('@/lib/airflow');
+        const result = await afJSON<{ dag_run_id: string; state: string }>(
+          `/dags/${encodeURIComponent(dagId)}/dagRuns`,
+          { method: 'POST', body: JSON.stringify({ conf: conf || {} }) }
+        );
+        return NextResponse.json({
+          ok: true,
+          message: `Triggered ${dagId}`,
+          runId: result.dag_run_id,
+        });
+      }
+
       default:
         return NextResponse.json({ error: `Unknown action: ${action}` }, { status: 400 });
     }
