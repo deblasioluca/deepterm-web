@@ -129,7 +129,7 @@ export default function LifecycleTab() {
         'start-deliberation': {
           url: '/api/admin/cockpit/deliberation',
           method: 'POST',
-          body: { storyId, title: selectedStory?.title || 'Review' },
+          body: { type: 'implementation', storyId, title: selectedStory?.title || 'Review' },
         },
         'start-agent': {
           url: '/api/admin/cockpit/agent-loop',
