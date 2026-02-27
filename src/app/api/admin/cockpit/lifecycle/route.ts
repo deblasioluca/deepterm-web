@@ -74,3 +74,80 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: 'Failed to fetch lifecycle data' }, { status: 500 });
   }
 }
+
+// POST /api/admin/cockpit/lifecycle — Gate actions for lifecycle flow
+export async function POST(req: NextRequest) {
+  try {
+    const { action, storyId, reason } = await req.json();
+    if (!storyId || !action) {
+      return NextResponse.json({ error: 'storyId and action required' }, { status: 400 });
+    }
+
+    const story = await prisma.story.findUnique({ where: { id: storyId } });
+    if (!story) return NextResponse.json({ error: 'Story not found' }, { status: 404 });
+
+    const updates: Record<string, unknown> = {};
+
+    switch (action) {
+      case 'skip-deliberation':
+        // Mark as if deliberation passed — create a "skipped" deliberation record
+        await prisma.deliberation.create({
+          data: { type: 'implementation', status: 'decided', storyId, title: 'Skipped', summary: 'Deliberation skipped by operator.' },
+        });
+        updates.status = 'in_progress';
+        break;
+
+      case 'approve-decision':
+        // Approve the deliberation decision — advance to implementation
+        const delib = await prisma.deliberation.findFirst({ where: { storyId }, orderBy: { createdAt: 'desc' } });
+        if (delib) await prisma.deliberation.update({ where: { id: delib.id }, data: { status: 'decided' } });
+        updates.status = 'in_progress';
+        break;
+
+      case 'restart-deliberation':
+        // Reset deliberation — the start-deliberation button will create a new one
+        break;
+
+      case 'manual-pr':
+      case 'manual-fix':
+        // Operator will create PR manually — just mark as in_progress
+        updates.status = 'in_progress';
+        break;
+
+      case 'approve-pr':
+        // Mark PR as approved / merged
+        updates.status = 'done';
+        break;
+
+      case 'reject-pr':
+        // PR rejected — stay in progress for rework
+        updates.status = 'in_progress';
+        break;
+
+      case 'mark-tests-passed':
+        // Mark tests as passing (for manual override)
+        updates.status = 'done';
+        break;
+
+      case 'mark-deployed':
+        updates.status = 'released';
+        break;
+
+      case 'mark-released':
+        updates.status = 'released';
+        break;
+
+      default:
+        return NextResponse.json({ error: `Unknown action: ${action}` }, { status: 400 });
+    }
+
+    if (Object.keys(updates).length > 0) {
+      await prisma.story.update({ where: { id: storyId }, data: updates });
+    }
+
+    return NextResponse.json({ ok: true, action, storyId });
+  } catch (error) {
+    console.error('Lifecycle gate action error:', error);
+    return NextResponse.json({ error: 'Failed to process gate action' }, { status: 500 });
+  }
+}
