@@ -25,6 +25,8 @@ import {
   Mail,
   BookOpen,
   ArrowRight,
+  Terminal,
+  ChevronDown,
 } from 'lucide-react';
 
 // ── Types ──
@@ -53,6 +55,7 @@ interface LifecycleStep {
   };
   substeps?: { label: string; status: StepStatus }[];
   timestamp?: string;
+  agentLoopId?: string | null;
 }
 
 // ── Status styles ──
@@ -118,6 +121,59 @@ function GateButtons({ gate, stepId, onGateAction }: {
 }
 
 // ── Single step card ──
+
+
+// ── Agent Log Drill-down ──
+
+function AgentDrillDown({ loopId }: { loopId: string }) {
+  const [expanded, setExpanded] = useState(false);
+  const [data, setData] = useState<any>(null);
+  const [loading, setLoading] = useState(false);
+
+  const fetchLogs = async () => {
+    if (data) { setExpanded(!expanded); return; }
+    setExpanded(true);
+    setLoading(true);
+    try {
+      const res = await fetch(`/api/admin/cockpit/agent-loop/${loopId}`);
+      if (res.ok) setData(await res.json());
+    } catch { /* ok */ } finally { setLoading(false); }
+  };
+
+  return (
+    <div className="mt-2">
+      <button onClick={fetchLogs} className="inline-flex items-center gap-1 text-xs text-cyan-400 hover:text-cyan-300 transition">
+        <Terminal className="w-3 h-3" />
+        {expanded ? 'Hide' : 'View'} Agent Logs
+        <ChevronDown className={`w-3 h-3 transition-transform ${expanded ? 'rotate-180' : ''}`} />
+      </button>
+      {expanded && (
+        <div className="mt-2 max-h-64 overflow-y-auto rounded-lg border border-zinc-700/50 bg-zinc-900/80 p-3 space-y-2">
+          {loading ? (
+            <div className="flex items-center gap-2 text-xs text-zinc-500"><Loader2 className="w-3 h-3 animate-spin" /> Loading agent logs...</div>
+          ) : !data ? (
+            <p className="text-xs text-zinc-500">Failed to load agent logs</p>
+          ) : (
+            <>
+              <div className="flex items-center justify-between text-xs">
+                <span className="text-zinc-400">Status: <span className={data.status === 'completed' ? 'text-emerald-400' : data.status === 'failed' ? 'text-red-400' : data.status === 'running' ? 'text-blue-400' : 'text-zinc-400'}>{data.status}</span></span>
+                <span className="text-zinc-500">{data.iterations?.length || 0} iterations</span>
+              </div>
+              {data.errorLog && <p className="text-xs text-red-400 bg-red-500/10 rounded px-2 py-1">{data.errorLog}</p>}
+              {(data.iterations || []).map((iter: any, i: number) => (
+                <div key={i} className="border-l-2 border-zinc-700 pl-3 py-1">
+                  <p className="text-[10px] text-zinc-500 font-mono">Iteration {iter.iteration}</p>
+                  <p className="text-xs text-zinc-300 mt-0.5 line-clamp-2">{iter.thinking?.slice(0, 200)}{iter.thinking?.length > 200 ? '...' : ''}</p>
+                  <p className="text-[10px] text-cyan-400/70 mt-0.5 font-mono truncate">{iter.action?.slice(0, 100)}</p>
+                </div>
+              ))}
+            </>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
 
 function StepCard({ step, isLast, onGateAction }: {
   step: LifecycleStep;
@@ -185,6 +241,11 @@ function StepCard({ step, isLast, onGateAction }: {
           {/* Gate actions */}
           {isGate && step.gate && (
             <GateButtons gate={step.gate} stepId={step.id} onGateAction={onGateAction} />
+          )}
+
+          {/* Agent drill-down for Implement step */}
+          {step.agentLoopId && (
+            <AgentDrillDown loopId={step.agentLoopId} />
           )}
 
           {/* Timestamp */}
@@ -268,6 +329,7 @@ function buildLifecycleSteps(story: StoryLifecycleData | null): LifecycleStep[] 
   const implStatus: StepStatus = s.prNumber ? 'passed' : s.agentLoopStatus === 'running' ? 'active' : s.agentLoopStatus === 'failed' ? 'failed' : (delibStatus === 'passed' && delibPhase === 'decided') ? 'waiting_approval' : 'pending';
   steps.push({
     id: 'implement', label: 'Implement', description: 'AI agent writes code and creates PR',
+    agentLoopId: s.agentLoopId || null,
     icon: <GitPullRequest className="w-4 h-4" />, actor: 'ai', status: implStatus,
     detail: s.prNumber ? `PR #${s.prNumber}` : s.agentLoopStatus === 'running' ? 'Agent coding...' : s.agentLoopStatus === 'failed' ? 'Agent failed — fix & retry' : undefined,
     link: s.prUrl ? { url: s.prUrl, label: `PR #${s.prNumber}` } : undefined,
