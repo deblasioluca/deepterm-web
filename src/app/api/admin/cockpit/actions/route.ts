@@ -71,12 +71,13 @@ export async function POST(req: NextRequest) {
 
       // ── Trigger CI build ──
       case 'trigger-build': {
-        const { workflow, branch } = body;
+        const { workflow, branch, repo: repoName } = body;
+        const repo = repoName || 'deepterm-web';
         const ghToken = process.env.GITHUB_TOKEN;
         if (!ghToken) return NextResponse.json({ error: 'No GITHUB_TOKEN' }, { status: 500 });
 
         const res = await fetch(
-          `https://api.github.com/repos/deblasioluca/deepterm/actions/workflows/${workflow || 'pr-check.yml'}/dispatches`,
+          `https://api.github.com/repos/deblasioluca/${repo}/actions/workflows/${workflow || 'pr-check.yml'}/dispatches`,
           {
             method: 'POST',
             headers: {

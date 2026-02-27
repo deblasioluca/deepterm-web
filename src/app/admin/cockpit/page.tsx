@@ -193,6 +193,10 @@ export default function CockpitPage() {
           className="flex items-center gap-2 px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-xs text-zinc-300 hover:bg-zinc-700 hover:border-zinc-600 transition disabled:opacity-50">
           <Play className="w-3.5 h-3.5 text-emerald-400" /> Trigger CI Build
         </button>
+        <button onClick={() => runAction('trigger-build', { workflow: 'e2e.yml', branch: 'main', repo: 'deepterm-web' })} disabled={actionLoading !== null}
+          className="flex items-center gap-2 px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-xs text-zinc-300 hover:bg-zinc-700 hover:border-zinc-600 transition disabled:opacity-50">
+          <Play className="w-3.5 h-3.5 text-blue-400" /> Run E2E Tests
+        </button>
         <button onClick={() => runAction('test-whatsapp')} disabled={actionLoading !== null}
           className="flex items-center gap-2 px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-xs text-zinc-300 hover:bg-zinc-700 hover:border-zinc-600 transition disabled:opacity-50">
           <Send className="w-3.5 h-3.5 text-green-400" /> Test WhatsApp
