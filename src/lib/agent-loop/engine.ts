@@ -16,6 +16,7 @@ import { prisma } from '@/lib/prisma';
 import { callAI } from '@/lib/ai-client';
 import { getRepoContext } from '@/lib/repo-context';
 import { commitFiles, createPullRequest, groupByRepo } from '@/lib/github-commit';
+import { notifyAgentPR } from '@/lib/node-red';
 import type { AIMessage } from '@/lib/ai-client';
 
 // ── File Change Accumulator ──────────────────────
@@ -550,6 +551,17 @@ export async function runAgentLoop(loopId: string, feedbackContext?: string): Pr
               prUrl: prResult.prUrl,
               prNumber: prResult.prNumber,
             },
+          });
+
+          // Notify via WhatsApp
+          notifyAgentPR({
+            loopId,
+            repo: targetRepo,
+            branch: loop.branchName || `agent/${loopId.slice(0, 8)}`,
+            prNumber: prResult.prNumber!,
+            prUrl: prResult.prUrl,
+            title: prTitle,
+            filesChanged: accumulatedFiles.length,
           });
         }
 

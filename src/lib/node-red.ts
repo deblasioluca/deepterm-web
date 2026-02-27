@@ -11,7 +11,7 @@
 
 const NODE_RED_BASE_URL = process.env.NODE_RED_URL || 'http://192.168.1.30:1880';
 
-type WebhookType = 'triage' | 'build-status' | 'release' | 'payment' | 'idea-popular' | 'security';
+type WebhookType = 'triage' | 'build-status' | 'release' | 'payment' | 'idea-popular' | 'security' | 'agent-pr';
 
 interface TriagePayload {
   event: 'new-issue' | 'new-idea';
@@ -69,6 +69,17 @@ interface SecurityPayload {
   details?: string;
 }
 
+interface AgentPrPayload {
+  event: 'agent-pr-opened';
+  loopId: string;
+  repo: string;
+  branch: string;
+  prNumber: number;
+  prUrl: string;
+  title: string;
+  filesChanged: number;
+}
+
 type PayloadMap = {
   triage: TriagePayload;
   'build-status': BuildStatusPayload;
@@ -76,6 +87,7 @@ type PayloadMap = {
   payment: PaymentPayload;
   'idea-popular': IdeaPopularPayload;
   security: SecurityPayload;
+  'agent-pr': AgentPrPayload;
 };
 
 /**
@@ -210,5 +222,20 @@ export function notifySecurityAlert(alert: {
   return notifyNodeRed('security', {
     event: 'security-alert',
     ...alert,
+  });
+}
+
+export function notifyAgentPR(pr: {
+  loopId: string;
+  repo: string;
+  branch: string;
+  prNumber: number;
+  prUrl: string;
+  title: string;
+  filesChanged: number;
+}) {
+  return notifyNodeRed('agent-pr', {
+    event: 'agent-pr-opened',
+    ...pr,
   });
 }

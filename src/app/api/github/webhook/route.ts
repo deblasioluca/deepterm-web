@@ -16,8 +16,12 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import crypto from 'crypto';
+import { exec } from 'child_process';
+import { promisify } from 'util';
 import { prisma } from '@/lib/prisma';
-import { notifyBuildResult } from '@/lib/node-red';
+import { notifyBuildResult, notifyNodeRed } from '@/lib/node-red';
+
+const execAsync = promisify(exec);
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -218,6 +222,44 @@ async function handlePullRequest(payload: any): Promise<void> {
       }
     } catch (err) {
       console.error('[GitHub Webhook] Story status update failed:', err);
+    }
+  }
+
+  // ── Auto-deploy web repo on merge to main ──
+  if (action === 'closed' && merged && repo === 'deblasioluca/deepterm-web' && branch !== 'main') {
+    const baseBranch = pr.base?.ref || '';
+    if (baseBranch === 'main') {
+      console.log(`[GitHub Webhook] Auto-deploying web repo — PR #${pr.number} merged to main`);
+      try {
+        const { stdout, stderr } = await execAsync(
+          'cd /home/macan/deepterm && git pull origin main && npm run build && pm2 restart deepterm',
+          { timeout: 120000 }
+        );
+        console.log(`[GitHub Webhook] Deploy succeeded: ${stdout.slice(-200)}`);
+
+        // Notify via WhatsApp
+        notifyNodeRed('build-status', {
+          event: 'build-success',
+          repo,
+          branch: baseBranch,
+          workflow: 'auto-deploy',
+          commitMessage: `PR #${pr.number} merged: ${title.slice(0, 80)}`,
+          url,
+        });
+      } catch (err) {
+        const message = err instanceof Error ? err.message : 'Unknown error';
+        console.error(`[GitHub Webhook] Auto-deploy FAILED:`, message);
+
+        notifyNodeRed('build-status', {
+          event: 'build-failure',
+          repo,
+          branch: baseBranch,
+          workflow: 'auto-deploy',
+          commitMessage: `PR #${pr.number} merged: ${title.slice(0, 80)}`,
+          failureDetails: message.slice(0, 500),
+          url,
+        });
+      }
     }
   }
 }
