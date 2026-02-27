@@ -1,151 +1,184 @@
-# DeepTerm Cockpit Reorganization Plan
+# DeepTerm Cockpit & DevOps Reorganization Plan
 
-**Version:** 1.0
+**Version:** 2.0
 **Date:** 2026-02-27
-**Status:** PLANNING
+**Status:** IN PROGRESS
 
 ---
 
-## 1. Current Issues & Questions Answered
+## 1. Architecture Decision: Cockpit vs DevOps Split
 
-### Q: What does "Trigger CI Build" do?
-It dispatches `pr-check.yml` via GitHub Actions API on the `deepterm-web` repo (default) or a specified repo. It sends a `workflow_dispatch` event to GitHub, which the self-hosted CI Mac runner picks up. The CI Mac then builds, runs tests, and reports back. The "Run E2E Tests" button does the same but dispatches `e2e.yml`.
+### Problem
+The Cockpit tries to be both an operational dashboard AND a development pipeline manager (13 tabs). This creates cognitive overload and mixes concerns.
 
-### Q: Lifecycle bugs identified
-| Bug | Root Cause | Fix |
-|-----|-----------|-----|
-| a) No auto-update when deliberation finishes | Lifecycle tab only fetches on mount + manual refresh, no polling | Add 10s polling interval while a step is "active" |
-| b) Implement gate active during deliberation spin | Status derivation shows implement as waiting_approval too early | Fix: check if deliberation is still running and show "pending" for implement until decided |
-| c) Progress 1/6 (left) vs 3/8 (right) | Left counts 6 phases, right counts 8 steps | Align to same count everywhere |
-| d) Only 1 of 3 stories visible | API filters status IN (planned, in_progress, done) — backlog excluded | Include backlog stories from active epics |
+### Decision
+Split into two top-level sidebar items:
+- **Cockpit** → "Is everything running?" (operational monitoring)
+- **DevOps** → "What are we building?" (development pipeline)
 
-### Q: AI Config overlap with Settings → AI tab
-- `/admin/ai` page: Full AI provider management
-- Settings → AI tab: Nearly identical
-- **Decision:** Keep `/admin/ai` only. Remove AI tab from Settings.
+### Agent Loop Decision
+Agent Loop is removed as a standalone tab. Agent status is already reflected in Lifecycle's "Implement" step. Detailed agent logs/traces become a drill-down panel accessible from within the Implement gate ("View Agent Logs" link).
 
-### Q: Settings → Integrations missing systems
-Current: GitHub, Node-RED, AI Dev Mac, Apache Airflow
-Missing: CI Mac, Raspberry Pi, Web App
-**Fix:** Add all 7 systems everywhere consistently.
+---
 
-### Q: Consistent system list
-| System | Integrations | System Health | Overview |
+## 2. New Left Sidebar Structure
+
+```
+Dashboard
+Cockpit          → Overview | System Health | AI Usage
+DevOps           → Triage | Backlog | Planning | Lifecycle | Code & PRs | Builds | Pipelines
+Users
+Teams
+Licenses
+Subscriptions
+Analytics
+Audit Logs
+Feedback
+Issues
+Announcements
+AI Config        (keep — remove AI tab from Settings)
+Settings         (General, Security, Billing, Notifications, Releases, Integrations, Danger Zone)
+```
+
+---
+
+## 3. Cockpit (3 tabs — operational monitoring)
+
+| # | Tab | Contents |
+|---|-----|----------|
+| 1 | **Overview** | KPI cards (users, revenue, issues), system status summary (all 7), recent alerts, quick actions |
+| 2 | **System Health** | All 7 systems detailed: Pi, CI Mac, Web App, GitHub, Node-RED, AI Dev Mac, Airflow |
+| 3 | **AI Usage** | Token spend, cost breakdown, model usage, per-activity stats |
+
+---
+
+## 4. DevOps (7 tabs — development pipeline flow)
+
+| # | Tab | Contents | Flow |
+|---|-----|----------|------|
+| 1 | **Triage** | Incoming bugs/features → approve/reject/defer | Input |
+| 2 | **Backlog** | Approved items awaiting planning | Queue |
+| 3 | **Planning** | Epics, stories, priorities, sprint planning | Organize |
+| 4 | **Lifecycle** | Epic/story flow through gates (agent drill-down in Implement step) | Execute |
+| 5 | **Code & PRs** | Reviews + Pull Requests + Activity (sub-tabs) | Review |
+| 6 | **Builds** | Build history, CI/E2E triggers, GitHub Actions runs | Build |
+| 7 | **Pipelines** | DAG overview + recent runs, Scheduled DAGs, All DAGs (sub-tabs) | Orchestrate |
+
+---
+
+## 5. System Consistency (7 systems everywhere)
+
+| System | Cockpit Overview | System Health | Settings Integrations |
 |--------|:---:|:---:|:---:|
-| Raspberry Pi | ✅ | ✅ | ✅ |
-| CI Mac | ❌ add | ✅ | ✅ |
-| Web App (Next.js/PM2) | ❌ add | ❌ add | ❌ add |
-| GitHub | ✅ | ❌ add | ❌ add |
-| Node-RED | ✅ | ✅ | ✅ |
-| AI Dev Mac | ✅ | ❌ add | ❌ add |
-| Airflow | ✅ | ❌ add | ❌ add |
+| Raspberry Pi | ✅ show | ✅ show | ✅ show |
+| CI Mac | ✅ show | ✅ show | ✅ add |
+| Web App (Next.js/PM2) | ✅ add | ✅ add | ✅ add |
+| GitHub | ✅ add | ✅ add | ✅ exists |
+| Node-RED | ✅ show | ✅ show | ✅ exists |
+| AI Dev Mac | ✅ add | ✅ add | ✅ exists |
+| Airflow | ✅ add | ✅ add | ✅ exists |
 
 ---
 
-## 2. Cockpit Tab Reorganization
+## 6. Lifecycle Bugs to Fix
 
-### Current (13 tabs):
-Overview, Backlog, Triage, Planning, Lifecycle, Pipelines, Reviews, Pull Requests, System Health, Builds, Activity, Agent Loop, AI Usage
-
-### Proposed (10 tabs, logical flow):
-
-| # | Tab | Contents | Rationale |
-|---|-----|----------|-----------|
-| 1 | **Overview** | Dashboard cards, system status, recent activity | Entry point |
-| 2 | **Triage** | Incoming bugs/features → approve/reject/defer | First step |
-| 3 | **Backlog** | Approved items awaiting planning | After triage |
-| 4 | **Planning** | Epics, stories, priorities | Bundle backlog |
-| 5 | **Lifecycle** | Epic/story flow through stages | Track WIP |
-| 6 | **Code & PRs** | Reviews + Pull Requests + Activity (sub-tabs) | All code activity |
-| 7 | **Agent Loop** | AI agent sessions, logs | AI dev tracking |
-| 8 | **Builds** | Build history, triggers, GitHub Actions | Build/deploy |
-| 9 | **Pipelines** | DAG overview, scheduled, all DAGs (sub-tabs) | Orchestration |
-| 10 | **System Health** | All 7 systems + AI usage summary | Infrastructure |
-
-### Pipelines sub-tabs:
-- Overview & Recent Runs
-- Scheduled DAGs (only 5 active)
-- All DAGs
+| Bug | Fix |
+|-----|-----|
+| a) No auto-update when step finishes | Add 10s polling when any step is active |
+| b) Implement gate active during deliberation | Show "pending" while deliberation still running |
+| c) Progress 1/6 left vs 3/8 right | Align to same count everywhere |
+| d) Only 1 of 3 stories visible | Include backlog stories from active epics |
 
 ---
 
-## 3. Implementation Phases
+## 7. Implementation Phases
 
 ### Phase 1: Fix Lifecycle Bugs ⬜
-- [ ] 1.1 Add polling (10s) to LifecycleTab when active steps exist
+- [ ] 1.1 Add 10s polling to LifecycleTab when active steps exist
 - [ ] 1.2 Fix implement gate: pending while deliberation running
-- [ ] 1.3 Align progress count (left = right)
-- [ ] 1.4 Include backlog stories from active epics in API
-- [ ] 1.5 Test full lifecycle flow
+- [ ] 1.3 Align progress count left = right
+- [ ] 1.4 Include backlog stories from active epics in lifecycle API
+- [ ] 1.5 Test full lifecycle flow with test epic
 
-### Phase 2: Cockpit Tab Reorder & Merge ⬜
-- [ ] 2.1 Reorder TABS array
-- [ ] 2.2 Create CodeAndPRsTab (Reviews + PRs + Activity sub-tabs)
-- [ ] 2.3 Move AI Usage into System Health
-- [ ] 2.4 Remove old standalone tabs
-- [ ] 2.5 Test all tabs
+### Phase 2: Create DevOps Page ⬜
+- [ ] 2.1 Create /admin/devops/page.tsx with 7 tabs
+- [ ] 2.2 Move Triage, Backlog, Planning, Lifecycle tabs to DevOps
+- [ ] 2.3 Create CodeAndPRsTab (Reviews + PRs + Activity sub-tabs)
+- [ ] 2.4 Move Builds tab to DevOps
+- [ ] 2.5 Move Pipelines tab to DevOps
+- [ ] 2.6 Add DevOps to sidebar in layout.tsx
 
-### Phase 3: System Consistency ⬜
-- [ ] 3.1 Define canonical 7-system list
-- [ ] 3.2 Update SystemHealthTab for all 7
-- [ ] 3.3 Update OverviewTab for all 7
-- [ ] 3.4 Update IntegrationsTab (add CI Mac, Pi, Web App)
-- [ ] 3.5 Remove AI tab from Settings
-- [ ] 3.6 Add health check endpoints for new systems
+### Phase 3: Slim Down Cockpit ⬜
+- [ ] 3.1 Reduce Cockpit to 3 tabs: Overview, System Health, AI Usage
+- [ ] 3.2 Update Overview with all 7 system status cards
+- [ ] 3.3 Move quick action buttons (Trigger CI, Run E2E) to DevOps Builds tab
+- [ ] 3.4 Remove old standalone tabs from Cockpit (Reviews, PRs, Activity, Agent Loop, Builds, Backlog, Triage, Planning, Lifecycle, Pipelines)
 
-### Phase 4: Pipelines Cleanup ⬜
-- [ ] 4.1 Add sub-tabs to PipelinesTab
-- [ ] 4.2 Remove non-implementation DAGs
-- [ ] 4.3 Connect triggers to GitHub dispatch
+### Phase 4: System Consistency ⬜
+- [ ] 4.1 Define canonical 7-system list with health check endpoints
+- [ ] 4.2 Update SystemHealthTab for all 7 systems
+- [ ] 4.3 Update OverviewTab system cards for all 7
+- [ ] 4.4 Update Settings IntegrationsTab (add CI Mac, Pi, Web App)
+- [ ] 4.5 Remove AI tab from Settings (keep /admin/ai)
+- [ ] 4.6 Add health check API endpoints for new systems
 
-### Phase 5: Polish & Testing ⬜
-- [ ] 5.1 E2E lifecycle test
-- [ ] 5.2 Verify quick actions
-- [ ] 5.3 Verify health checks
-- [ ] 5.4 Final commit
+### Phase 5: Pipelines & Agent Drill-down ⬜
+- [ ] 5.1 Add sub-tabs to Pipelines: Overview+Runs, Scheduled, All DAGs
+- [ ] 5.2 Remove non-implementation DAGs
+- [ ] 5.3 Add agent log drill-down panel to Lifecycle Implement step
+- [ ] 5.4 Remove standalone Agent Loop tab
 
----
-
-## 4. Files to Modify
-
-| File | Changes |
-|------|---------|
-| `page.tsx` (cockpit) | Reorder TABS, add CodeAndPRsTab, remove old tabs |
-| `LifecycleTab.tsx` | Polling, progress count, backlog stories |
-| `DevLifecycleFlow.tsx` | Fix implement gate status |
-| `CodeAndPRsTab.tsx` | NEW: Reviews + PRs + Activity |
-| `SystemHealthTab.tsx` | All 7 systems + AI usage |
-| `OverviewTab.tsx` | All 7 system status |
-| `PipelinesTab.tsx` | Sub-tabs, DAG cleanup |
-| `settings/page.tsx` | Remove AI tab |
-| `IntegrationsTab.tsx` | Add CI Mac, Pi, Web App |
-| `lifecycle/route.ts` | Backlog stories from active epics |
-| `health/route.ts` | New system health checks |
+### Phase 6: Polish & Testing ⬜
+- [ ] 6.1 E2E lifecycle test with test epic
+- [ ] 6.2 Verify all quick actions work
+- [ ] 6.3 Verify all 7 health checks
+- [ ] 6.4 Final commit and push
 
 ---
 
-## 5. Progress Tracking
+## 8. Files to Create/Modify
+
+| File | Action | Phase |
+|------|--------|-------|
+| `src/app/admin/devops/page.tsx` | CREATE — new DevOps page with 7 tabs | P2 |
+| `src/app/admin/layout.tsx` | MODIFY — add DevOps sidebar item | P2 |
+| `src/app/admin/cockpit/page.tsx` | MODIFY — reduce to 3 tabs | P3 |
+| `src/app/admin/cockpit/components/LifecycleTab.tsx` | MODIFY — polling, progress, backlog | P1 |
+| `src/app/admin/cockpit/components/DevLifecycleFlow.tsx` | MODIFY — fix implement gate, add agent drill-down | P1+P5 |
+| `src/app/admin/devops/components/CodeAndPRsTab.tsx` | CREATE — Reviews + PRs + Activity | P2 |
+| `src/app/admin/cockpit/components/SystemHealthTab.tsx` | MODIFY — all 7 systems | P4 |
+| `src/app/admin/cockpit/components/OverviewTab.tsx` | MODIFY — all 7 system cards | P4 |
+| `src/app/admin/cockpit/components/PipelinesTab.tsx` | MODIFY — sub-tabs | P5 |
+| `src/app/admin/settings/page.tsx` | MODIFY — remove AI tab | P4 |
+| `src/app/admin/settings/components/IntegrationsTab.tsx` | MODIFY — add 3 systems | P4 |
+| `src/app/api/admin/cockpit/lifecycle/route.ts` | MODIFY — backlog from active epics | P1 |
+| `src/app/api/admin/cockpit/health/route.ts` | MODIFY — new health checks | P4 |
+
+---
+
+## 9. Progress Tracking
 
 | Phase | Status | Started | Completed | Notes |
 |-------|--------|---------|-----------|-------|
 | Phase 1: Lifecycle Bugs | ⬜ | | | |
-| Phase 2: Tab Reorder | ⬜ | | | |
-| Phase 3: System Consistency | ⬜ | | | |
-| Phase 4: Pipelines Cleanup | ⬜ | | | |
-| Phase 5: Polish | ⬜ | | | |
+| Phase 2: Create DevOps | ⬜ | | | |
+| Phase 3: Slim Cockpit | ⬜ | | | |
+| Phase 4: System Consistency | ⬜ | | | |
+| Phase 5: Pipelines + Agent | ⬜ | | | |
+| Phase 6: Polish | ⬜ | | | |
 
 ---
 
-## 6. Chat Recovery
+## 10. Chat Recovery
 
 **Start new chat with:**
-> "Continue cockpit reorganization. Read /home/macan/deepterm/COCKPIT-REORG-PLAN.md on Pi (ssh macan@10.10.10.10). Shows what's done and next."
+> "Continue cockpit/devops reorganization. Read /home/macan/deepterm/COCKPIT-REORG-PLAN.md on Pi (ssh macan@10.10.10.10). Shows full plan with progress."
 
 **Key facts:**
 - Pi SSH: ssh macan@10.10.10.10 (user: macan)
 - Web app: /home/macan/deepterm (deepterm-web repo)
 - Build: npm run build → pm2 restart deepterm
-- Git: git add -A && git commit && git push origin main
+- Git: git add -A && git commit -m "..." && git push origin main
 - Cockpit: http://10.10.10.10:3000/admin/cockpit
 - Test epic: cmm4w6qmi0000vzo954ybzrd4 (Test Lifecycle Demo)
 - Test stories: cmm4w6qmi0001vzo9p26qtk4b (dark mode), cmm4w6qmi0002vzo9i81wrh4e (SSH reconnect), cmm4w6qmi0003vzo9e4kzc65a (clipboard sync)
