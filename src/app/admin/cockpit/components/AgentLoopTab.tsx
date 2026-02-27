@@ -159,7 +159,7 @@ export default function AgentLoopTab() {
       const [loopsRes, configsRes, storiesRes] = await Promise.all([
         fetch('/api/admin/cockpit/agent-loop'),
         fetch('/api/admin/cockpit/agent-loop/configs'),
-        fetch('/api/admin/cockpit/planning?type=stories&status=ready,in_progress').catch(() => null),
+        fetch('/api/admin/cockpit/planning/stories').catch(() => null),
       ]);
 
       if (loopsRes.ok) {
