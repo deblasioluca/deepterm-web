@@ -20,6 +20,7 @@ import {
   Eye,
   AlertTriangle,
   Zap,
+  RefreshCw,
 } from 'lucide-react';
 
 // ── Types ────────────────────────────────────────
@@ -543,6 +544,15 @@ export default function AgentLoopTab() {
                             className="flex items-center gap-1 px-2.5 py-1 bg-yellow-600/20 border border-yellow-500/30 rounded text-xs text-yellow-400 hover:bg-yellow-600/30"
                           >
                             <Square className="w-3 h-3" /> Cancel
+                          </button>
+                        )}
+                        {['failed', 'cancelled'].includes(loop.status) && (
+                          <button
+                            onClick={(e) => { e.stopPropagation(); loopAction(loop.id, 'retry'); }}
+                            disabled={actionLoading !== null}
+                            className="flex items-center gap-1 px-2.5 py-1 bg-blue-600/20 border border-blue-500/30 rounded text-xs text-blue-400 hover:bg-blue-600/30"
+                          >
+                            <RefreshCw className="w-3 h-3" /> Retry
                           </button>
                         )}
                         {['completed', 'failed', 'cancelled'].includes(loop.status) && (

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { createAndRunAgentLoop } from '@/lib/agent-loop/engine';
 
 export const dynamic = 'force-dynamic';
 
@@ -86,6 +87,46 @@ export async function PATCH(
           },
         });
         return NextResponse.json(updated);
+      }
+
+
+      case 'retry': {
+        if (!['failed', 'cancelled'].includes(loop.status)) {
+          return NextResponse.json({ error: 'Can only retry failed or cancelled loops' }, { status: 400 });
+        }
+
+        // Collect feedback from the failed loop
+        const iterations = await prisma.agentIteration.findMany({
+          where: { loopId: id },
+          orderBy: { iteration: 'desc' },
+          take: 3,
+        });
+
+        const feedbackParts: string[] = [];
+        if (loop.errorLog) feedbackParts.push(`Error: ${loop.errorLog}`);
+        if (body.reason) feedbackParts.push(`Reviewer feedback: ${body.reason}`);
+
+        for (const iter of iterations.reverse()) {
+          feedbackParts.push(
+            `--- Iteration ${iter.iteration} ---\n` +
+            `Thinking: ${iter.thinking.slice(0, 500)}\n` +
+            `Action: ${iter.action.slice(0, 1000)}\n` +
+            `Observation: ${iter.observation}`
+          );
+        }
+
+        const feedbackContext = feedbackParts.join('\n\n');
+
+        // Create new loop with feedback
+        const newLoopId = await createAndRunAgentLoop({
+          storyId: loop.storyId || undefined,
+          deliberationId: loop.deliberationId || undefined,
+          configId: loop.configId || undefined,
+          maxIterations: loop.maxIterations,
+          feedbackContext,
+        });
+
+        return NextResponse.json({ newLoopId, retryOf: id });
       }
 
       default:

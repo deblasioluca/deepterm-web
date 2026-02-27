@@ -205,7 +205,7 @@ function parseIterationResponse(content: string): ParsedIteration {
  * Run an agent loop to completion or failure.
  * Call fire-and-forget — updates DB records as it progresses.
  */
-export async function runAgentLoop(loopId: string): Promise<void> {
+export async function runAgentLoop(loopId: string, feedbackContext?: string): Promise<void> {
   const loop = await prisma.agentLoop.findUnique({
     where: { id: loopId },
     include: { config: true },
@@ -245,7 +245,9 @@ export async function runAgentLoop(loopId: string): Promise<void> {
 
     // Conversation history for multi-turn
     const messages: AIMessage[] = [
-      { role: 'user', content: `Here is the task and codebase context:\n\n${taskContext}\n\nBegin implementation. Start with iteration 1.` },
+      { role: 'user', content: feedbackContext
+        ? `Here is the task and codebase context:\n\n${taskContext}\n\n## Previous Attempt Feedback\nA previous attempt at this task failed. Here is the context from that attempt:\n\n${feedbackContext}\n\nPlease fix the issues from the previous attempt and complete the implementation. Start with iteration 1.`
+        : `Here is the task and codebase context:\n\n${taskContext}\n\nBegin implementation. Start with iteration 1.` },
     ];
 
     let totalInputTokens = 0;
@@ -403,6 +405,7 @@ export async function createAndRunAgentLoop(params: {
   deliberationId?: string;
   configId?: string;
   maxIterations?: number;
+  feedbackContext?: string;
 }): Promise<string> {
   const config = params.configId
     ? await prisma.agentLoopConfig.findUnique({ where: { id: params.configId } })
@@ -422,7 +425,7 @@ export async function createAndRunAgentLoop(params: {
   });
 
   // Fire-and-forget
-  runAgentLoop(loop.id).catch(err => {
+  runAgentLoop(loop.id, params.feedbackContext).catch(err => {
     console.error(`[AgentLoop] Background run failed for ${loop.id}:`, err);
   });
 
