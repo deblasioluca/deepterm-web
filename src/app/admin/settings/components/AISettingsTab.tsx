@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { Card, Button, Input } from '@/components/ui';
-import { Bot, Loader2, Check, AlertCircle, Save, Plus, Trash2, CheckCircle, XCircle } from 'lucide-react';
+import { Bot, Loader2, Check, AlertCircle, Save, Plus, Trash2, CheckCircle, XCircle, Pencil } from 'lucide-react';
 
 type AIProvider = {
   id: string;
@@ -78,6 +78,13 @@ export default function AISettingsTab() {
 
   // Validation
   const [validatingId, setValidatingId] = useState<string | null>(null);
+
+  // Edit provider state
+  const [editingProviderId, setEditingProviderId] = useState<string | null>(null);
+  const [editName, setEditName] = useState('');
+  const [editKey, setEditKey] = useState('');
+  const [editBaseUrl, setEditBaseUrl] = useState('');
+  const [isSavingEdit, setIsSavingEdit] = useState(false);
 
   // Assignment saving
   const [isSavingAssignments, setIsSavingAssignments] = useState(false);
@@ -181,6 +188,37 @@ export default function AISettingsTab() {
       await fetchAll();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to delete provider');
+    }
+  };
+
+  const startEditProvider = (provider: AIProvider) => {
+    setEditingProviderId(provider.id);
+    setEditName(provider.name);
+    setEditKey('');
+    setEditBaseUrl(provider.baseUrl || '');
+  };
+
+  const saveProviderEdit = async () => {
+    if (!editingProviderId) return;
+    try {
+      setIsSavingEdit(true);
+      setError(null);
+      const body: Record<string, string> = { name: editName, baseUrl: editBaseUrl };
+      if (editKey) body.apiKey = editKey;
+      const res = await fetch(`/api/admin/cockpit/ai-providers/${editingProviderId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      if (!res.ok) throw new Error((await res.json()).error || 'Failed to update provider');
+      setSuccess('Provider updated');
+      setTimeout(() => setSuccess(null), 3000);
+      setEditingProviderId(null);
+      await fetchAll();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to update provider');
+    } finally {
+      setIsSavingEdit(false);
     }
   };
 
@@ -367,7 +405,8 @@ export default function AISettingsTab() {
             <p className="text-sm text-text-tertiary">No providers configured.</p>
           ) : (
             providers.map(p => (
-              <div key={p.id} className="flex items-center justify-between bg-background-tertiary rounded-lg px-4 py-3">
+              <div key={p.id} className="space-y-0">
+              <div className="flex items-center justify-between bg-background-tertiary rounded-lg px-4 py-3">
                 <div className="flex items-center gap-3">
                   {p.isValid === true ? (
                     <CheckCircle className="w-4 h-4 text-green-500" />
@@ -385,6 +424,9 @@ export default function AISettingsTab() {
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
+                  <Button variant="ghost" onClick={() => startEditProvider(p)}>
+                    <Pencil className="w-4 h-4 text-text-secondary" />
+                  </Button>
                   <Button variant="ghost" onClick={() => validateProvider(p.id)} disabled={validatingId === p.id}>
                     {validatingId === p.id ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Validate'}
                   </Button>
@@ -398,6 +440,23 @@ export default function AISettingsTab() {
                     <Trash2 className="w-4 h-4 text-red-500" />
                   </Button>
                 </div>
+              </div>
+              {editingProviderId === p.id && (
+                <div className="p-4 bg-background-secondary rounded-b-lg border-t border-border space-y-3">
+                  <div className="grid md:grid-cols-3 gap-4">
+                    <Input label="Display Name" value={editName} onChange={(e) => setEditName(e.target.value)} />
+                    <Input label="New API Key (leave blank to keep)" type="password" value={editKey} onChange={(e) => setEditKey(e.target.value)} placeholder="(unchanged)" />
+                    <Input label="Base URL (optional)" value={editBaseUrl} onChange={(e) => setEditBaseUrl(e.target.value)} placeholder="https://api.example.com" />
+                  </div>
+                  <div className="flex gap-2">
+                    <Button variant="primary" onClick={saveProviderEdit} disabled={isSavingEdit}>
+                      {isSavingEdit ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Save className="w-4 h-4 mr-2" />}
+                      Save
+                    </Button>
+                    <Button variant="ghost" onClick={() => setEditingProviderId(null)}>Cancel</Button>
+                  </div>
+                </div>
+              )}
               </div>
             ))
           )}

@@ -38,6 +38,59 @@ export default function PlanningTab({ planning, githubIssues, runAction, actionL
   const [epics, setEpics] = useState<Epic[]>(planning.epics);
   const [unassignedStories, setUnassignedStories] = useState<Story[]>(planning.unassignedStories);
   const [statusFilter, setStatusFilter] = useState<string | null>(null);
+
+  // AI Propose state
+  const [isProposing, setIsProposing] = useState(false);
+  const [proposals, setProposals] = useState<any[] | null>(null);
+  const [proposalSummary, setProposalSummary] = useState('');
+  const [proposeError, setProposeError] = useState<string | null>(null);
+
+  const aiPropose = async () => {
+    try {
+      setIsProposing(true);
+      setProposeError(null);
+      setProposals(null);
+      const res = await fetch('/api/admin/cockpit/planning/ai-propose', { method: 'POST' });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'AI proposal failed');
+      setProposals(data.proposals || []);
+      setProposalSummary(data.summary || '');
+    } catch (err) {
+      setProposeError(err instanceof Error ? err.message : 'AI proposal failed');
+    } finally {
+      setIsProposing(false);
+    }
+  };
+
+  const acceptProposal = async (proposal: any) => {
+    try {
+      // Create epic
+      const epicRes = await fetch('/api/admin/cockpit/planning/epics', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title: proposal.title, description: proposal.description, priority: proposal.priority }),
+      });
+      if (!epicRes.ok) throw new Error('Failed to create epic');
+      const epic = await epicRes.json();
+      // Create stories
+      for (const story of (proposal.stories || [])) {
+        await fetch('/api/admin/cockpit/planning/stories', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ ...story, epicId: epic.id }),
+        });
+      }
+      // Remove from proposals
+      setProposals(prev => prev ? prev.filter(p => p.title !== proposal.title) : null);
+      onDataChange();
+    } catch (err) {
+      setProposeError(err instanceof Error ? err.message : 'Failed to accept proposal');
+    }
+  };
+
+  const dismissProposal = (title: string) => {
+    setProposals(prev => prev ? prev.filter(p => p.title !== title) : null);
+  };
   const [expandedEpics, setExpandedEpics] = useState<Set<string>>(new Set());
   const [showCreateEpic, setShowCreateEpic] = useState(false);
   const [showCreateStory, setShowCreateStory] = useState<string | null>(null); // epicId or 'unassigned'
@@ -274,12 +327,22 @@ export default function PlanningTab({ planning, githubIssues, runAction, actionL
           <h2 className="text-sm font-semibold text-zinc-300">Planning</h2>
           {saving && <Loader2 className="w-3.5 h-3.5 animate-spin text-zinc-500" />}
         </div>
-        <button
-          onClick={() => setShowCreateEpic(true)}
-          className="flex items-center gap-1.5 px-3 py-1.5 bg-zinc-800 border border-zinc-700 rounded-lg text-xs text-zinc-300 hover:bg-zinc-700 transition"
-        >
-          <Plus className="w-3.5 h-3.5" /> Epic
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={aiPropose}
+            disabled={isProposing}
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-purple-900/40 border border-purple-700/50 rounded-lg text-xs text-purple-300 hover:bg-purple-800/40 transition disabled:opacity-50"
+          >
+            {isProposing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Brain className="w-3.5 h-3.5" />}
+            {isProposing ? 'Thinking...' : 'AI Propose'}
+          </button>
+          <button
+            onClick={() => setShowCreateEpic(true)}
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-zinc-800 border border-zinc-700 rounded-lg text-xs text-zinc-300 hover:bg-zinc-700 transition"
+          >
+            <Plus className="w-3.5 h-3.5" /> Epic
+          </button>
+        </div>
       </div>
 
       {/* Status filter */}
@@ -304,6 +367,57 @@ export default function PlanningTab({ planning, githubIssues, runAction, actionL
           </button>
         ))}
       </div>
+
+      {/* AI Proposal Review */}
+      {proposeError && (
+        <div className="p-3 bg-red-900/20 border border-red-800/30 rounded-lg text-xs text-red-400 flex items-center justify-between">
+          <span>{proposeError}</span>
+          <button onClick={() => setProposeError(null)} className="text-red-500 hover:text-red-300"><X className="w-3.5 h-3.5" /></button>
+        </div>
+      )}
+
+      {proposals && proposals.length > 0 && (
+        <div className="space-y-3">
+          <div className="flex items-center justify-between">
+            <p className="text-xs text-purple-400 font-medium flex items-center gap-1.5">
+              <Brain className="w-3.5 h-3.5" />
+              {proposalSummary || `${proposals.length} proposal(s)`}
+            </p>
+            <button onClick={() => setProposals(null)} className="text-xs text-zinc-500 hover:text-zinc-300">Dismiss all</button>
+          </div>
+          {proposals.map((prop, i) => (
+            <div key={i} className="p-3 bg-purple-900/10 border border-purple-800/30 rounded-lg space-y-2">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium text-zinc-200">{prop.title}</p>
+                  {prop.description && <p className="text-xs text-zinc-400 mt-0.5">{prop.description}</p>}
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <span className="text-xs text-zinc-500">{prop.priority}</span>
+                  <button onClick={() => acceptProposal(prop)} className="px-2.5 py-1 bg-green-900/30 border border-green-700/40 rounded text-xs text-green-400 hover:bg-green-800/30 transition">
+                    <Check className="w-3 h-3 inline mr-1" />Accept
+                  </button>
+                  <button onClick={() => dismissProposal(prop.title)} className="px-2.5 py-1 bg-zinc-800 border border-zinc-700 rounded text-xs text-zinc-400 hover:bg-zinc-700 transition">
+                    <X className="w-3 h-3 inline mr-1" />Skip
+                  </button>
+                </div>
+              </div>
+              {prop.stories && prop.stories.length > 0 && (
+                <div className="pl-3 border-l border-purple-800/30 space-y-1">
+                  {prop.stories.map((s: any, j: number) => (
+                    <div key={j} className="flex items-center gap-2 text-xs">
+                      <span className="text-zinc-500">•</span>
+                      <span className="text-zinc-300">{s.title}</span>
+                      {s.githubIssueNumber && <span className="text-zinc-600">#{s.githubIssueNumber}</span>}
+                      <span className="text-zinc-600">{s.priority}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
 
       {/* Create Epic form */}
       {showCreateEpic && (
