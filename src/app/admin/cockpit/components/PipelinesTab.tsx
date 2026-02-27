@@ -62,6 +62,7 @@ function RunRow({ run, onTrigger }: { run: PipelineRun; onTrigger?: () => void }
   const [expanded, setExpanded] = useState(false);
   const [tasks, setTasks] = useState<PipelineTask[]>([]);
   const [loadingTasks, setLoadingTasks] = useState(false);
+  const [effectiveState, setEffectiveState] = useState<string | null>(null);
 
   const toggleExpand = async () => {
     if (expanded) {
@@ -78,12 +79,24 @@ function RunRow({ run, onTrigger }: { run: PipelineRun; onTrigger?: () => void }
       );
       if (res.ok) {
         const data = await res.json();
-        setTasks(data.tasks || []);
+        const loadedTasks: PipelineTask[] = data.tasks || [];
+        setTasks(loadedTasks);
+        
+        // Compute effective state: if Airflow says "success" but tasks failed, override
+        if (run.state === 'success' && loadedTasks.length > 0) {
+          const hasFailed = loadedTasks.some(t => t.state === 'failed');
+          const hasUpstreamFailed = loadedTasks.some(t => t.state === 'upstream_failed');
+          if (hasFailed) setEffectiveState('failed');
+          else if (hasUpstreamFailed) setEffectiveState('upstream_failed');
+        }
       }
     } catch { /* ok */ } finally {
       setLoadingTasks(false);
     }
   };
+
+  const displayState = effectiveState || run.state;
+  const showOverridden = (effectiveState && effectiveState !== run.state) || run.stateOverridden;
 
   return (
     <>
@@ -103,7 +116,15 @@ function RunRow({ run, onTrigger }: { run: PipelineRun; onTrigger?: () => void }
           <span className="text-xs text-zinc-500 font-mono">{run.runId.length > 30 ? `${run.runId.slice(0, 30)}...` : run.runId}</span>
         </td>
         <td className="py-2.5 px-3">
-          <StateBadge state={run.state} />
+          <div className="flex items-center gap-1.5">
+            <StateBadge state={displayState} />
+            {showOverridden && (
+              <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-medium bg-red-500/10 text-red-400 border border-red-500/20" title={`Airflow reported "${run.airflowState || 'success'}" but tasks show failures`}>
+                <AlertTriangle className="w-2.5 h-2.5" />
+                overridden
+              </span>
+            )}
+          </div>
         </td>
         <td className="py-2.5 px-3 text-xs text-zinc-400">
           {run.startDate ? formatTimeAgo(run.startDate) : '-'}
@@ -132,19 +153,57 @@ function RunRow({ run, onTrigger }: { run: PipelineRun; onTrigger?: () => void }
             ) : tasks.length === 0 ? (
               <p className="text-xs text-zinc-500">No task instances found</p>
             ) : (
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
-                {tasks.map(t => (
-                  <div key={t.taskId} className="flex items-center justify-between px-3 py-2 bg-zinc-800/50 rounded-lg">
-                    <div className="flex items-center gap-2">
-                      <StateBadge state={t.state} />
-                      <span className="text-xs text-zinc-300 font-mono">{t.taskId}</span>
-                    </div>
-                    <span className="text-xs text-zinc-500">
-                      {t.duration != null ? `${t.duration}s` : '-'}
-                      {t.tryNumber > 1 && ` (try ${t.tryNumber})`}
-                    </span>
-                  </div>
-                ))}
+              <div className="space-y-3">
+                {/* Visual Pipeline Flow */}
+                <div className="flex items-center gap-1 flex-wrap py-2">
+                  {tasks
+                    .sort((a, b) => {
+                      // Sort by start_date, then by taskId for unstarted tasks
+                      if (a.startDate && b.startDate) return new Date(a.startDate).getTime() - new Date(b.startDate).getTime();
+                      if (a.startDate) return -1;
+                      if (b.startDate) return 1;
+                      return a.taskId.localeCompare(b.taskId);
+                    })
+                    .map((t, idx, arr) => {
+                      const st = STATE_STYLES[t.state] || STATE_STYLES.no_status;
+                      const Icon = st.icon;
+                      return (
+                        <div key={t.taskId} className="flex items-center gap-1">
+                          <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border ${st.bg} ${st.color} border-current/20`} title={`${t.taskId}: ${t.state}${t.duration != null ? ` (${t.duration}s)` : ''}${t.tryNumber > 1 ? ` — try ${t.tryNumber}` : ''}`}>
+                            <Icon className={`w-3.5 h-3.5 ${st.animate ? 'animate-spin' : ''}`} />
+                            <span className="text-xs font-medium truncate max-w-[140px]">{t.taskId}</span>
+                            {t.duration != null && (
+                              <span className="text-[10px] opacity-70">{t.duration}s</span>
+                            )}
+                            {t.tryNumber > 1 && (
+                              <span className="text-[10px] opacity-70">×{t.tryNumber}</span>
+                            )}
+                          </div>
+                          {idx < arr.length - 1 && (
+                            <span className="text-zinc-600 text-xs">→</span>
+                          )}
+                        </div>
+                      );
+                    })}
+                </div>
+                {/* Summary bar */}
+                <div className="flex items-center gap-3 text-[10px] text-zinc-500">
+                  {(() => {
+                    const counts = tasks.reduce((acc, t) => { acc[t.state] = (acc[t.state] || 0) + 1; return acc; }, {} as Record<string, number>);
+                    return Object.entries(counts).map(([state, count]) => {
+                      const st = STATE_STYLES[state] || STATE_STYLES.no_status;
+                      return (
+                        <span key={state} className={`flex items-center gap-1 ${st.color}`}>
+                          <span className={`w-2 h-2 rounded-full ${st.bg}`} />
+                          {count} {state}
+                        </span>
+                      );
+                    });
+                  })()}
+                  <span className="ml-auto">
+                    {tasks.length} total tasks
+                  </span>
+                </div>
               </div>
             )}
           </td>

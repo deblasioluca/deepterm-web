@@ -313,6 +313,27 @@ export default function DeliberationPanel({ deliberationId, onClose, onComplete 
         </div>
       </div>
 
+      {/* Create Issues — prominent at top for decided architecture reviews */}
+      {(data.status === 'decided' || data.status === 'implementing') && data.type === 'architecture_review' && (
+        <div className="flex items-center gap-2">
+          {!issueResult ? (
+            <button
+              onClick={() => runAction('create-issues')}
+              disabled={actionLoading !== null}
+              className="flex items-center gap-1.5 px-4 py-2 bg-blue-500/20 border border-blue-500/30 rounded-lg text-sm font-medium text-blue-400 hover:bg-blue-500/30 transition disabled:opacity-50"
+            >
+              {actionLoading === 'create-issues' ? <Loader2 className="w-4 h-4 animate-spin" /> : <ExternalLink className="w-4 h-4" />}
+              Create GitHub Issues from Findings
+            </button>
+          ) : (
+            <div className={`flex items-start gap-2 p-2.5 rounded-lg text-xs flex-1 ${issueResult.created > 0 ? 'bg-emerald-500/10 border border-emerald-500/20 text-emerald-400' : 'bg-amber-500/10 border border-amber-500/20 text-amber-400'}`}>
+              <ExternalLink className="w-3.5 h-3.5 mt-0.5 shrink-0" />
+              <span>{issueResult.message}</span>
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Error */}
       {data.status === 'failed' && data.error && (
         <div className="flex items-start gap-2 p-2 bg-red-500/10 border border-red-500/20 rounded-lg text-xs text-red-400">
@@ -447,14 +468,6 @@ export default function DeliberationPanel({ deliberationId, onClose, onComplete 
         </Section>
       )}
 
-      {/* Issue creation result */}
-      {issueResult && (
-        <div className={`flex items-start gap-2 p-2 rounded-lg text-xs ${issueResult.created > 0 ? 'bg-emerald-500/10 border border-emerald-500/20 text-emerald-400' : 'bg-amber-500/10 border border-amber-500/20 text-amber-400'}`}>
-          <ExternalLink className="w-3.5 h-3.5 mt-0.5 shrink-0" />
-          <span>{issueResult.message}</span>
-        </div>
-      )}
-
       {/* Action Bar */}
       <div className="flex items-center gap-2 pt-2 border-t border-zinc-800">
         {isActive && data.status !== 'proposing' && (
@@ -475,16 +488,6 @@ export default function DeliberationPanel({ deliberationId, onClose, onComplete 
           >
             {actionLoading === 'auto' ? <Loader2 className="w-3 h-3 animate-spin" /> : <FastForward className="w-3 h-3" />}
             Auto-Run All
-          </button>
-        )}
-        {(data.status === 'decided' || data.status === 'implementing') && data.type === 'architecture_review' && !issueResult && (
-          <button
-            onClick={() => runAction('create-issues')}
-            disabled={actionLoading !== null}
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-500/20 border border-blue-500/30 rounded-lg text-xs text-blue-400 hover:bg-blue-500/30 transition disabled:opacity-50"
-          >
-            {actionLoading === 'create-issues' ? <Loader2 className="w-3 h-3 animate-spin" /> : <ExternalLink className="w-3 h-3" />}
-            Create Issues
           </button>
         )}
         <button

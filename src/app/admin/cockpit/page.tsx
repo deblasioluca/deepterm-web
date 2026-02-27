@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import {
   Activity, CircleDot, Cpu, GitBranch, Loader2, XCircle, Wifi, WifiOff,
-  RefreshCw, Play, Send, Zap, LayoutDashboard, Map, Eye, BarChart3, Workflow, Bot,
+  RefreshCw, Play, Send, Zap, LayoutDashboard, Map, Eye, BarChart3, Workflow, Bot, GitPullRequest, Milestone,
 } from 'lucide-react';
 import { formatTimeAgo } from './utils';
 import OverviewTab from './components/OverviewTab';
@@ -17,14 +17,18 @@ import ReviewsTab from './components/ReviewsTab';
 import AIUsageTab from './components/AIUsageTab';
 import PipelinesTab from './components/PipelinesTab';
 import AgentLoopTab from './components/AgentLoopTab';
+import PullRequestsTab from './components/PullRequestsTab';
+import LifecycleTab from './components/LifecycleTab';
 
 const TABS = [
   { key: 'overview', label: 'Overview', icon: LayoutDashboard },
   { key: 'backlog', label: 'Backlog', icon: CircleDot },
   { key: 'triage', label: 'Triage', icon: Zap },
   { key: 'planning', label: 'Planning', icon: Map },
+  { key: 'lifecycle', label: 'Lifecycle', icon: Milestone },
   { key: 'pipelines', label: 'Pipelines', icon: Workflow },
   { key: 'reviews', label: 'Reviews', icon: Eye },
+  { key: 'pulls', label: 'Pull Requests', icon: GitPullRequest },
   { key: 'health', label: 'System Health', icon: Activity },
   { key: 'builds', label: 'Builds', icon: Cpu },
   { key: 'activity', label: 'Activity', icon: GitBranch },
@@ -222,8 +226,10 @@ export default function CockpitPage() {
       {activeTab === 'backlog' && (backlog.loading ? <TabLoader /> : <GithubIssuesTab githubIssues={githubIssues} runAction={runAction} actionLoading={actionLoading} />)}
       {activeTab === 'triage' && (triage.loading ? <TabLoader /> : <TriageQueueTab triageQueue={triageQueue} runAction={runAction} actionLoading={actionLoading} />)}
       {activeTab === 'planning' && <PlanningTab planning={planningData.data || { epics: [], unassignedStories: [] }} githubIssues={githubIssues} runAction={runAction} actionLoading={actionLoading} onDataChange={() => { planningData.refetch(); fetchCore(); }} />}
+      {activeTab === 'lifecycle' && <LifecycleTab />}
       {activeTab === 'pipelines' && <PipelinesTab pipelines={pipelinesData.data || { connected: false, dags: [], activeRuns: [], recentRuns: [] }} runAction={runAction} actionLoading={actionLoading} />}
       {activeTab === 'reviews' && <ReviewsTab onDataChange={fetchCore} />}
+      {activeTab === 'pulls' && <PullRequestsTab />}
       {activeTab === 'health' && (healthTab.loading ? <TabLoader /> : <SystemHealthTab health={healthData} builds={buildsData} />)}
       {activeTab === 'builds' && <BuildsTab builds={buildsData} />}
       {activeTab === 'activity' && <GithubActivityTab events={activityData.data?.events || []} />}

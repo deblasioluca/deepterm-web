@@ -157,6 +157,8 @@ export interface PipelineRun {
   dagId: string;
   runId: string;
   state: string;
+  airflowState?: string;
+  stateOverridden?: boolean;
   startDate: string | null;
   endDate: string | null;
   conf: Record<string, unknown>;
