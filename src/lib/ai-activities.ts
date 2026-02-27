@@ -7,7 +7,7 @@ export interface AIActivityDef {
   key: string;
   label: string;
   description: string;
-  category: 'deliberation' | 'planning' | 'reports' | 'issues' | 'ci';
+  category: 'deliberation' | 'planning' | 'reports' | 'issues' | 'ci' | 'agent';
   defaultModel: string;
   defaultTemperature: number;
   defaultMaxTokens: number;
@@ -130,6 +130,18 @@ export const AI_ACTIVITIES: Record<string, AIActivityDef> = {
     defaultModel: 'claude-sonnet-4-6',
     defaultTemperature: 0.3,
     defaultMaxTokens: 2048,
+  },
+
+  // CI / Code Review
+  // Agent Loop
+  'agent-loop.iterate': {
+    key: 'agent-loop.iterate',
+    label: 'Agent Loop Iteration',
+    description: 'Iterative AI coding loop — think/act/observe cycles',
+    category: 'agent',
+    defaultModel: 'claude-sonnet-4-6',
+    defaultTemperature: 0.3,
+    defaultMaxTokens: 8192,
   },
 
   // CI / Code Review

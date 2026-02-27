@@ -19,6 +19,7 @@ import {
   Eye,
   BarChart3,
   Workflow,
+  Bot,
 } from 'lucide-react';
 import type { CockpitData } from './types';
 import { formatTimeAgo } from './utils';
@@ -32,6 +33,7 @@ import GithubActivityTab from './components/GithubActivityTab';
 import ReviewsTab from './components/ReviewsTab';
 import AIUsageTab from './components/AIUsageTab';
 import PipelinesTab from './components/PipelinesTab';
+import AgentLoopTab from './components/AgentLoopTab';
 
 const TABS = [
   { key: 'overview', label: 'Overview', icon: LayoutDashboard },
@@ -43,6 +45,7 @@ const TABS = [
   { key: 'health', label: 'System Health', icon: Activity },
   { key: 'builds', label: 'Builds', icon: Cpu },
   { key: 'activity', label: 'Activity', icon: GitBranch },
+  { key: 'agent-loop', label: 'Agent Loop', icon: Bot },
   { key: 'ai-usage', label: 'AI Usage', icon: BarChart3 },
 ] as const;
 
@@ -251,6 +254,9 @@ export default function CockpitPage() {
       )}
       {activeTab === 'activity' && (
         <GithubActivityTab events={events} />
+      )}
+      {activeTab === 'agent-loop' && (
+        <AgentLoopTab />
       )}
       {activeTab === 'ai-usage' && (
         <AIUsageTab />
