@@ -352,32 +352,17 @@ function buildLifecycleSteps(story: StoryLifecycleData | null): LifecycleStep[] 
     } : undefined,
   });
 
-  // 5. Review PR
-  const reviewStatus: StepStatus = s.prMerged ? 'passed' : s.prNumber ? 'waiting_approval' : 'pending';
+  // 5. Test (CI runs on the PR before merge)
+  const testStatus: StepStatus = s.testsPass === true ? 'passed' : s.testsPass === false ? 'failed' : s.prNumber ? 'active' : 'pending';
   steps.push({
-    id: 'review', label: 'Review PR', description: 'Review diff, approve or request changes',
-    icon: <MessageSquare className="w-4 h-4" />, actor: 'human', status: reviewStatus,
-    link: s.prUrl ? { url: s.prUrl, label: 'View in Pull Requests tab' } : undefined,
-    gate: reviewStatus === 'waiting_approval' ? {
-      required: true,
-      actions: [
-        { label: 'Approve & Merge', action: 'merge-pr', variant: 'approve' },
-        { label: 'Request Changes', action: 'request-changes', variant: 'reject' },
-      ],
-    } : undefined,
-  });
-
-  // 6. Test
-  const testStatus: StepStatus = s.testsPass === true ? 'passed' : s.testsPass === false ? 'failed' : s.prMerged ? 'active' : 'pending';
-  steps.push({
-    id: 'test', label: 'Test', description: 'Playwright E2E + unit tests + UI tests',
+    id: 'test', label: 'Test', description: 'CI runs on PR: E2E + unit + UI tests',
     icon: <TestTube className="w-4 h-4" />, actor: 'system', status: testStatus,
-    substeps: s.prMerged ? [
+    substeps: s.prNumber ? [
       { label: 'E2E (Playwright)', status: s.e2ePass ?? 'pending' as StepStatus },
       { label: 'Unit Tests', status: s.unitPass ?? 'pending' as StepStatus },
       { label: 'UI Tests', status: s.uiPass ?? 'pending' as StepStatus },
     ] : undefined,
-    detail: testStatus === 'failed' ? 'Tests failed — fix required before deploy' : undefined,
+    detail: testStatus === 'failed' ? 'Tests failed — fix required before merge' : undefined,
     gate: testStatus === 'failed' ? {
       required: false,
       actions: [
@@ -387,8 +372,24 @@ function buildLifecycleSteps(story: StoryLifecycleData | null): LifecycleStep[] 
     } : undefined,
   });
 
+  // 6. Review & Merge (after tests pass)
+  const reviewStatus: StepStatus = s.prMerged ? 'passed' : (testStatus === 'passed' && s.prNumber) ? 'waiting_approval' : s.prNumber ? 'pending' : 'pending';
+  steps.push({
+    id: 'review', label: 'Review & Merge', description: 'Review diff, approve and merge after tests pass',
+    icon: <MessageSquare className="w-4 h-4" />, actor: 'human', status: reviewStatus,
+    link: s.prUrl ? { url: s.prUrl, label: 'View in Pull Requests tab' } : undefined,
+    detail: reviewStatus === 'pending' && s.prNumber ? 'Waiting for tests to pass' : undefined,
+    gate: reviewStatus === 'waiting_approval' ? {
+      required: true,
+      actions: [
+        { label: 'Approve & Merge', action: 'merge-pr', variant: 'approve' },
+        { label: 'Request Changes', action: 'request-changes', variant: 'reject' },
+      ],
+    } : undefined,
+  });
+
   // 7. Deploy
-  const deployStatus: StepStatus = s.deployed ? 'passed' : testStatus === 'passed' ? 'waiting_approval' : 'pending';
+  const deployStatus: StepStatus = s.deployed ? 'passed' : (reviewStatus === 'passed' && s.prMerged) ? 'waiting_approval' : 'pending';
   steps.push({
     id: 'deploy', label: 'Deploy', description: 'Build, sign, notarize, deploy to production',
     icon: <Rocket className="w-4 h-4" />, actor: 'system', status: deployStatus,
@@ -431,8 +432,8 @@ function getDefaultSteps(): LifecycleStep[] {
     { id: 'planning', label: 'Plan', description: '', icon: <FileText className="w-4 h-4" />, actor: 'human', status: 'pending' },
     { id: 'deliberation', label: 'AI Deliberation', description: '', icon: <Brain className="w-4 h-4" />, actor: 'ai', status: 'pending' },
     { id: 'implement', label: 'Implement', description: '', icon: <GitPullRequest className="w-4 h-4" />, actor: 'ai', status: 'pending' },
-    { id: 'review', label: 'Review PR', description: '', icon: <MessageSquare className="w-4 h-4" />, actor: 'human', status: 'pending' },
     { id: 'test', label: 'Test', description: '', icon: <TestTube className="w-4 h-4" />, actor: 'system', status: 'pending' },
+    { id: 'review', label: 'Review & Merge', description: '', icon: <MessageSquare className="w-4 h-4" />, actor: 'human', status: 'pending' },
     { id: 'deploy', label: 'Deploy', description: '', icon: <Rocket className="w-4 h-4" />, actor: 'system', status: 'pending' },
     { id: 'release', label: 'Release', description: '', icon: <Mail className="w-4 h-4" />, actor: 'system', status: 'pending' },
   ];

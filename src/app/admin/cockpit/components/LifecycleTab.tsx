@@ -333,7 +333,7 @@ export default function LifecycleTab() {
             <div className="bg-zinc-900 border border-zinc-800 rounded-lg p-12 text-center">
               <ChevronRight className="w-10 h-10 text-zinc-700 mx-auto mb-3" />
               <p className="text-sm text-zinc-500">Select a story from the left to view its lifecycle</p>
-              <p className="text-xs text-zinc-600 mt-1">Each story shows its progress through: Triage → Plan → Deliberate → Implement → Test → Deploy → Release</p>
+              <p className="text-xs text-zinc-600 mt-1">Each story shows its progress through: Triage → Plan → Deliberate → Implement → Test → Review & Merge → Deploy → Release</p>
             </div>
           )}
         </div>
