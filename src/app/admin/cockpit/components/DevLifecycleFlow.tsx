@@ -304,6 +304,10 @@ function buildLifecycleSteps(story: StoryLifecycleData | null): LifecycleStep[] 
     { label: 'Vote', status: getSubstepStatus(delibPhase, ['voting', 'decided', 'implementing']) },
     { label: 'Decide', status: getSubstepStatus(delibPhase, ['decided', 'implementing']) },
   ];
+  // When deliberation is fully passed, all substeps should show as passed
+  if (delibStatus === 'passed') {
+    delibSubsteps.forEach(s => s.status = 'passed');
+  }
 
   steps.push({
     id: 'deliberation', label: 'AI Deliberation', description: '4 AI agents propose, debate, vote on architecture',

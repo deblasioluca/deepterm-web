@@ -49,6 +49,7 @@ export default function LifecycleTab() {
   const [expandedEpics, setExpandedEpics] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
 
   const fetchData = useCallback(async () => {
     try {
@@ -161,15 +162,22 @@ export default function LifecycleTab() {
       };
       const mapped = actionMap[action];
       if (mapped) {
-        await fetch(mapped.url, {
+        const res = await fetch(mapped.url, {
           method: mapped.method,
           headers: { 'Content-Type': 'application/json' },
           body: mapped.body ? JSON.stringify(mapped.body) : undefined,
         });
+        if (!res.ok) {
+          const errData = await res.json().catch(() => ({}));
+          setActionError(errData.error || `Action failed (HTTP ${res.status})`);
+          return;
+        }
+        setActionError(null);
       }
       await fetchData();
     } catch (err) {
       console.error('Gate action error:', err);
+      setActionError(err instanceof Error ? err.message : 'Action failed');
     } finally {
       setActionLoading(null);
     }
@@ -305,6 +313,12 @@ export default function LifecycleTab() {
                 </div>
                 <p className="text-xs text-zinc-500 mt-1">Status: {selectedStory.status} · ID: {selectedStory.id.slice(0, 8)}</p>
               </div>
+              {actionError && (
+                <div className="mb-3 px-3 py-2 rounded-lg bg-red-500/10 border border-red-500/30 text-red-400 text-xs flex items-center justify-between">
+                  <span>{actionError}</span>
+                  <button onClick={() => setActionError(null)} className="text-red-400 hover:text-red-300 ml-2">×</button>
+                </div>
+              )}
               <DevLifecycleFlow
                 story={selectedStory}
                 stories={allStories}

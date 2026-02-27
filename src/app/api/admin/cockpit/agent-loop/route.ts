@@ -52,11 +52,21 @@ export async function POST(req: NextRequest) {
       if (!story) return NextResponse.json({ error: 'Story not found' }, { status: 404 });
     }
 
-    // Validate config exists if provided
+    // Validate config exists if provided (accepts ID or name)
+    let resolvedConfigId = configId;
     if (configId) {
-      const config = await prisma.agentLoopConfig.findUnique({ where: { id: configId } });
-      if (!config) return NextResponse.json({ error: 'Config not found' }, { status: 404 });
+      let config = await prisma.agentLoopConfig.findUnique({ where: { id: configId } });
+      if (!config) {
+        // Fallback: look up by name
+        config = await prisma.agentLoopConfig.findFirst({ where: { name: configId } });
+      }
+      if (!config) {
+        // Final fallback: use first enabled config
+        config = await prisma.agentLoopConfig.findFirst({ where: { isEnabled: true } });
+      }
+      if (!config) return NextResponse.json({ error: 'No agent config found' }, { status: 404 });
       if (!config.isEnabled) return NextResponse.json({ error: 'Config is disabled' }, { status: 400 });
+      resolvedConfigId = config.id;
     }
 
     // Check no running loops for the same story
@@ -75,7 +85,7 @@ export async function POST(req: NextRequest) {
     const loopId = await createAndRunAgentLoop({
       storyId,
       deliberationId,
-      configId,
+      configId: resolvedConfigId,
       maxIterations,
     });
 
