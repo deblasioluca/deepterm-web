@@ -23,8 +23,10 @@ const STATUS_DOT: Record<string, { color: string; icon: typeof Circle }> = {
 function StoryProgress({ story }: { story: StoryLifecycleData }) {
   const phases = [
     { key: 'triage', done: story.triageApproved },
-    { key: 'deliberation', done: story.deliberationStatus === 'completed' || story.deliberationStatus === 'consensus' },
+    { key: 'plan', done: !!story.epicId },
+    { key: 'deliberation', done: story.deliberationStatus === 'decided' },
     { key: 'implement', done: !!story.prNumber },
+    { key: 'review', done: story.prMerged },
     { key: 'test', done: story.testsPass },
     { key: 'deploy', done: story.deployed },
     { key: 'release', done: story.released },

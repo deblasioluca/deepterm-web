@@ -13,9 +13,18 @@ export async function GET(req: NextRequest) {
     const where: Record<string, unknown> = {};
     if (storyId) where.id = storyId;
     if (status) where.status = status;
-    // Default: show active stories (in_progress, planned)
+    // Default: show stories from active epics (including backlog) + standalone active stories
     if (!storyId && !status) {
-      where.status = { in: ['planned', 'in_progress', 'done'] };
+      // Find epics that have at least one non-backlog story
+      const activeEpicIds = await prisma.epic.findMany({
+        where: { stories: { some: { status: { in: ['planned', 'in_progress', 'done'] } } } },
+        select: { id: true },
+      });
+      const epicIds = activeEpicIds.map(e => e.id);
+      where.OR = [
+        { status: { in: ['planned', 'in_progress', 'done'] } },
+        ...(epicIds.length > 0 ? [{ epicId: { in: epicIds } }] : []),
+      ];
     }
 
     const stories = await prisma.story.findMany({

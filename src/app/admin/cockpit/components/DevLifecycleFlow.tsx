@@ -265,7 +265,7 @@ function buildLifecycleSteps(story: StoryLifecycleData | null): LifecycleStep[] 
   });
 
   // 4. Implementation (Agent Loop → PR)
-  const implStatus: StepStatus = s.prNumber ? 'passed' : s.agentLoopStatus === 'running' ? 'active' : s.agentLoopStatus === 'failed' ? 'failed' : delibStatus === 'passed' ? 'waiting_approval' : 'pending';
+  const implStatus: StepStatus = s.prNumber ? 'passed' : s.agentLoopStatus === 'running' ? 'active' : s.agentLoopStatus === 'failed' ? 'failed' : (delibStatus === 'passed' && delibPhase === 'decided') ? 'waiting_approval' : 'pending';
   steps.push({
     id: 'implement', label: 'Implement', description: 'AI agent writes code and creates PR',
     icon: <GitPullRequest className="w-4 h-4" />, actor: 'ai', status: implStatus,
