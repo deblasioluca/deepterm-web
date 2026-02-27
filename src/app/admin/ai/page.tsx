@@ -62,6 +62,10 @@ interface ActivityAssignment {
     temperature: number;
     maxTokens: number;
     systemPromptOverride: string | null;
+    secondaryModelId: string | null;
+    secondaryModelDisplayName: string | null;
+    tertiaryModelId: string | null;
+    tertiaryModelDisplayName: string | null;
   } | null;
 }
 
@@ -522,7 +526,7 @@ function AssignmentsSection({
   allModels: (ProviderModel & { provider: { name: string; slug: string; isEnabled: boolean } })[];
   onRefresh: () => void;
 }) {
-  const [edits, setEdits] = useState<Map<string, { modelId: string | null; temperature: number; maxTokens: number; systemPromptOverride: string | null }>>(new Map());
+  const [edits, setEdits] = useState<Map<string, { modelId: string | null; secondaryModelId: string | null; tertiaryModelId: string | null; temperature: number; maxTokens: number; systemPromptOverride: string | null }>>(new Map());
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
 
@@ -533,6 +537,8 @@ function AssignmentsSection({
     if (edit) return edit;
     return {
       modelId: activity.assignment?.modelId || null,
+      secondaryModelId: activity.assignment?.secondaryModelId || null,
+      tertiaryModelId: activity.assignment?.tertiaryModelId || null,
       temperature: activity.assignment?.temperature ?? activity.defaultTemperature,
       maxTokens: activity.assignment?.maxTokens ?? activity.defaultMaxTokens,
       systemPromptOverride: activity.assignment?.systemPromptOverride || null,
@@ -544,6 +550,8 @@ function AssignmentsSection({
       const next = new Map(prev);
       const existing = next.get(key) || {
         modelId: assignments.find(a => a.key === key)?.assignment?.modelId || null,
+        secondaryModelId: assignments.find(a => a.key === key)?.assignment?.secondaryModelId || null,
+        tertiaryModelId: assignments.find(a => a.key === key)?.assignment?.tertiaryModelId || null,
         temperature: assignments.find(a => a.key === key)?.assignment?.temperature ?? 0.7,
         maxTokens: assignments.find(a => a.key === key)?.assignment?.maxTokens ?? 4096,
         systemPromptOverride: assignments.find(a => a.key === key)?.assignment?.systemPromptOverride || null,
@@ -560,6 +568,8 @@ function AssignmentsSection({
       const items = Array.from(edits.entries()).map(([activity, edit]) => ({
         activity,
         modelId: edit.modelId,
+        secondaryModelId: edit.secondaryModelId,
+        tertiaryModelId: edit.tertiaryModelId,
         temperature: edit.temperature,
         maxTokens: edit.maxTokens,
         systemPromptOverride: edit.systemPromptOverride,
@@ -658,18 +668,47 @@ function AssignmentsSection({
                       >
                         Prompt
                       </button>
-                      <select
-                        value={edit.modelId || ''}
-                        onChange={e => setEdit(activity.key, 'modelId', e.target.value || null)}
-                        className="bg-zinc-800 border border-zinc-700 rounded-md px-2 py-1 text-[11px] text-zinc-300 focus:outline-none focus:border-zinc-500 max-w-[200px]"
-                      >
-                        <option value="">Default ({activity.defaultModel})</option>
-                        {enabledModels.map(m => (
-                          <option key={m.id} value={m.id}>
-                            {m.provider.name}: {m.displayName}
-                          </option>
-                        ))}
-                      </select>
+                      <div className="flex items-center gap-1">
+                        <select
+                          value={edit.modelId || ''}
+                          onChange={e => setEdit(activity.key, 'modelId', e.target.value || null)}
+                          className="bg-zinc-800 border border-zinc-700 rounded-md px-2 py-1 text-[11px] text-zinc-300 focus:outline-none focus:border-zinc-500 max-w-[180px]"
+                          title="Primary model"
+                        >
+                          <option value="">Default ({activity.defaultModel})</option>
+                          {enabledModels.map(m => (
+                            <option key={m.id} value={m.id}>
+                              {m.provider.name}: {m.displayName}
+                            </option>
+                          ))}
+                        </select>
+                        <select
+                          value={edit.secondaryModelId || ''}
+                          onChange={e => setEdit(activity.key, 'secondaryModelId', e.target.value || null)}
+                          className="bg-zinc-800 border border-zinc-700 rounded-md px-2 py-1 text-[11px] text-zinc-400 focus:outline-none focus:border-zinc-500 max-w-[180px]"
+                          title="Secondary model (ensemble)"
+                        >
+                          <option value="">2nd —</option>
+                          {enabledModels.map(m => (
+                            <option key={m.id} value={m.id}>
+                              {m.provider.name}: {m.displayName}
+                            </option>
+                          ))}
+                        </select>
+                        <select
+                          value={edit.tertiaryModelId || ''}
+                          onChange={e => setEdit(activity.key, 'tertiaryModelId', e.target.value || null)}
+                          className="bg-zinc-800 border border-zinc-700 rounded-md px-2 py-1 text-[11px] text-zinc-400 focus:outline-none focus:border-zinc-500 max-w-[180px]"
+                          title="Tertiary model (ensemble)"
+                        >
+                          <option value="">3rd —</option>
+                          {enabledModels.map(m => (
+                            <option key={m.id} value={m.id}>
+                              {m.provider.name}: {m.displayName}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
                       <input
                         type="number"
                         value={edit.temperature}

@@ -184,7 +184,7 @@ async function runDebateRound(deliberationId: string, round: number, agents: Age
         : `Here are the original proposals and Round 1 discussion:\n\n${proposalSummary}\n${debateSummary}\n\nAs ${agent.name}, provide your final position:\n1. Your updated recommendation considering the discussion\n2. Any remaining concerns\n3. What the team should prioritize`;
 
       const response = await callAI(
-        'deliberation.debate',
+        agent.activity, // Inherit agent's model (architect→Opus, pragmatist→Sonnet)
         agent.systemPrompt,
         [{ role: 'user', content: prompt }],
         { maxTokens: 2048 }

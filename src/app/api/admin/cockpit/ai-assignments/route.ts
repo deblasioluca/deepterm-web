@@ -13,6 +13,12 @@ export async function GET() {
         model: {
           include: { provider: { select: { name: true, slug: true, isEnabled: true } } },
         },
+        secondaryModel: {
+          include: { provider: { select: { name: true, slug: true, isEnabled: true } } },
+        },
+        tertiaryModel: {
+          include: { provider: { select: { name: true, slug: true, isEnabled: true } } },
+        },
       },
     });
 
@@ -32,6 +38,10 @@ export async function GET() {
           temperature: assignment.temperature,
           maxTokens: assignment.maxTokens,
           systemPromptOverride: assignment.systemPromptOverride || null,
+          secondaryModelId: assignment.secondaryModelId || null,
+          secondaryModelDisplayName: assignment.secondaryModel?.displayName || null,
+          tertiaryModelId: assignment.tertiaryModelId || null,
+          tertiaryModelDisplayName: assignment.tertiaryModel?.displayName || null,
         } : null,
       };
     });
@@ -53,7 +63,7 @@ export async function PATCH(req: NextRequest) {
     }
 
     for (const item of assignments) {
-      const { activity, modelId, temperature, maxTokens, systemPromptOverride } = item;
+      const { activity, modelId, temperature, maxTokens, systemPromptOverride, secondaryModelId, tertiaryModelId } = item;
 
       if (!activity || !(activity in AI_ACTIVITIES)) {
         continue; // Skip unknown activities
@@ -68,6 +78,8 @@ export async function PATCH(req: NextRequest) {
         if (temperature !== undefined) data.temperature = temperature;
         if (maxTokens !== undefined) data.maxTokens = maxTokens;
         if (systemPromptOverride !== undefined) data.systemPromptOverride = systemPromptOverride || null;
+        if (secondaryModelId !== undefined) data.secondaryModelId = secondaryModelId || null;
+        if (tertiaryModelId !== undefined) data.tertiaryModelId = tertiaryModelId || null;
 
         await prisma.aIActivityAssignment.upsert({
           where: { activity },

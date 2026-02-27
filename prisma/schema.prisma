@@ -713,7 +713,9 @@ model AIModel {
   isEnabled       Boolean                @default(true)
   createdAt       DateTime               @default(now())
   updatedAt       DateTime               @updatedAt
-  assignments     AIActivityAssignment[]
+  assignments          AIActivityAssignment[] @relation("primaryAssignment")
+  secondaryAssignments AIActivityAssignment[] @relation("secondaryAssignment")
+  tertiaryAssignments  AIActivityAssignment[] @relation("tertiaryAssignment")
   provider        AIProvider             @relation(fields: [providerId], references: [id], onDelete: Cascade)
 
   @@unique([providerId, modelId])
@@ -731,7 +733,11 @@ model AIActivityAssignment {
   createdAt            DateTime @default(now())
   updatedAt            DateTime @updatedAt
   systemPromptOverride String?
-  model                AIModel  @relation(fields: [modelId], references: [id], onDelete: Cascade)
+  secondaryModelId     String?
+  tertiaryModelId      String?
+  model                AIModel  @relation("primaryAssignment", fields: [modelId], references: [id], onDelete: Cascade)
+  secondaryModel       AIModel? @relation("secondaryAssignment", fields: [secondaryModelId], references: [id], onDelete: SetNull)
+  tertiaryModel        AIModel? @relation("tertiaryAssignment", fields: [tertiaryModelId], references: [id], onDelete: SetNull)
 
   @@index([activity])
   @@index([modelId])

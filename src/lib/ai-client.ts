@@ -325,6 +325,154 @@ export async function callAI(
   }
 }
 
+
+
+// ── Ensemble support ─────────────────────────────
+
+/**
+ * Resolve all assigned models for an activity (primary + secondary + tertiary).
+ * Returns 1-3 configs depending on what's assigned.
+ */
+async function resolveEnsembleConfigs(activity: string): Promise<{ role: 'primary' | 'secondary' | 'tertiary'; config: ResolvedConfig }[]> {
+  const primary = await resolveConfig(activity);
+  const results: { role: 'primary' | 'secondary' | 'tertiary'; config: ResolvedConfig }[] = [
+    { role: 'primary', config: primary },
+  ];
+
+  try {
+    const assignment = await prisma.aIActivityAssignment.findUnique({
+      where: { activity },
+      include: {
+        secondaryModel: { include: { provider: true } },
+        tertiaryModel: { include: { provider: true } },
+      },
+    });
+
+    if (assignment?.secondaryModel?.isEnabled && assignment.secondaryModel.provider?.isEnabled) {
+      const apiKey = decryptApiKey(assignment.secondaryModel.provider.encryptedKey);
+      if (apiKey) {
+        results.push({
+          role: 'secondary',
+          config: {
+            providerSlug: assignment.secondaryModel.provider.slug,
+            modelId: assignment.secondaryModel.modelId,
+            apiKey,
+            baseUrl: assignment.secondaryModel.provider.baseUrl,
+            temperature: assignment.temperature,
+            maxTokens: assignment.maxTokens,
+            systemPromptOverride: assignment.systemPromptOverride || null,
+          },
+        });
+      }
+    }
+
+    if (assignment?.tertiaryModel?.isEnabled && assignment.tertiaryModel.provider?.isEnabled) {
+      const apiKey = decryptApiKey(assignment.tertiaryModel.provider.encryptedKey);
+      if (apiKey) {
+        results.push({
+          role: 'tertiary',
+          config: {
+            providerSlug: assignment.tertiaryModel.provider.slug,
+            modelId: assignment.tertiaryModel.modelId,
+            apiKey,
+            baseUrl: assignment.tertiaryModel.provider.baseUrl,
+            temperature: assignment.temperature,
+            maxTokens: assignment.maxTokens,
+            systemPromptOverride: assignment.tertiaryModel.provider.slug === primary.providerSlug ? null : assignment.systemPromptOverride || null,
+          },
+        });
+      }
+    }
+  } catch (e) {
+    console.warn(`[AI Ensemble] Failed to load secondary/tertiary for ${activity}:`, e);
+  }
+
+  return results;
+}
+
+export interface EnsembleResponse {
+  role: 'primary' | 'secondary' | 'tertiary';
+  response: AIResponse;
+}
+
+/**
+ * Call all assigned models for an activity in parallel (ensemble mode).
+ * Returns 1-3 responses. If only primary is assigned, behaves like callAI.
+ * Failed calls are logged but don't block other models.
+ */
+export async function callAIEnsemble(
+  activity: string,
+  systemPrompt: string,
+  messages: AIMessage[],
+  overrides?: { temperature?: number; maxTokens?: number; context?: AICallContext }
+): Promise<EnsembleResponse[]> {
+  const configs = await resolveEnsembleConfigs(activity);
+
+  // If only primary, just use normal callAI path
+  if (configs.length === 1) {
+    const response = await callAI(activity, systemPrompt, messages, overrides);
+    return [{ role: 'primary', response }];
+  }
+
+  // Parallel calls to all configured models
+  const promises = configs.map(async ({ role, config }) => {
+    const startTime = Date.now();
+    if (overrides?.temperature !== undefined) config.temperature = overrides.temperature;
+    if (overrides?.maxTokens !== undefined) config.maxTokens = overrides.maxTokens;
+    const finalPrompt = config.systemPromptOverride || systemPrompt;
+
+    const dispatch = (): Promise<AIResponse> => {
+      switch (config.providerSlug) {
+        case 'anthropic':
+          return callAnthropic(config, finalPrompt, messages);
+        case 'openai':
+        case 'mistral':
+        case 'groq':
+          return callOpenAICompatible(config, finalPrompt, messages, config.providerSlug);
+        case 'google':
+          return callGoogle(config, finalPrompt, messages);
+        default:
+          throw new Error(`Unsupported AI provider: ${config.providerSlug}`);
+      }
+    };
+
+    try {
+      const response = await withRetry(dispatch, 2, `${activity}[${role}]`);
+      const durationMs = Date.now() - startTime;
+      const activityDef = AI_ACTIVITIES[activity as AIActivityKey];
+      logAIUsage({
+        provider: config.providerSlug,
+        model: config.modelId,
+        activity: `${activity}[${role}]`,
+        category: activityDef?.category || 'unknown',
+        inputTokens: response.inputTokens,
+        outputTokens: response.outputTokens,
+        costCents: calculateCost(
+          { costPer1kInput: null, costPer1kOutput: null, modelId: config.modelId },
+          response.inputTokens,
+          response.outputTokens,
+        ),
+        durationMs,
+        success: true,
+        context: overrides?.context,
+      }).catch(() => {});
+      return { role, response } as EnsembleResponse;
+    } catch (err) {
+      console.error(`[AI Ensemble] ${role} model failed for ${activity}:`, err);
+      return null;
+    }
+  });
+
+  const results = await Promise.all(promises);
+  const valid = results.filter((r): r is EnsembleResponse => r !== null);
+
+  if (valid.length === 0) {
+    throw new Error(`All ensemble models failed for activity "${activity}"`);
+  }
+
+  return valid;
+}
+
 /** Invalidate the assignment cache (call after config changes). */
 export function invalidateAICache(): void {
   assignmentCache = null;
