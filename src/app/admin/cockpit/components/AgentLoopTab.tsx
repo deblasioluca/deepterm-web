@@ -21,6 +21,7 @@ import {
   AlertTriangle,
   Zap,
   RefreshCw,
+  ExternalLink,
 } from 'lucide-react';
 
 // ── Types ────────────────────────────────────────
@@ -462,6 +463,18 @@ export default function AgentLoopTab() {
                 <span className="text-xs text-zinc-500 shrink-0">
                   {loop.totalIterations}/{loop.maxIterations} iter
                 </span>
+                {loop.prUrl && (
+                  <a
+                    href={loop.prUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    onClick={e => e.stopPropagation()}
+                    className="flex items-center gap-1 px-1.5 py-0.5 bg-blue-500/20 text-blue-400 border border-blue-500/30 rounded text-[10px] hover:bg-blue-500/30 transition shrink-0"
+                  >
+                    <ExternalLink className="w-3 h-3" />
+                    PR #{loop.prNumber}
+                  </a>
+                )}
                 <span className="text-xs text-zinc-500 shrink-0">
                   {formatTokens(loop.inputTokens + loop.outputTokens)} tok
                 </span>
@@ -484,6 +497,17 @@ export default function AgentLoopTab() {
                         <div>
                           <span className="text-zinc-500">Branch:</span>
                           <span className="text-white ml-1">{loopDetail.branchName}</span>
+                          {loopDetail.prUrl && (
+                            <a
+                              href={loopDetail.prUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center gap-1 ml-2 px-1.5 py-0.5 bg-blue-500/20 text-blue-400 border border-blue-500/30 rounded text-[10px] hover:bg-blue-500/30 transition"
+                            >
+                              <ExternalLink className="w-3 h-3" />
+                              PR #{loopDetail.prNumber}
+                            </a>
+                          )}
                         </div>
                         <div>
                           <span className="text-zinc-500">Config:</span>

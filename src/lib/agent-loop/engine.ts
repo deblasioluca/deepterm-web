@@ -15,7 +15,135 @@
 import { prisma } from '@/lib/prisma';
 import { callAI } from '@/lib/ai-client';
 import { getRepoContext } from '@/lib/repo-context';
+import { commitFiles, createPullRequest, groupByRepo } from '@/lib/github-commit';
 import type { AIMessage } from '@/lib/ai-client';
+
+// ── File Change Accumulator ──────────────────────
+
+interface AccumulatedFile {
+  path: string;
+  content: string;
+  action: 'create' | 'update' | 'delete';
+}
+
+/**
+ * Parse file changes from an iteration's action text.
+ * Supports: ```file:path, ```new:path, ```delete:path
+ */
+function parseFileChanges(actionText: string): AccumulatedFile[] {
+  const files: AccumulatedFile[] = [];
+  const blockRegex = /```(file|new|delete):([^\n]+)\n([\s\S]*?)```/g;
+  let match;
+
+  while ((match = blockRegex.exec(actionText)) !== null) {
+    const [, type, path, content] = match;
+    const cleanPath = path.trim();
+    
+    if (type === 'delete') {
+      files.push({ path: cleanPath, content: '', action: 'delete' });
+    } else {
+      files.push({
+        path: cleanPath,
+        content: content.trimEnd(),
+        action: type === 'new' ? 'create' : 'update',
+      });
+    }
+  }
+
+  return files;
+}
+
+/**
+ * Merge file changes — later iterations override earlier ones for the same path.
+ */
+function mergeFileChanges(accumulated: AccumulatedFile[], newChanges: AccumulatedFile[]): AccumulatedFile[] {
+  const map = new Map<string, AccumulatedFile>();
+  for (const f of accumulated) map.set(f.path, f);
+  for (const f of newChanges) map.set(f.path, f);
+  return Array.from(map.values());
+}
+
+/**
+ * Commit accumulated file changes and open PRs on GitHub.
+ * Groups files by repo (web vs app) and creates separate PRs for each.
+ */
+async function commitAndOpenPRs(
+  loopId: string,
+  branchName: string,
+  files: AccumulatedFile[],
+  title: string,
+  description: string,
+  defaultRepo: string,
+  baseBranch: string,
+): Promise<{ prUrl: string | null; prNumber: number | null; allPRs: Array<{ repo: string; number: number; url: string }> }> {
+  if (files.length === 0) {
+    console.log('[AgentLoop] No file changes to commit');
+    return { prUrl: null, prNumber: null, allPRs: [] };
+  }
+
+  const repoGroups = groupByRepo(files, defaultRepo);
+  const allPRs: Array<{ repo: string; number: number; url: string }> = [];
+
+  for (const [repo, repoFiles] of Array.from(repoGroups.entries())) {
+    try {
+      console.log('[AgentLoop] Committing', repoFiles.length, 'files to', repo, 'branch:', branchName);
+
+      // Commit files
+      const commitResult = await commitFiles(
+        repo,
+        branchName,
+        baseBranch,
+        repoFiles,
+        `agent: ${title}\n\nAgent loop ${loopId}\n\nFiles changed:\n${repoFiles.map(f => '- ' + f.action + ': ' + f.path).join('\n')}`
+      );
+
+      console.log('[AgentLoop] Committed to', repo, ':', commitResult.sha);
+
+      // Build PR body
+      const repoLabel = repo.includes('web') ? 'Web App' : 'macOS App';
+      const prBody = [
+        '## 🤖 Agent Implementation',
+        '',
+        `**Loop:** \`${loopId}\``,
+        `**Repository:** ${repoLabel} (\`${repo}\`)`,
+        `**Branch:** \`${branchName}\``,
+        '',
+        '### Summary',
+        description,
+        '',
+        '### Files Changed',
+        ...repoFiles.map(f => `- **${f.action}**: \`${f.path}\``),
+        '',
+        '---',
+        '*This PR was created by the DeepTerm Agent Loop. Please review before merging.*',
+      ].join('\n');
+
+      // Create PR
+      const prResult = await createPullRequest(
+        repo,
+        branchName,
+        baseBranch,
+        `🤖 ${title}`,
+        prBody,
+        ['agent-loop', 'auto-generated']
+      );
+
+      console.log('[AgentLoop] PR opened:', prResult.url);
+      allPRs.push({ repo, number: prResult.number, url: prResult.url });
+
+    } catch (err) {
+      console.error('[AgentLoop] Failed to commit/PR for', repo, ':', err);
+    }
+  }
+
+  // Return the first PR (primary) for the loop record
+  const primary = allPRs[0] || null;
+  return {
+    prUrl: primary?.url || null,
+    prNumber: primary?.number || null,
+    allPRs,
+  };
+}
 
 // ── Constants ────────────────────────────────────
 
@@ -227,6 +355,8 @@ export async function runAgentLoop(loopId: string, feedbackContext?: string): Pr
     systemPrompt: '',
     allowedPaths: '[]',
     forbiddenPaths: '[]',
+    targetRepo: 'deblasioluca/deepterm',
+    targetBranch: 'main',
   };
 
   const maxIter = loop.maxIterations || config.maxIterations || 10;
@@ -254,6 +384,7 @@ export async function runAgentLoop(loopId: string, feedbackContext?: string): Pr
     let totalOutputTokens = 0;
     let totalCostCents = 0;
     let finalStatus: 'completed' | 'awaiting_review' | 'failed' = 'completed';
+    let accumulatedFiles: AccumulatedFile[] = [];
 
     for (let i = 1; i <= maxIter; i++) {
       // Check if cancelled
@@ -295,6 +426,13 @@ export async function runAgentLoop(loopId: string, feedbackContext?: string): Pr
 
         // Parse response
         const parsed = parseIterationResponse(response.content);
+
+        // Accumulate file changes from this iteration
+        const iterationFiles = parseFileChanges(response.content);
+        if (iterationFiles.length > 0) {
+          accumulatedFiles = mergeFileChanges(accumulatedFiles, iterationFiles);
+          console.log(`[AgentLoop] ${loopId} accumulated ${accumulatedFiles.length} total files (${iterationFiles.length} from iteration ${i})`);
+        }
 
         // Update iteration record
         await prisma.agentIteration.update({
@@ -373,6 +511,63 @@ export async function runAgentLoop(loopId: string, feedbackContext?: string): Pr
       }
     }
 
+
+    // Commit to GitHub and open PRs if we have file changes
+    if (accumulatedFiles.length > 0 && (finalStatus === 'awaiting_review' || finalStatus === 'completed')) {
+      const targetRepo = config.targetRepo || 'deblasioluca/deepterm';
+      const baseBranch = config.targetBranch || 'main';
+
+      // Build title from story or loop ID
+      let prTitle = 'Agent implementation';
+      if (loop.storyId) {
+        const story = await prisma.story.findUnique({ where: { id: loop.storyId } });
+        if (story) prTitle = story.title;
+      }
+
+      // Build description from last iteration's thinking
+      const lastIter = await prisma.agentIteration.findFirst({
+        where: { loopId },
+        orderBy: { iteration: 'desc' },
+      });
+      const description = lastIter?.thinking?.slice(0, 1000) || 'Implementation by agent loop';
+
+      try {
+        const prResult = await commitAndOpenPRs(
+          loopId,
+          loop.branchName || `agent/${loopId.slice(0, 8)}`,
+          accumulatedFiles,
+          prTitle,
+          description,
+          targetRepo,
+          baseBranch,
+        );
+
+        // Update loop with PR info
+        if (prResult.prUrl) {
+          await prisma.agentLoop.update({
+            where: { id: loopId },
+            data: {
+              prUrl: prResult.prUrl,
+              prNumber: prResult.prNumber,
+            },
+          });
+        }
+
+        // Log all PRs if multiple repos were targeted
+        if (prResult.allPRs.length > 1) {
+          const prSummary = prResult.allPRs.map(p => `${p.repo}: ${p.url}`).join(', ');
+          console.log(`[AgentLoop] ${loopId} opened ${prResult.allPRs.length} PRs: ${prSummary}`);
+        }
+      } catch (err) {
+        console.error(`[AgentLoop] ${loopId} failed to create PR:`, err);
+        // Don't fail the loop — the code was generated, just PR creation failed
+        await prisma.agentLoop.update({
+          where: { id: loopId },
+          data: { errorLog: (loop.errorLog || '') + `\nPR creation failed: ${err instanceof Error ? err.message : 'Unknown'}` },
+        });
+      }
+    }
+
     // Finalize loop
     await prisma.agentLoop.update({
       where: { id: loopId },
@@ -382,7 +577,7 @@ export async function runAgentLoop(loopId: string, feedbackContext?: string): Pr
       },
     });
 
-    console.log(`[AgentLoop] ${loopId} finished: ${finalStatus}`);
+    console.log(`[AgentLoop] ${loopId} finished: ${finalStatus} (${accumulatedFiles.length} files committed)`);
 
   } catch (error) {
     console.error(`[AgentLoop] ${loopId} fatal error:`, error);
