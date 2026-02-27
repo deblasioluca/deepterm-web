@@ -122,11 +122,11 @@ Settings         (General, Security, Billing, Notifications, Releases, Integrati
 - [x] 4.5 Remove AI tab from Settings (keep /admin/ai)
 - [x] 4.6 Add health check API endpoints for new systems
 
-### Phase 5: Pipelines & Agent Drill-down ⬜
-- [ ] 5.1 Add sub-tabs to Pipelines: Overview+Runs, Scheduled, All DAGs
-- [ ] 5.2 Remove non-implementation DAGs
-- [ ] 5.3 Add agent log drill-down panel to Lifecycle Implement step
-- [ ] 5.4 Remove standalone Agent Loop tab
+### Phase 5: Pipelines & Agent Drill-down ✅ DONE
+- [x] 5.1 Add sub-tabs to Pipelines: Overview+Runs, Scheduled, All DAGs
+- [x] 5.2 Remove non-implementation DAGs (tag-based filtering added)
+- [x] 5.3 Add agent log drill-down panel to Lifecycle Implement step
+- [x] 5.4 Remove standalone Agent Loop tab (AgentLoopTab.tsx deleted)
 
 ### Phase 6: Polish & Testing ⬜
 - [ ] 6.1 E2E lifecycle test with test epic
@@ -164,7 +164,7 @@ Settings         (General, Security, Billing, Notifications, Releases, Integrati
 | Phase 2: Create DevOps | ✅ | | | |
 | Phase 3: Slim Cockpit | ✅ | | | |
 | Phase 4: System Consistency | ✅ | | | |
-| Phase 5: Pipelines + Agent | ⬜ | | | |
+| Phase 5: Pipelines + Agent | ✅ | | | |
 | Phase 6: Polish | ⬜ | | | |
 
 ---
