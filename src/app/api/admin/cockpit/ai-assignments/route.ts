@@ -69,12 +69,13 @@ export async function PATCH(req: NextRequest) {
         continue; // Skip unknown activities
       }
 
-      if (modelId === null || modelId === undefined) {
-        // Remove assignment (revert to default)
+      const hasAnyModel = modelId || secondaryModelId || tertiaryModelId;
+      if (!hasAnyModel) {
+        // Remove assignment (revert to default) — only if no models at all
         await prisma.aIActivityAssignment.deleteMany({ where: { activity } });
       } else {
         // Upsert assignment
-        const data: Record<string, unknown> = { modelId };
+        const data: Record<string, unknown> = { modelId: modelId || secondaryModelId || tertiaryModelId };
         if (temperature !== undefined) data.temperature = temperature;
         if (maxTokens !== undefined) data.maxTokens = maxTokens;
         if (systemPromptOverride !== undefined) data.systemPromptOverride = systemPromptOverride || null;
@@ -85,10 +86,12 @@ export async function PATCH(req: NextRequest) {
           where: { activity },
           create: {
             activity,
-            modelId,
+            modelId: modelId || secondaryModelId || tertiaryModelId,
             temperature: temperature ?? 0.7,
             maxTokens: maxTokens ?? 4096,
             systemPromptOverride: systemPromptOverride || null,
+            secondaryModelId: secondaryModelId || null,
+            tertiaryModelId: tertiaryModelId || null,
           },
           update: data,
         });
