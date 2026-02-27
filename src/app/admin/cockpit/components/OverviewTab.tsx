@@ -84,7 +84,7 @@ export default function OverviewTab({ stats, revenue, health, builds }: Overview
           </div>
         </div>
 
-        {revenue.recentPayments.length > 0 && (
+        {revenue.recentPayments?.length > 0 && (
           <div>
             <h3 className="text-xs font-medium text-zinc-500 uppercase tracking-wider mb-2">Recent Payment Events</h3>
             <div className="space-y-1.5">
@@ -120,17 +120,17 @@ export default function OverviewTab({ stats, revenue, health, builds }: Overview
           <div className="flex items-center gap-2">
             <Server className="w-4 h-4 text-blue-400" />
             <span className="text-xs text-zinc-300">Raspberry Pi</span>
-            <StatusBadge status={health.pi.status} />
+            <StatusBadge status={health?.pi?.status || "unknown"} />
           </div>
           <div className="flex items-center gap-2">
             <Cpu className="w-4 h-4 text-purple-400" />
             <span className="text-xs text-zinc-300">CI Mac</span>
-            <StatusBadge status={health.ciMac.status} />
+            <StatusBadge status={health?.ciMac?.status || "unknown"} />
           </div>
           <div className="flex items-center gap-2">
             <Radio className="w-4 h-4 text-amber-400" />
             <span className="text-xs text-zinc-300">Node-RED</span>
-            <StatusBadge status={health.nodeRed.status} />
+            <StatusBadge status={health?.nodeRed?.status || "unknown"} />
           </div>
           {builds.length > 0 && (
             <div className="text-xs text-zinc-500 ml-auto">

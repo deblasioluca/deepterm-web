@@ -24,20 +24,20 @@ export default function SystemHealthTab({ health, builds }: SystemHealthTabProps
               <Server className="w-4 h-4 text-blue-400" />
               <span className="text-sm font-medium text-zinc-200">Raspberry Pi</span>
             </div>
-            <StatusBadge status={health.pi.status} />
+            <StatusBadge status={health?.pi?.status || "unknown"} />
           </div>
           <div className="space-y-1.5 text-xs text-zinc-400">
             <div className="flex justify-between">
               <span>Uptime</span>
-              <span className="text-zinc-300">{formatUptime(health.pi.uptimeSeconds)}</span>
+              <span className="text-zinc-300">{formatUptime(health?.pi?.uptimeSeconds || 0)}</span>
             </div>
             <div className="flex justify-between">
               <span>Memory (RSS)</span>
-              <span className="text-zinc-300">{health.pi.memoryMB} MB</span>
+              <span className="text-zinc-300">{health?.pi?.memoryMB || 0} MB</span>
             </div>
             <div className="flex justify-between">
               <span>Heap Used</span>
-              <span className="text-zinc-300">{health.pi.heapMB} MB</span>
+              <span className="text-zinc-300">{health?.pi?.heapMB || 0} MB</span>
             </div>
           </div>
         </div>
@@ -49,7 +49,7 @@ export default function SystemHealthTab({ health, builds }: SystemHealthTabProps
               <Cpu className="w-4 h-4 text-purple-400" />
               <span className="text-sm font-medium text-zinc-200">CI Mac</span>
             </div>
-            <StatusBadge status={health.ciMac.status} />
+            <StatusBadge status={health?.ciMac?.status || "unknown"} />
           </div>
           <div className="space-y-1.5 text-xs text-zinc-400">
             <div className="flex justify-between">
@@ -72,7 +72,7 @@ export default function SystemHealthTab({ health, builds }: SystemHealthTabProps
               <Radio className="w-4 h-4 text-amber-400" />
               <span className="text-sm font-medium text-zinc-200">Node-RED</span>
             </div>
-            <StatusBadge status={health.nodeRed.status} />
+            <StatusBadge status={health?.nodeRed?.status || "unknown"} />
           </div>
           <div className="space-y-1.5 text-xs text-zinc-400">
             <div className="flex justify-between">
