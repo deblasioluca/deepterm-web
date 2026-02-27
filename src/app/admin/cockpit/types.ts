@@ -1,7 +1,11 @@
 export interface HealthData {
-  pi: { status: string; uptimeSeconds: number; memoryMB: number; heapMB: number };
+  pi: { status: string; uptimeSeconds: number; memoryMB: number; heapMB: number; osUptimeSeconds?: number; diskTotal?: string; diskUsed?: string; diskPercent?: string; tempC?: string | null };
+  webApp: { status: string; uptimeSeconds: number; memoryMB: number; heapMB: number; nodeVersion?: string };
+  ciMac: { status: string; runnerName?: string };
   nodeRed: { status: string };
-  ciMac: { status: string };
+  github: { status: string; rateLimit?: number; rateRemaining?: number };
+  aiDevMac: { status: string; detail?: string };
+  airflow: { status: string; detail?: string };
 }
 
 export interface CiBuild {

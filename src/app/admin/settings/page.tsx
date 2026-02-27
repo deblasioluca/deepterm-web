@@ -19,7 +19,6 @@ import SecurityTab from './components/SecurityTab';
 import BillingTab from './components/BillingTab';
 import NotificationsTab from './components/NotificationsTab';
 import ReleasesTab from './components/ReleasesTab';
-import AISettingsTab from './components/AISettingsTab';
 import IntegrationsTab from './components/IntegrationsTab';
 import DangerZoneTab from './components/DangerZoneTab';
 
@@ -29,7 +28,6 @@ const TABS = [
   { key: 'billing', label: 'Billing', icon: Database },
   { key: 'notifications', label: 'Notifications', icon: Bell },
   { key: 'releases', label: 'Releases', icon: Upload },
-  { key: 'ai', label: 'AI', icon: Bot },
   { key: 'integrations', label: 'Integrations', icon: Radio },
   { key: 'danger', label: 'Danger Zone', icon: AlertCircle },
 ] as const;
@@ -83,8 +81,7 @@ export default function AdminSettingsPage() {
           {activeTab === 'billing' && <BillingTab />}
           {activeTab === 'notifications' && <NotificationsTab />}
           {activeTab === 'releases' && <ReleasesTab />}
-          {activeTab === 'ai' && <AISettingsTab />}
-          {activeTab === 'integrations' && <IntegrationsTab />}
+              {activeTab === 'integrations' && <IntegrationsTab />}
           {activeTab === 'danger' && <DangerZoneTab />}
         </motion.div>
       </div>

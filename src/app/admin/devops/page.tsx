@@ -2,18 +2,26 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import {
-  Activity, Loader2, XCircle, Wifi, WifiOff,
-  RefreshCw, Send, LayoutDashboard, BarChart3,
+  Zap, CircleDot, Map, Milestone, GitPullRequest, Cpu, Workflow,
+  Loader2, XCircle, RefreshCw, Wifi, WifiOff, Play, Send,
 } from 'lucide-react';
-import { formatTimeAgo } from './utils';
-import OverviewTab from './components/OverviewTab';
-import SystemHealthTab from './components/SystemHealthTab';
-import AIUsageTab from './components/AIUsageTab';
+import { formatTimeAgo } from '../cockpit/utils';
+import TriageQueueTab from '../cockpit/components/TriageQueueTab';
+import GithubIssuesTab from '../cockpit/components/GithubIssuesTab';
+import PlanningTab from '../cockpit/components/PlanningTab';
+import LifecycleTab from '../cockpit/components/LifecycleTab';
+import BuildsTab from '../cockpit/components/BuildsTab';
+import PipelinesTab from '../cockpit/components/PipelinesTab';
+import CodeAndPRsTab from './components/CodeAndPRsTab';
 
 const TABS = [
-  { key: 'overview', label: 'Overview', icon: LayoutDashboard },
-  { key: 'health', label: 'System Health', icon: Activity },
-  { key: 'ai-usage', label: 'AI Usage', icon: BarChart3 },
+  { key: 'triage', label: 'Triage', icon: Zap },
+  { key: 'backlog', label: 'Backlog', icon: CircleDot },
+  { key: 'planning', label: 'Planning', icon: Map },
+  { key: 'lifecycle', label: 'Lifecycle', icon: Milestone },
+  { key: 'code', label: 'Code & PRs', icon: GitPullRequest },
+  { key: 'builds', label: 'Builds', icon: Cpu },
+  { key: 'pipelines', label: 'Pipelines', icon: Workflow },
 ] as const;
 
 type TabKey = typeof TABS[number]['key'];
@@ -47,19 +55,19 @@ function useLazyTabData<T>(url: string, active: boolean, refreshInterval = 30000
   return { data, loading: loading && !data, refetch: fetchData };
 }
 
-export default function CockpitPage() {
+export default function DevOpsPage() {
   const [coreData, setCoreData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [autoRefresh, setAutoRefresh] = useState(true);
-  const [activeTab, setActiveTab] = useState<TabKey>('overview');
+  const [activeTab, setActiveTab] = useState<TabKey>('triage');
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [actionResult, setActionResult] = useState<{ msg: string; ok: boolean } | null>(null);
 
   const fetchCore = useCallback(async () => {
     try {
       const res = await fetch('/api/admin/cockpit/core');
-      if (!res.ok) throw new Error("HTTP " + res.status);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
       setCoreData(await res.json());
       setError(null);
     } catch (e: unknown) {
@@ -76,7 +84,11 @@ export default function CockpitPage() {
     return () => clearInterval(interval);
   }, [fetchCore, autoRefresh]);
 
-  const healthTab = useLazyTabData<any>('/api/admin/cockpit/tab/health', activeTab === 'health' || activeTab === 'overview');
+  const backlog = useLazyTabData<any>('/api/admin/cockpit/tab/backlog', activeTab === 'backlog');
+  const triage = useLazyTabData<any>('/api/admin/cockpit/tab/triage', activeTab === 'triage');
+  const healthTab = useLazyTabData<any>('/api/admin/cockpit/tab/health', activeTab === 'builds');
+  const planningData = useLazyTabData<any>('/api/admin/cockpit/tab/planning', activeTab === 'planning');
+  const pipelinesData = useLazyTabData<any>('/api/admin/cockpit/tab/pipelines', activeTab === 'pipelines');
 
   if (loading) {
     return (
@@ -121,7 +133,9 @@ export default function CockpitPage() {
     }
   };
 
-  const healthData = healthTab.data?.health || coreData.health || {};
+  const triageCount = coreData.triageCount || 0;
+  const githubIssues = backlog.data || { open: 0, closed: 0, items: [], lastSyncedAt: null };
+  const triageQueue = triage.data || { issues: [], ideas: [] };
   const buildsData = healthTab.data?.builds || [];
 
   return (
@@ -129,16 +143,14 @@ export default function CockpitPage() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-white">Cockpit</h1>
-          <p className="text-sm text-zinc-400 mt-1">System monitoring &amp; health</p>
+          <h1 className="text-2xl font-bold text-white">DevOps</h1>
+          <p className="text-sm text-zinc-400 mt-1">Development pipeline &amp; CI/CD operations</p>
         </div>
         <div className="flex items-center gap-3">
           <button
             onClick={() => setAutoRefresh(!autoRefresh)}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs transition ${
-              autoRefresh
-                ? 'bg-emerald-500/10 border border-emerald-500/30 text-emerald-400'
-                : 'bg-zinc-800 border border-zinc-700 text-zinc-400'
+            className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium transition ${
+              autoRefresh ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'bg-zinc-800 text-zinc-400 border border-zinc-700'
             }`}
           >
             {autoRefresh ? <Wifi className="w-3 h-3" /> : <WifiOff className="w-3 h-3" />}
@@ -158,9 +170,13 @@ export default function CockpitPage() {
 
       {/* Quick Actions */}
       <div className="flex items-center gap-3 flex-wrap">
-        <button onClick={() => runAction('test-whatsapp')} disabled={actionLoading !== null}
+        <button onClick={() => runAction('trigger-build', { workflow: 'pr-check.yml', branch: 'main' })} disabled={actionLoading !== null}
           className="flex items-center gap-2 px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-xs text-zinc-300 hover:bg-zinc-700 hover:border-zinc-600 transition disabled:opacity-50">
-          <Send className="w-3.5 h-3.5 text-green-400" /> Test WhatsApp
+          <Play className="w-3.5 h-3.5 text-emerald-400" /> Trigger CI Build
+        </button>
+        <button onClick={() => runAction('trigger-build', { workflow: 'e2e.yml', branch: 'main', repo: 'deepterm-web' })} disabled={actionLoading !== null}
+          className="flex items-center gap-2 px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-xs text-zinc-300 hover:bg-zinc-700 hover:border-zinc-600 transition disabled:opacity-50">
+          <Play className="w-3.5 h-3.5 text-blue-400" /> Run E2E Tests
         </button>
         {actionLoading && <span className="flex items-center gap-1.5 text-xs text-zinc-500"><Loader2 className="w-3 h-3 animate-spin" /> {actionLoading}...</span>}
         {actionResult && <span className={`text-xs ${actionResult.ok ? 'text-emerald-400' : 'text-red-400'}`}>{actionResult.msg}</span>}
@@ -171,23 +187,29 @@ export default function CockpitPage() {
         {TABS.map((tab) => {
           const Icon = tab.icon;
           const isActive = activeTab === tab.key;
+          const badge = tab.key === 'triage' && triageCount > 0 ? triageCount : null;
           return (
             <button key={tab.key} onClick={() => setActiveTab(tab.key)}
-              className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-medium transition whitespace-nowrap ${
-                isActive
-                  ? 'bg-zinc-800 text-white shadow-sm'
-                  : 'text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800/50'
+              className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium whitespace-nowrap transition ${
+                isActive ? 'bg-zinc-800 text-white border border-zinc-700' : 'text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800/50 border border-transparent'
               }`}>
               <Icon className="w-3.5 h-3.5" /> {tab.label}
+              {badge !== null && (
+                <span className="ml-1 px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/20 text-amber-400 border border-amber-500/30">{badge}</span>
+              )}
             </button>
           );
         })}
       </div>
 
       {/* Tab Content */}
-      {activeTab === 'overview' && <OverviewTab stats={coreData.stats} revenue={coreData.revenue} health={healthData} builds={buildsData} />}
-      {activeTab === 'health' && (healthTab.loading ? <TabLoader /> : <SystemHealthTab health={healthData} builds={buildsData} />)}
-      {activeTab === 'ai-usage' && <AIUsageTab />}
+      {activeTab === 'triage' && (triage.loading ? <TabLoader /> : <TriageQueueTab triageQueue={triageQueue} runAction={runAction} actionLoading={actionLoading} />)}
+      {activeTab === 'backlog' && (backlog.loading ? <TabLoader /> : <GithubIssuesTab githubIssues={githubIssues} runAction={runAction} actionLoading={actionLoading} />)}
+      {activeTab === 'planning' && <PlanningTab planning={planningData.data || { epics: [], unassignedStories: [] }} githubIssues={githubIssues} runAction={runAction} actionLoading={actionLoading} onDataChange={() => { planningData.refetch(); fetchCore(); }} />}
+      {activeTab === 'lifecycle' && <LifecycleTab />}
+      {activeTab === 'code' && <CodeAndPRsTab />}
+      {activeTab === 'builds' && <BuildsTab builds={buildsData} />}
+      {activeTab === 'pipelines' && <PipelinesTab pipelines={pipelinesData.data || { connected: false, dags: [], activeRuns: [], recentRuns: [] }} runAction={runAction} actionLoading={actionLoading} />}
     </div>
   );
 }

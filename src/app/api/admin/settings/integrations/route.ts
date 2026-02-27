@@ -32,6 +32,9 @@ export async function GET() {
     } catch { /* table may not exist */ }
 
     return NextResponse.json({
+      pi: { configured: true, address: 'localhost', detail: 'Running this web app' },
+      webApp: { configured: true, address: 'localhost:3000', detail: 'Next.js via PM2' },
+      ciMac: { configured: !!ghToken, detail: ghToken ? 'Via GitHub Actions runner' : 'GITHUB_TOKEN not set' },
       github: {
         configured: !!ghToken,
         repo: ghToken ? 'deblasioluca/deepterm' : null,

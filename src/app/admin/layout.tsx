@@ -23,6 +23,7 @@ import {
   Key,
   Activity,
   Brain,
+  GitMerge,
 } from 'lucide-react';
 
 const navItems = [
@@ -35,6 +36,11 @@ const navItems = [
     label: 'Cockpit',
     href: '/admin/cockpit',
     icon: Activity,
+  },
+  {
+    label: 'DevOps',
+    href: '/admin/devops',
+    icon: GitMerge,
   },
   {
     label: 'Users',

@@ -93,14 +93,14 @@ Settings         (General, Security, Billing, Notifications, Releases, Integrati
 
 ## 7. Implementation Phases
 
-### Phase 1: Fix Lifecycle Bugs ⬜
+### Phase 1: Fix Lifecycle Bugs ✅
 - [ ] 1.1 Add 10s polling to LifecycleTab when active steps exist
 - [ ] 1.2 Fix implement gate: pending while deliberation running
 - [ ] 1.3 Align progress count left = right
 - [ ] 1.4 Include backlog stories from active epics in lifecycle API
 - [ ] 1.5 Test full lifecycle flow with test epic
 
-### Phase 2: Create DevOps Page ⬜
+### Phase 2: Create DevOps Page ✅
 - [ ] 2.1 Create /admin/devops/page.tsx with 7 tabs
 - [ ] 2.2 Move Triage, Backlog, Planning, Lifecycle tabs to DevOps
 - [ ] 2.3 Create CodeAndPRsTab (Reviews + PRs + Activity sub-tabs)
@@ -108,19 +108,19 @@ Settings         (General, Security, Billing, Notifications, Releases, Integrati
 - [ ] 2.5 Move Pipelines tab to DevOps
 - [ ] 2.6 Add DevOps to sidebar in layout.tsx
 
-### Phase 3: Slim Down Cockpit ⬜
+### Phase 3: Slim Down Cockpit ✅
 - [ ] 3.1 Reduce Cockpit to 3 tabs: Overview, System Health, AI Usage
 - [ ] 3.2 Update Overview with all 7 system status cards
 - [ ] 3.3 Move quick action buttons (Trigger CI, Run E2E) to DevOps Builds tab
 - [ ] 3.4 Remove old standalone tabs from Cockpit (Reviews, PRs, Activity, Agent Loop, Builds, Backlog, Triage, Planning, Lifecycle, Pipelines)
 
-### Phase 4: System Consistency ⬜
-- [ ] 4.1 Define canonical 7-system list with health check endpoints
-- [ ] 4.2 Update SystemHealthTab for all 7 systems
-- [ ] 4.3 Update OverviewTab system cards for all 7
-- [ ] 4.4 Update Settings IntegrationsTab (add CI Mac, Pi, Web App)
-- [ ] 4.5 Remove AI tab from Settings (keep /admin/ai)
-- [ ] 4.6 Add health check API endpoints for new systems
+### Phase 4: System Consistency ✅
+- [x] 4.1 Define canonical 7-system list with health check endpoints
+- [x] 4.2 Update SystemHealthTab for all 7 systems
+- [x] 4.3 Update OverviewTab system cards for all 7
+- [x] 4.4 Update Settings IntegrationsTab (add CI Mac, Pi, Web App)
+- [x] 4.5 Remove AI tab from Settings (keep /admin/ai)
+- [x] 4.6 Add health check API endpoints for new systems
 
 ### Phase 5: Pipelines & Agent Drill-down ⬜
 - [ ] 5.1 Add sub-tabs to Pipelines: Overview+Runs, Scheduled, All DAGs
@@ -160,10 +160,10 @@ Settings         (General, Security, Billing, Notifications, Releases, Integrati
 
 | Phase | Status | Started | Completed | Notes |
 |-------|--------|---------|-----------|-------|
-| Phase 1: Lifecycle Bugs | ⬜ | | | |
-| Phase 2: Create DevOps | ⬜ | | | |
-| Phase 3: Slim Cockpit | ⬜ | | | |
-| Phase 4: System Consistency | ⬜ | | | |
+| Phase 1: Lifecycle Bugs | ✅ | | | |
+| Phase 2: Create DevOps | ✅ | | | |
+| Phase 3: Slim Cockpit | ✅ | | | |
+| Phase 4: System Consistency | ✅ | | | |
 | Phase 5: Pipelines + Agent | ⬜ | | | |
 | Phase 6: Polish | ⬜ | | | |
 

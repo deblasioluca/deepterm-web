@@ -11,6 +11,10 @@ import {
   Server,
   Cpu,
   Radio,
+  Globe,
+  GitBranch,
+  Brain,
+  Workflow,
 } from 'lucide-react';
 import type { QuickStats, RevenueData, HealthData, CiBuild } from '../types';
 import { formatTimeAgo } from '../utils';
@@ -111,32 +115,27 @@ export default function OverviewTab({ stats, revenue, health, builds }: Overview
         )}
       </div>
 
-      {/* Compact System Health */}
+      {/* Compact System Health — All 7 Systems */}
       <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-5">
         <h2 className="text-sm font-semibold text-zinc-300 mb-3 flex items-center gap-2">
           System Health
         </h2>
-        <div className="flex items-center gap-6 flex-wrap">
-          <div className="flex items-center gap-2">
-            <Server className="w-4 h-4 text-blue-400" />
-            <span className="text-xs text-zinc-300">Raspberry Pi</span>
-            <StatusBadge status={health?.pi?.status || "unknown"} />
-          </div>
-          <div className="flex items-center gap-2">
-            <Cpu className="w-4 h-4 text-purple-400" />
-            <span className="text-xs text-zinc-300">CI Mac</span>
-            <StatusBadge status={health?.ciMac?.status || "unknown"} />
-          </div>
-          <div className="flex items-center gap-2">
-            <Radio className="w-4 h-4 text-amber-400" />
-            <span className="text-xs text-zinc-300">Node-RED</span>
-            <StatusBadge status={health?.nodeRed?.status || "unknown"} />
-          </div>
-          {builds.length > 0 && (
-            <div className="text-xs text-zinc-500 ml-auto">
-              Last build: {formatTimeAgo(builds[0].createdAt)}
+        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3">
+          {[
+            { icon: Server, color: "text-blue-400", name: "Pi", status: health?.pi?.status },
+            { icon: Globe, color: "text-emerald-400", name: "Web App", status: health?.webApp?.status },
+            { icon: Cpu, color: "text-purple-400", name: "CI Mac", status: health?.ciMac?.status },
+            { icon: Radio, color: "text-amber-400", name: "Node-RED", status: health?.nodeRed?.status },
+            { icon: GitBranch, color: "text-zinc-300", name: "GitHub", status: health?.github?.status },
+            { icon: Brain, color: "text-cyan-400", name: "AI Dev", status: health?.aiDevMac?.status },
+            { icon: Workflow, color: "text-orange-400", name: "Airflow", status: health?.airflow?.status },
+          ].map((sys) => (
+            <div key={sys.name} className="flex items-center gap-1.5 bg-zinc-800/40 rounded-lg px-2.5 py-2 border border-zinc-700/30">
+              <sys.icon className={'w-3.5 h-3.5 ' + sys.color} />
+              <span className="text-xs text-zinc-300">{sys.name}</span>
+              <StatusBadge status={sys.status || "unknown"} />
             </div>
-          )}
+          ))}
         </div>
       </div>
     </div>

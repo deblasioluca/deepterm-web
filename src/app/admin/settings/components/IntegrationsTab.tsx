@@ -2,9 +2,12 @@
 
 import { useState, useEffect } from 'react';
 import { Card, Button } from '@/components/ui';
-import { GitBranch, Radio, Cpu, Loader2, CheckCircle, XCircle, RefreshCw, Workflow, Save, Eye, EyeOff } from 'lucide-react';
+import { GitBranch, Radio, Cpu, Loader2, CheckCircle, XCircle, RefreshCw, Workflow, Save, Eye, EyeOff, Server, Globe } from 'lucide-react';
 
 type IntegrationStatus = {
+  pi: { configured: boolean; address: string; detail: string };
+  webApp: { configured: boolean; address: string; detail: string };
+  ciMac: { configured: boolean; detail: string };
   github: { configured: boolean; repo: string | null; lastSync: string | null };
   nodeRed: { configured: boolean; url: string | null; reachable: boolean | null };
   aiDev: { configured: boolean };
@@ -123,6 +126,36 @@ export default function IntegrationsTab() {
   }
 
   const integrations = [
+    {
+      key: 'pi',
+      label: 'Raspberry Pi',
+      description: 'Database host, web server, file storage, and webhook receiver',
+      icon: Server,
+      color: 'text-blue-400',
+      bgColor: 'bg-blue-500/20',
+      configured: status?.pi?.configured ?? true,
+      details: status?.pi?.detail || 'Core infrastructure',
+    },
+    {
+      key: 'web-app',
+      label: 'Web App (Next.js)',
+      description: 'Admin panel, cockpit, API server running via PM2',
+      icon: Globe,
+      color: 'text-emerald-400',
+      bgColor: 'bg-emerald-500/20',
+      configured: status?.webApp?.configured ?? true,
+      details: status?.webApp?.detail || 'localhost:3000',
+    },
+    {
+      key: 'ci-mac',
+      label: 'CI Mac',
+      description: 'Self-hosted GitHub Actions runner for builds, signing, and tests',
+      icon: Cpu,
+      color: 'text-purple-400',
+      bgColor: 'bg-purple-500/20',
+      configured: status?.ciMac?.configured ?? false,
+      details: status?.ciMac?.detail || 'Via GitHub Actions runner',
+    },
     {
       key: 'github',
       label: 'GitHub',
