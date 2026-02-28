@@ -1,0 +1,141 @@
+# .github/workflows/pr-check.yml — DeepTerm Swift App PR Check
+# INSTALL: Copy to Swift app repo at .github/workflows/pr-check.yml
+# SECRETS: PI_URL, PI_API_KEY, GITHUB_TOKEN
+# PR body: include "storyId: <cuid>" and "scope: app|web|both"
+name: PR Check
+on:
+  pull_request:
+    branches: [develop, main]
+    types: [opened, synchronize, reopened]
+env:
+  WORKSPACE: DeepTerm.xcworkspace
+  SCHEME: DeepTerm
+  PI_URL: ${{ secrets.PI_URL }}
+  PI_API_KEY: ${{ secrets.PI_API_KEY }}
+jobs:
+  build-and-test:
+    runs-on: self-hosted-mac
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - name: Extract story metadata
+        id: story
+        run: |
+          STORY_ID=$(echo "${{ github.event.pull_request.body }}" | grep -oP 'storyId:\s*\K\S+' || echo "")
+          SCOPE=$(echo "${{ github.event.pull_request.body }}" | grep -oP 'scope:\s*\K\S+' || echo "app")
+          echo "story_id=$STORY_ID" >> $GITHUB_OUTPUT
+          echo "scope=$SCOPE" >> $GITHUB_OUTPUT
+      - name: Emit test started
+        if: steps.story.outputs.story_id != ''
+        run: |
+          curl -s -X POST "$PI_URL/api/internal/lifecycle/events" \
+            -H "Content-Type: application/json" -H "x-api-key: $PI_API_KEY" \
+            -d '{"storyId":"${{ steps.story.outputs.story_id }}","stepId":"test","event":"started","detail":"{\"message\":\"CI triggered on PR #${{ github.event.pull_request.number }}\"}","actor":"ci"}' || true
+      - name: Start heartbeat
+        if: steps.story.outputs.story_id != ''
+        run: |
+          (while true; do
+            curl -s -X POST "$PI_URL/api/internal/lifecycle/events" \
+              -H "Content-Type: application/json" -H "x-api-key: $PI_API_KEY" \
+              -d '{"storyId":"${{ steps.story.outputs.story_id }}","stepId":"test","event":"heartbeat","actor":"ci"}' 2>/dev/null || true
+            sleep 30
+          done) & echo $! > heartbeat.pid
+      - name: Install CocoaPods
+        run: pod install --repo-update
+      # Build (5 min timeout)
+      - name: Build
+        id: build
+        timeout-minutes: 5
+        run: |
+          START=$(date +%s)
+          xcodebuild build-for-testing -workspace $WORKSPACE -scheme $SCHEME -sdk macosx -arch arm64 -derivedDataPath DerivedData 2>&1 | tail -20
+          echo "duration=$(( $(date +%s) - START ))" >> $GITHUB_OUTPUT
+      - name: Emit build result
+        if: always() && steps.story.outputs.story_id != ''
+        run: |
+          E=$([[ "${{ steps.build.outcome }}" == "failure" ]] && echo "failed" || echo "progress")
+          curl -s -X POST "$PI_URL/api/internal/lifecycle/events" \
+            -H "Content-Type: application/json" -H "x-api-key: $PI_API_KEY" \
+            -d '{"storyId":"${{ steps.story.outputs.story_id }}","stepId":"test","event":"'"$E"'","detail":"{\"suite\":\"build\",\"status\":\"${{ steps.build.outcome }}\",\"duration\":${{ steps.build.outputs.duration || 0 }}}","actor":"ci"}' || true
+      # Unit Tests — XCTest (5 min timeout)
+      - name: Unit tests
+        id: unit_tests
+        if: steps.build.outcome == 'success'
+        timeout-minutes: 5
+        run: |
+          START=$(date +%s)
+          xcodebuild test -workspace $WORKSPACE -scheme $SCHEME -sdk macosx -arch arm64 \
+            -derivedDataPath DerivedData -resultBundlePath unit-result.xcresult \
+            -only-testing:DeepTermTests 2>&1 | tee unit-test.log | tail -20
+          echo "duration=$(( $(date +%s) - START ))" >> $GITHUB_OUTPUT
+      - name: Parse and emit unit results
+        if: always() && steps.unit_tests.outcome != 'skipped' && steps.story.outputs.story_id != ''
+        env:
+          STORY_ID: ${{ steps.story.outputs.story_id }}
+        run: |
+          python3 << 'PYEOF'
+          import json, os, re, urllib.request
+          p, f, fails = 0, 0, []
+          try:
+              log = open("unit-test.log").read()
+              m = re.search(r'Executed (\d+) tests?, with (\d+) failures?', log)
+              if m: t,f = int(m.group(1)),int(m.group(2)); p = t-f
+              for m in re.finditer(r'([\w/]+\.swift):(\d+).*error.*?:\s*(.+)', log):
+                  fails.append({"file":m.group(1),"line":int(m.group(2)),"message":m.group(3).strip()})
+          except: pass
+          r = {"suite":"unit","passed":p,"failed":f,"total":p+f,"status":"failed" if f>0 else "passed","failures":fails[:10]}
+          json.dump(r, open("unit-result.json","w"))
+          e = "failed" if f>0 else "progress"
+          d = json.dumps({"storyId":os.environ["STORY_ID"],"stepId":"test","event":e,"detail":json.dumps(r),"actor":"ci"}).encode()
+          try: urllib.request.urlopen(urllib.request.Request(os.environ["PI_URL"]+"/api/internal/lifecycle/events",data=d,headers={"Content-Type":"application/json","x-api-key":os.environ["PI_API_KEY"]}),timeout=5)
+          except: pass
+          PYEOF
+      # UI Tests — XCUITest (10 min timeout)
+      - name: UI tests
+        id: ui_tests
+        if: steps.build.outcome == 'success'
+        timeout-minutes: 10
+        run: |
+          START=$(date +%s)
+          xcodebuild test -workspace $WORKSPACE -scheme $SCHEME -sdk macosx -arch arm64 \
+            -derivedDataPath DerivedData -resultBundlePath ui-result.xcresult \
+            -only-testing:DeepTermUITests 2>&1 | tee ui-test.log | tail -20
+          echo "duration=$(( $(date +%s) - START ))" >> $GITHUB_OUTPUT
+      - name: Parse and emit UI results
+        if: always() && steps.ui_tests.outcome != 'skipped' && steps.story.outputs.story_id != ''
+        env:
+          STORY_ID: ${{ steps.story.outputs.story_id }}
+        run: |
+          python3 << 'PYEOF'
+          import json, os, re, urllib.request
+          p, f, fails = 0, 0, []
+          try:
+              log = open("ui-test.log").read()
+              m = re.search(r'Executed (\d+) tests?, with (\d+) failures?', log)
+              if m: t,f = int(m.group(1)),int(m.group(2)); p = t-f
+              for m in re.finditer(r'([\w/]+\.swift):(\d+).*error.*?:\s*(.+)', log):
+                  fails.append({"file":m.group(1),"line":int(m.group(2)),"message":m.group(3).strip()})
+          except: pass
+          r = {"suite":"ui","passed":p,"failed":f,"total":p+f,"status":"failed" if f>0 else "passed","failures":fails[:10]}
+          json.dump(r, open("ui-result.json","w"))
+          e = "failed" if f>0 else "progress"
+          d = json.dumps({"storyId":os.environ["STORY_ID"],"stepId":"test","event":e,"detail":json.dumps(r),"actor":"ci"}).encode()
+          try: urllib.request.urlopen(urllib.request.Request(os.environ["PI_URL"]+"/api/internal/lifecycle/events",data=d,headers={"Content-Type":"application/json","x-api-key":os.environ["PI_API_KEY"]}),timeout=5)
+          except: pass
+          PYEOF
+      # E2E Playwright (5 min, scope=both only)
+      - name: Trigger E2E
+        if: steps.build.outcome == 'success' && steps.story.outputs.scope == 'both'
+        run: |
+          curl -s -X POST "https://api.github.com/repos/${{ github.repository_owner }}/deepterm-web/dispatches" \
+            -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" -H "Accept: application/vnd.github.v3+json" \
+            -d '{"event_type":"pr-e2e-check","client_payload":{"storyId":"${{ steps.story.outputs.story_id }}","prNumber":"${{ github.event.pull_request.number }}"}}'
+      # Final verdict
+      - name: Emit final result
+        if: always() && steps.story.outputs.story_id != ''
+        run: |
+          B="${{ steps.build.outcome }}" U="${{ steps.unit_tests.outcome }}" I="${{ steps.ui_tests.outcome }}"
+          [[ "$B" == "failure" || "$U" == "failure" || "$I" == "failure" ]] && E="failed" || E="completed"
+          curl -s -X POST "$PI_URL/api/internal/lifecycle/events" \
+            -H "Content-Type: application/json" -H "x-api-key: $PI_API_KEY" \
+            -d '{"storyId":"${{ steps.story.outputs.story_id }}","stepId":"test","event":"'"$E"'","detail":"{\"build\":\"'"$B"'\",\"unit\":\"'"$U"'\",\"ui\":\"'"$I"'\"}","actor":"ci"}' || true
