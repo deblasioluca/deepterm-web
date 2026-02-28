@@ -2,7 +2,7 @@
 
 **Version:** 1.2  
 **Date:** 2026-02-28  
-**Status:** IN PROGRESS — Phase 3 next  
+**Status:** IN PROGRESS — Phase 4 next  
 **Depends on:** COCKPIT-REORG-PLAN.md (✅ complete)
 
 ---
@@ -39,7 +39,7 @@
 - [x] 1.6 Add `StepDurationHistory` model for ETA tracking
 - [x] 1.7 Run Prisma migration (`npx prisma db push`)
 
-### Phase 2: Feedback Loops (Backend) ✅ DONE (commit a914f7f) IN PROGRESS
+### Phase 2: Feedback Loops (Backend) ✅ DONE (commit a914f7f)
 
 - [x] 2.1 Add `loop-back` action to lifecycle POST handler in route.ts _(done in session 1 — 4 actions added)_
 - [x] 2.2 Implement Test → Implement loop (collect failure data, reset step, inject context into agent)
