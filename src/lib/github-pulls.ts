@@ -209,3 +209,103 @@ export async function submitReview(
   const data = await res.json();
   return { id: data.id, state: data.state };
 }
+
+/**
+ * Close a PR without merging.
+ */
+export async function closePR(
+  repo: string,
+  prNumber: number
+): Promise<{ closed: boolean; message: string }> {
+  const headers = getGitHubHeaders();
+  const res = await fetch(
+    `https://api.github.com/repos/${repo}/pulls/${prNumber}`,
+    {
+      method: "PATCH",
+      headers: { ...headers, "Content-Type": "application/json" },
+      body: JSON.stringify({ state: "closed" }),
+      signal: AbortSignal.timeout(10000),
+    }
+  );
+  if (res.ok) return { closed: true, message: "PR closed" };
+  const data = await res.json().catch(() => ({}));
+  return { closed: false, message: data.message || `Close failed (${res.status})` };
+}
+
+/**
+ * Delete a branch from a repo.
+ */
+export async function deleteBranch(
+  repo: string,
+  branchName: string
+): Promise<{ deleted: boolean; message: string }> {
+  const headers = getGitHubHeaders();
+  const ref = `heads/${branchName}`;
+  const res = await fetch(
+    `https://api.github.com/repos/${repo}/git/refs/${ref}`,
+    {
+      method: "DELETE",
+      headers,
+      signal: AbortSignal.timeout(10000),
+    }
+  );
+  if (res.status === 204 || res.ok) return { deleted: true, message: "Branch deleted" };
+  if (res.status === 422) return { deleted: false, message: "Branch not found or already deleted" };
+  return { deleted: false, message: `Delete failed (${res.status})` };
+}
+
+/**
+ * Post a comment on a PR (used for loop-back notifications).
+ */
+export async function commentOnPR(
+  repo: string,
+  prNumber: number,
+  body: string
+): Promise<{ id: number | null; success: boolean }> {
+  const headers = getGitHubHeaders();
+  const res = await fetch(
+    `https://api.github.com/repos/${repo}/issues/${prNumber}/comments`,
+    {
+      method: "POST",
+      headers: { ...headers, "Content-Type": "application/json" },
+      body: JSON.stringify({ body }),
+      signal: AbortSignal.timeout(10000),
+    }
+  );
+  if (res.ok) {
+    const data = await res.json();
+    return { id: data.id, success: true };
+  }
+  return { id: null, success: false };
+}
+
+/**
+ * Find PR info for a story by looking at its most recent AgentLoop.
+ */
+export async function findStoryPR(storyId: string, prisma: any): Promise<{
+  repo: string;
+  prNumber: number;
+  branchName: string;
+  prUrl: string;
+} | null> {
+  const agentLoop = await prisma.agentLoop.findFirst({
+    where: { storyId, prNumber: { not: null } },
+    orderBy: { createdAt: "desc" },
+    select: { prNumber: true, prUrl: true, branchName: true },
+  });
+  if (!agentLoop?.prNumber) return null;
+
+  // Determine repo from prUrl (e.g., https://github.com/deblasioluca/deepterm-web/pull/42)
+  let repo = "deblasioluca/deepterm-web"; // default
+  if (agentLoop.prUrl) {
+    const match = agentLoop.prUrl.match(/github\.com\/([^/]+\/[^/]+)\/pull/);
+    if (match) repo = match[1];
+  }
+
+  return {
+    repo,
+    prNumber: agentLoop.prNumber,
+    branchName: agentLoop.branchName || "",
+    prUrl: agentLoop.prUrl || "",
+  };
+}

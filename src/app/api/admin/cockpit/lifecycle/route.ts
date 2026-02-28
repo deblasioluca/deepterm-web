@@ -1,5 +1,22 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { closePR, deleteBranch, commentOnPR, findStoryPR } from '@/lib/github-pulls';
+
+const NODE_RED_URL = process.env.NODE_RED_URL || 'http://192.168.1.30:1880';
+
+// Helper: send loop-back webhook to Node-RED
+async function notifyLoopBack(storyId: string, storyTitle: string, fromStep: string, toStep: string, reason: string, loopCount: number, maxLoops: number) {
+  try {
+    await fetch(`${NODE_RED_URL}/deepterm/lifecycle-loop`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ event: 'lifecycle-loop', storyId, storyTitle, fromStep, toStep, reason, loopCount, maxLoops }),
+      signal: AbortSignal.timeout(5000),
+    });
+  } catch (e) {
+    console.error('Node-RED lifecycle-loop webhook failed:', e);
+  }
+}
 
 export const dynamic = 'force-dynamic';
 
@@ -301,6 +318,18 @@ export async function POST(req: NextRequest) {
         updates.loopCount = (storyLoop1?.loopCount || 0) + 1;
         await logEvent(storyId, 'test', 'loop-back', JSON.stringify({ from: 'test', to: 'implement', reason: reason || 'Test failure — auto-fix' }), 'system');
         await logEvent(storyId, 'implement', 'started', JSON.stringify({ message: 'Restarted for auto-fix after test failure', context: reason }), 'system');
+
+        // Comment on PR for traceability
+        const prInfoTest = await findStoryPR(storyId, prisma);
+        if (prInfoTest) {
+          await commentOnPR(prInfoTest.repo, prInfoTest.prNumber,
+            `## 🔄 Lifecycle Loop: Test → Implement\n\nTest failures detected. AI agent will attempt auto-fix (attempt ${(storyLoop1?.loopCount || 0) + 1}/${storyLoop1?.maxLoops || 5}).\n\nReason: ${reason || 'Test failure'}`
+          );
+        }
+
+        // Notify Node-RED
+        const storyTestLoop = await prisma.story.findUnique({ where: { id: storyId }, select: { title: true } });
+        await notifyLoopBack(storyId, storyTestLoop?.title || '', 'test', 'implement', reason || 'Test failure — auto-fix', updates.loopCount as number, storyLoop1?.maxLoops || 5);
         break;
       }
 
@@ -319,13 +348,25 @@ export async function POST(req: NextRequest) {
         updates.loopCount = (storyLoop2?.loopCount || 0) + 1;
         await logEvent(storyId, 'review', 'loop-back', JSON.stringify({ from: 'review', to: 'implement', reason, feedback: reason }), 'human');
         await logEvent(storyId, 'implement', 'started', JSON.stringify({ message: 'Restarted with review feedback', feedback: reason }), 'system');
+
+        // Comment on PR for traceability
+        const prInfoReview = await findStoryPR(storyId, prisma);
+        if (prInfoReview) {
+          await commentOnPR(prInfoReview.repo, prInfoReview.prNumber,
+            `## 🔄 Lifecycle Loop: Review → Implement\n\nChanges requested. AI agent will revise code (attempt ${updates.loopCount}/${storyLoop2?.maxLoops || 5}).\n\nFeedback: ${reason}`
+          );
+        }
+
+        // Notify Node-RED
+        const storyRevLoop = await prisma.story.findUnique({ where: { id: storyId }, select: { title: true } });
+        await notifyLoopBack(storyId, storyRevLoop?.title || '', 'review', 'implement', reason, updates.loopCount as number, storyLoop2?.maxLoops || 5);
         break;
       }
 
       case 'loop-review-to-deliberation': {
         // Review rejection → re-architect from deliberation
         if (!reason) return NextResponse.json({ error: 'Reason required for review → deliberation loop' }, { status: 400 });
-        const storyLoop3 = await prisma.story.findUnique({ where: { id: storyId }, select: { loopCount: true, maxLoops: true } });
+        const storyLoop3 = await prisma.story.findUnique({ where: { id: storyId }, select: { loopCount: true, maxLoops: true, title: true } });
         if (storyLoop3 && storyLoop3.loopCount >= storyLoop3.maxLoops) {
           return NextResponse.json({ error: `Circuit breaker: max loops (${storyLoop3.maxLoops}) reached.` }, { status: 400 });
         }
@@ -333,14 +374,28 @@ export async function POST(req: NextRequest) {
           where: { storyId, status: { in: ['queued', 'running'] } },
           data: { status: 'cancelled' },
         });
+
+        // Close PR via GitHub API (new deliberation = new implementation = new PR)
+        const prInfoDelib = await findStoryPR(storyId, prisma);
+        if (prInfoDelib) {
+          await closePR(prInfoDelib.repo, prInfoDelib.prNumber);
+          await commentOnPR(prInfoDelib.repo, prInfoDelib.prNumber,
+            `## 🔄 Lifecycle Loop: Review → Deliberation\n\nThis implementation is being scrapped for re-architecture.\nReason: ${reason}\n\nA new deliberation will produce a fresh approach.`
+          );
+        }
+
+        const newLoopCount3 = (storyLoop3?.loopCount || 0) + 1;
         updates.lifecycleStep = 'deliberation';
         updates.lifecycleStartedAt = new Date();
         updates.lifecycleHeartbeat = null;
         updates.lastLoopFrom = 'review';
         updates.lastLoopTo = 'deliberation';
-        updates.loopCount = (storyLoop3?.loopCount || 0) + 1;
+        updates.loopCount = newLoopCount3;
         await logEvent(storyId, 'review', 'loop-back', JSON.stringify({ from: 'review', to: 'deliberation', reason }), 'human');
         await logEvent(storyId, 'deliberation', 'started', JSON.stringify({ message: 'Re-architecture requested from review', feedback: reason }), 'system');
+
+        // Notify Node-RED
+        await notifyLoopBack(storyId, storyLoop3?.title || '', 'review', 'deliberation', reason, newLoopCount3, storyLoop3?.maxLoops || 5);
         break;
       }
 
@@ -354,7 +409,28 @@ export async function POST(req: NextRequest) {
           where: { storyId, status: { in: ['queued', 'running'] } },
           data: { status: 'cancelled' },
         });
-        await logEvent(storyId, 'review', 'loop-back', JSON.stringify({ from: 'review', to: 'plan', reason: reason || 'Implementation abandoned' }), 'human');
+
+        // Close PR and delete branch via GitHub API
+        const prInfoAbandon = await findStoryPR(storyId, prisma);
+        let ghResult = '';
+        if (prInfoAbandon) {
+          const closeRes = await closePR(prInfoAbandon.repo, prInfoAbandon.prNumber);
+          ghResult += closeRes.closed ? 'PR closed. ' : `PR close failed: ${closeRes.message}. `;
+          if (prInfoAbandon.branchName) {
+            const delRes = await deleteBranch(prInfoAbandon.repo, prInfoAbandon.branchName);
+            ghResult += delRes.deleted ? 'Branch deleted.' : `Branch delete: ${delRes.message}`;
+          }
+          // Comment on PR for traceability
+          await commentOnPR(prInfoAbandon.repo, prInfoAbandon.prNumber,
+            `## 🗄 Implementation Abandoned\n\nThis PR has been abandoned via the DeepTerm Lifecycle.\nReason: ${reason || 'No reason provided'}\n\nThe story has been moved back to Planning.`
+          );
+        }
+
+        await logEvent(storyId, 'review', 'loop-back', JSON.stringify({ from: 'review', to: 'plan', reason: reason || 'Implementation abandoned', github: ghResult }), 'human');
+
+        // Notify Node-RED
+        const storyAbandon = await prisma.story.findUnique({ where: { id: storyId }, select: { title: true } });
+        await notifyLoopBack(storyId, storyAbandon?.title || '', 'review', 'plan', reason || 'Implementation abandoned', 0, 5);
         break;
       }
 
