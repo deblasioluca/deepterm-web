@@ -607,6 +607,33 @@ function applyEventOverrides(steps: LifecycleStep[], events: LifecycleEventEntry
           }
         }
         break;
+
+      case 'started':
+        // A started event can activate a pending step (e.g. after skip of previous step)
+        if (step.status === 'pending') {
+          step.status = step.actor === 'human' ? 'waiting_approval' : 'active';
+          step.startedAt = lastEvent.createdAt;
+          step.detail = undefined;
+          // Add default gate for human steps that got activated
+          if (step.actor === 'human' && step.id === 'review') {
+            step.gate = {
+              required: true,
+              actions: [
+                { label: 'Approve & Merge', action: 'merge-pr', variant: 'approve' },
+                { label: 'Request Changes', action: 'request-changes', variant: 'reject' },
+              ],
+            };
+          }
+        }
+        break;
+
+      case 'completed':
+        // Override to passed if an event says so
+        if (step.status !== 'passed') {
+          step.status = 'passed';
+          step.detail = lastEvent.detail || 'Completed';
+        }
+        break;
     }
   }
 
