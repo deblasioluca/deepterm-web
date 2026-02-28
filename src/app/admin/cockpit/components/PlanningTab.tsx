@@ -24,6 +24,53 @@ import DeliberationPanel from './DeliberationPanel';
 import ImplementationReport from './ImplementationReport';
 
 const STATUSES = ['backlog', 'planned', 'in_progress', 'done', 'released'] as const;
+const LIFECYCLE_TEMPLATES: Record<string, string[]> = {
+  full:      ['triage', 'plan', 'deliberation', 'implement', 'test', 'review', 'deploy', 'release'],
+  quick_fix: ['triage', 'implement', 'test', 'review', 'deploy', 'release'],
+  hotfix:    ['implement', 'test', 'deploy'],
+  web_only:  ['triage', 'plan', 'implement', 'test', 'review', 'deploy'],
+};
+
+const STEP_COLORS: Record<string, string> = {
+  triage: '#a855f7', plan: '#8b5cf6', deliberation: '#06b6d4',
+  implement: '#3b82f6', test: '#f59e0b', review: '#ec4899',
+  deploy: '#10b981', release: '#34d399',
+};
+
+function MiniLifecycleBar({ story }: { story: Story }) {
+  const template = story.lifecycleTemplate || 'full';
+  const steps = LIFECYCLE_TEMPLATES[template] || LIFECYCLE_TEMPLATES.full;
+  const currentStep = story.lifecycleStep;
+  const isDone = story.status === 'done' || story.status === 'released';
+  const isActive = !!currentStep && !isDone;
+  const currentIdx = currentStep ? steps.indexOf(currentStep) : -1;
+  
+  if (!isActive && !isDone) return null;
+  
+  return (
+    <div className="flex items-center gap-[1px] ml-1" title={isDone ? 'Complete' : `Step: ${currentStep} (${currentIdx + 1}/${steps.length})`}>
+      {steps.map((step, i) => {
+        const isPassed = isDone || (currentIdx >= 0 && i < currentIdx);
+        const isCurrent = !isDone && i === currentIdx;
+        return (
+          <div
+            key={step}
+            className="h-[6px] rounded-[1px]"
+            style={{
+              width: Math.max(4, Math.floor(48 / steps.length)),
+              background: isPassed ? (STEP_COLORS[step] || '#059669') : isCurrent ? (STEP_COLORS[step] || '#3b82f6') : 'rgba(63,63,70,0.5)',
+              opacity: isCurrent ? 0.7 : isPassed ? 1 : 0.3,
+            }}
+          />
+        );
+      })}
+      {story.loopCount && story.loopCount > 0 ? (
+        <span className="text-[8px] text-amber-400 ml-0.5">↺{story.loopCount}</span>
+      ) : null}
+    </div>
+  );
+}
+
 const PRIORITIES = ['critical', 'high', 'medium', 'low'] as const;
 
 interface PlanningTabProps {
@@ -712,6 +759,7 @@ function StoryRow({ story, idx, totalStories, editing, saving, actionLoading, on
         <PriorityBadge priority={story.priority} />
         <span className="text-xs text-zinc-200 flex-1 truncate">{story.title}</span>
         <WorkflowStatusBadge status={story.status} />
+        <MiniLifecycleBar story={story} />
         {story.githubIssueNumber && (
           <a
             href={`https://github.com/deblasioluca/deepterm/issues/${story.githubIssueNumber}`}
@@ -805,6 +853,8 @@ function InlineForm({ type, initial, onSave, onCancel, saving }: InlineFormProps
   const [description, setDescription] = useState(initial?.description || '');
   const [priority, setPriority] = useState(initial?.priority || 'medium');
   const [status, setStatus] = useState(initial?.status || 'backlog');
+  const [scope, setScope] = useState(initial?.scope || 'app');
+  const [lifecycleTemplate, setLifecycleTemplate] = useState(initial?.lifecycleTemplate || 'full');
   const [githubIssueNumber, setGithubIssueNumber] = useState<string>(
     initial?.githubIssueNumber?.toString() || ''
   );
@@ -815,6 +865,8 @@ function InlineForm({ type, initial, onSave, onCancel, saving }: InlineFormProps
     const data: Record<string, unknown> = { title: title.trim(), description, priority, status };
     if (type === 'story') {
       data.githubIssueNumber = githubIssueNumber ? parseInt(githubIssueNumber, 10) : null;
+      data.scope = scope;
+      data.lifecycleTemplate = lifecycleTemplate;
     }
     onSave(data);
   };
@@ -856,6 +908,7 @@ function InlineForm({ type, initial, onSave, onCancel, saving }: InlineFormProps
           ))}
         </select>
         {type === 'story' && (
+          <>
           <input
             type="number"
             value={githubIssueNumber}
@@ -863,6 +916,28 @@ function InlineForm({ type, initial, onSave, onCancel, saving }: InlineFormProps
             placeholder="GitHub #"
             className="w-20 bg-zinc-900 border border-zinc-700 rounded-md px-2 py-1 text-xs text-zinc-300 placeholder-zinc-600 focus:outline-none focus:border-zinc-500"
           />
+          <select
+            value={scope}
+            onChange={(e) => setScope(e.target.value)}
+            className="bg-zinc-900 border border-zinc-700 rounded-md px-2 py-1 text-xs text-zinc-300 focus:outline-none focus:border-zinc-500"
+            title="Scope"
+          >
+            <option value="app">🖥 App</option>
+            <option value="web">🌐 Web</option>
+            <option value="both">🔄 Both</option>
+          </select>
+          <select
+            value={lifecycleTemplate}
+            onChange={(e) => setLifecycleTemplate(e.target.value)}
+            className="bg-zinc-900 border border-zinc-700 rounded-md px-2 py-1 text-xs text-zinc-300 focus:outline-none focus:border-zinc-500"
+            title="Lifecycle Template"
+          >
+            <option value="full">Full (8 steps)</option>
+            <option value="quick_fix">Quick Fix (6)</option>
+            <option value="hotfix">Hotfix (3)</option>
+            <option value="web_only">Web Only (6)</option>
+          </select>
+          </>
         )}
         <div className="flex items-center gap-1 ml-auto">
           <button
