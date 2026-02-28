@@ -175,6 +175,11 @@ export default function LifecycleTab() {
         'force-complete': { url: '/api/admin/cockpit/lifecycle', method: 'POST', body: { action: 'force-complete', storyId } },
         'back-to-implement': { url: '/api/admin/cockpit/lifecycle', method: 'POST', body: { action: 'reset-to-step', storyId, stepId: 'implement' } },
         'force-continue': { url: '/api/admin/cockpit/lifecycle', method: 'POST', body: { action: 'skip-step', storyId, stepId: 'test' } },
+        // Loop-back actions (Lifecycle V2)
+        'loop-back-implement': { url: '/api/admin/cockpit/lifecycle', method: 'POST', body: { action: 'loop-back-implement', storyId, reason: 'Test failure \u2014 auto-fix' } },
+        'loop-back-deliberation': { url: '/api/admin/cockpit/lifecycle', method: 'POST', body: { action: 'loop-back-deliberation', storyId, reason: 'Re-architect needed' } },
+        'loop-back-deliberation-from-test': { url: '/api/admin/cockpit/lifecycle', method: 'POST', body: { action: 'loop-back-deliberation', storyId, reason: 'Test failures require re-architecture' } },
+        'abandon-implementation': { url: '/api/admin/cockpit/lifecycle', method: 'POST', body: { action: 'abandon-implementation', storyId, reason: 'Implementation abandoned' } },
       };
       const mapped = actionMap[action];
       if (mapped) {
