@@ -2,7 +2,7 @@
 
 **Version:** 1.2  
 **Date:** 2026-02-28  
-**Status:** IN PROGRESS — Phase 4 next  
+**Status:** IN PROGRESS — Phase 5 next  
 **Depends on:** COCKPIT-REORG-PLAN.md (✅ complete)
 
 ---
@@ -58,17 +58,17 @@
 - [x] 3.5 Conditionally include Playwright E2E based on story `scope` field
 - [x] 3.6 Build `TestProgressPanel.tsx` component (pass/fail counts, failure messages, progress bar per suite)
 
-### Phase 4: UI Redesign ⬜ NOT STARTED
+### Phase 4: UI Redesign ✅ DONE
 
-- [ ] 4.1 Redesign step cards to compact format (48px collapsed, expandable accordion)
-- [ ] 4.2 Implement two-column layout (steps left, detail panel right)
-- [ ] 4.3 Add SVG loop arrows between steps (rendered from loop history events)
-- [ ] 4.4 Build `LoopHistoryPanel.tsx` for right column
-- [ ] 4.5 Add loop counter badge on step cards
-- [ ] 4.6 Integrate `TestProgressPanel` into Test step expanded view
-- [ ] 4.7 Build `FeedbackDialog.tsx` — required text input for Review → Implement/Deliberation
-- [ ] 4.8 Add "Abandon" button with confirmation dialog ("This will close PR and delete branch")
-- [ ] 4.9 Fix gate action error handling (loading state, error banners, res.ok check)
+- [x] 4.1 Redesign step cards to compact format (48px collapsed, expandable accordion)
+- [x] 4.2 Implement two-column layout (steps left, detail panel right)
+- [x] 4.3 Add SVG loop arrows between steps (rendered from loop history events)
+- [x] 4.4 Build `LoopHistoryPanel.tsx` for right column
+- [x] 4.5 Add loop counter badge on step cards
+- [x] 4.6 Integrate `TestProgressPanel` into Test step expanded view
+- [x] 4.7 Build `FeedbackDialog.tsx` — required text input for Review → Implement/Deliberation
+- [x] 4.8 Add "Abandon" button with confirmation dialog ("This will close PR and delete branch")
+- [x] 4.9 Fix gate action error handling (loading state, error banners, res.ok check)
 
 ### Phase 5: Polish & Integration ⬜ NOT STARTED
 
@@ -91,10 +91,10 @@
 | `src/app/api/admin/cockpit/lifecycle/route.ts` | Main lifecycle API + loop-back actions (374 lines) | ✅ Done |
 | `src/app/api/admin/cockpit/lifecycle/events/route.ts` | Admin GET for cockpit events (152 lines) | ✅ Done |
 | `src/app/api/internal/lifecycle/events/route.ts` | CI/agent POST events + heartbeat (126 lines) | ✅ Done |
-| `src/app/admin/cockpit/components/DevLifecycleFlow.tsx` | UI — compact cards, loops, accordion (983 lines, needs rewrite) | ⬜ Phase 4 |
+| `src/app/admin/cockpit/components/DevLifecycleFlow.tsx` | UI redesign — compact cards, SVG loops, accordion | ✅ Phase 4 |
 | `src/app/admin/cockpit/components/TestProgressPanel.tsx` | Per-suite test progress (380 lines) | ✅ Done |
-| `src/app/admin/cockpit/components/LoopHistoryPanel.tsx` | Loop history timeline | ⬜ Phase 4 |
-| `src/app/admin/cockpit/components/FeedbackDialog.tsx` | Review feedback text input | ⬜ Phase 4 |
+| `src/app/admin/cockpit/components/LoopHistoryPanel.tsx` | Loop history timeline | ✅ Phase 4 |
+| `src/app/admin/cockpit/components/FeedbackDialog.tsx` | Review feedback text input | ✅ Phase 4 |
 | `.github/workflows/pr-check.yml` (Swift app repo) | CI with per-suite event emission | ✅ Done (template at docs/pr-check.yml.template) |
 
 ---
