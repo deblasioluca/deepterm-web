@@ -311,6 +311,8 @@ export async function POST(req: NextRequest) {
         updates.lifecycleStartedAt = new Date();
         updates.lifecycleHeartbeat = new Date();
         await logEvent(storyId, stepId, 'retried', reason || `Step retried by operator`, 'human');
+        // Emit started event so UI clears old progress and shows fresh active state
+        await logEvent(storyId, stepId, 'started', JSON.stringify({ message: `Step restarted (retry)` }), 'system');
         break;
       }
 
@@ -403,6 +405,36 @@ export async function POST(req: NextRequest) {
         // Notify Node-RED
         const storyTestLoop = await prisma.story.findUnique({ where: { id: storyId }, select: { title: true } });
         await notifyLoopBack(storyId, storyTestLoop?.title || '', 'test', 'implement', reason || 'Test failure — auto-fix', updates.loopCount as number, storyLoop1?.maxLoops || 5);
+        break;
+      }
+
+      case 'loop-test-to-deliberation': {
+        // Test failure -> re-architecture needed
+        const storyLoopTD = await prisma.story.findUnique({ where: { id: storyId }, select: { loopCount: true, maxLoops: true, title: true } });
+        if (storyLoopTD && storyLoopTD.loopCount >= storyLoopTD.maxLoops) {
+          return NextResponse.json({ error: `Circuit breaker: max loops (${storyLoopTD.maxLoops}) reached.` }, { status: 400 });
+        }
+        await prisma.agentLoop.updateMany({
+          where: { storyId, status: { in: ['queued', 'running'] } },
+          data: { status: 'cancelled' },
+        });
+        const prInfoTD = await findStoryPR(storyId, prisma);
+        if (prInfoTD) {
+          await closePR(prInfoTD.repo, prInfoTD.prNumber);
+          await commentOnPR(prInfoTD.repo, prInfoTD.prNumber,
+            `## \u{1f504} Lifecycle Loop: Test \u2192 Deliberation\n\nTest failures indicate a fundamental approach problem.\nReason: ${reason || 'Test failure - re-architect'}`
+          );
+        }
+        const newLoopCountTD = (storyLoopTD?.loopCount || 0) + 1;
+        updates.lifecycleStep = 'deliberation';
+        updates.lifecycleStartedAt = new Date();
+        updates.lifecycleHeartbeat = null;
+        updates.lastLoopFrom = 'test';
+        updates.lastLoopTo = 'deliberation';
+        updates.loopCount = newLoopCountTD;
+        await logEvent(storyId, 'test', 'loop-back', JSON.stringify({ from: 'test', to: 'deliberation', reason: reason || 'Test failure - re-architect' }), 'system');
+        await logEvent(storyId, 'deliberation', 'started', JSON.stringify({ message: 'Re-architecture after test failure', context: reason }), 'system');
+        await notifyLoopBack(storyId, storyLoopTD?.title || '', 'test', 'deliberation', reason || 'Test failure - re-architect', newLoopCountTD, storyLoopTD?.maxLoops || 5);
         break;
       }
 

@@ -24,6 +24,7 @@ interface TestSuiteData {
   failures?: TestFailure[];
   timeoutSeconds: number;
   elapsed?: number;
+  currentTest?: string;
 }
 
 interface LifecycleEvent {
@@ -105,8 +106,10 @@ function parseSuitesFromEvents(events: LifecycleEvent[], scope: string): TestSui
       if (detail.failed !== undefined) suites[suite].failed = detail.failed as number;
       if (detail.total !== undefined) suites[suite].total = detail.total as number;
       if (detail.duration !== undefined) suites[suite].duration = detail.duration as number;
+      if (detail.currentTest) suites[suite].currentTest = detail.currentTest as string;
       if ((detail.status as string) === "completed") {
         suites[suite].status = (detail.failed as number) > 0 ? "failed" : "passed";
+        suites[suite].currentTest = undefined; // Clear when done
       }
     } else if (ev.event === "completed") {
       suites[suite].status = (detail.failed as number) > 0 ? "failed" : "passed";
@@ -163,6 +166,11 @@ function SuiteCard({ suite }: { suite: TestSuiteData }) {
                   <span className="text-red-400">/{suite.failed}✗</span>
                 )}
                 /{suite.total}
+              </span>
+            )}
+            {suite.currentTest && suite.status === "active" && (
+              <span className="text-[10px] text-blue-400/70 truncate max-w-[180px]" title={suite.currentTest}>
+                \u25B8 {suite.currentTest}
               </span>
             )}
           </div>

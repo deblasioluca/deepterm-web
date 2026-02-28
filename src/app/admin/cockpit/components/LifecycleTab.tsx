@@ -132,7 +132,7 @@ export default function LifecycleTab() {
     });
   };
 
-  const handleGateAction = async (stepId: string, action: string, storyId?: string) => {
+  const handleGateAction = async (stepId: string, action: string, storyId?: string, reason?: string) => {
     if (!storyId) return;
     setActionLoading(`${stepId}-${action}`);
     try {
@@ -175,11 +175,12 @@ export default function LifecycleTab() {
         'force-complete': { url: '/api/admin/cockpit/lifecycle', method: 'POST', body: { action: 'force-complete', storyId } },
         'back-to-implement': { url: '/api/admin/cockpit/lifecycle', method: 'POST', body: { action: 'reset-to-step', storyId, stepId: 'implement' } },
         'force-continue': { url: '/api/admin/cockpit/lifecycle', method: 'POST', body: { action: 'skip-step', storyId, stepId: 'test' } },
-        // Loop-back actions (Lifecycle V2)
-        'loop-back-implement': { url: '/api/admin/cockpit/lifecycle', method: 'POST', body: { action: 'loop-back-implement', storyId, reason: 'Test failure \u2014 auto-fix' } },
-        'loop-back-deliberation': { url: '/api/admin/cockpit/lifecycle', method: 'POST', body: { action: 'loop-back-deliberation', storyId, reason: 'Re-architect needed' } },
-        'loop-back-deliberation-from-test': { url: '/api/admin/cockpit/lifecycle', method: 'POST', body: { action: 'loop-back-deliberation', storyId, reason: 'Test failures require re-architecture' } },
-        'abandon-implementation': { url: '/api/admin/cockpit/lifecycle', method: 'POST', body: { action: 'abandon-implementation', storyId, reason: 'Implementation abandoned' } },
+        // Loop-back actions (Lifecycle V2) — reason passed from FeedbackDialog or default
+        'loop-test-to-implement': { url: '/api/admin/cockpit/lifecycle', method: 'POST', body: { action: 'loop-test-to-implement', storyId, reason: reason || 'Test failure — auto-fix' } },
+        'loop-test-to-deliberation': { url: '/api/admin/cockpit/lifecycle', method: 'POST', body: { action: 'loop-test-to-deliberation', storyId, reason: reason || 'Test failures require re-architecture' } },
+        'loop-review-to-implement': { url: '/api/admin/cockpit/lifecycle', method: 'POST', body: { action: 'loop-review-to-implement', storyId, reason: reason || 'Changes requested' } },
+        'loop-review-to-deliberation': { url: '/api/admin/cockpit/lifecycle', method: 'POST', body: { action: 'loop-review-to-deliberation', storyId, reason: reason || 'Re-architect needed' } },
+        'abandon-implementation': { url: '/api/admin/cockpit/lifecycle', method: 'POST', body: { action: 'abandon-implementation', storyId, reason: reason || 'Implementation abandoned' } },
       };
       const mapped = actionMap[action];
       if (mapped) {

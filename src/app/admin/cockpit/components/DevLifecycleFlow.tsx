@@ -306,6 +306,31 @@ function CompactStepCard({ step, index, isSelected, onSelect, onGateAction, loop
           </p>
         )}
 
+        {/* Potential loop indicators — always visible on Test & Review cards */}
+        {step.id === 'test' && effectiveStatus !== 'pending' && (
+          <div className="flex gap-2 mt-1 text-[9px] text-zinc-600">
+            <span className="inline-flex items-center gap-0.5">
+              <RefreshCcw className="w-2 h-2" /> \u2192 Implement
+            </span>
+            <span className="inline-flex items-center gap-0.5">
+              <RefreshCcw className="w-2 h-2" /> \u2192 Deliberation
+            </span>
+          </div>
+        )}
+        {step.id === 'review' && effectiveStatus !== 'pending' && (
+          <div className="flex gap-2 mt-1 text-[9px] text-zinc-600">
+            <span className="inline-flex items-center gap-0.5">
+              <RefreshCcw className="w-2 h-2" /> \u2192 Implement
+            </span>
+            <span className="inline-flex items-center gap-0.5">
+              <RefreshCcw className="w-2 h-2" /> \u2192 Deliberation
+            </span>
+            <span className="inline-flex items-center gap-0.5 text-red-800">
+              <Trash2 className="w-2 h-2" /> Abandon
+            </span>
+          </div>
+        )}
+
         {/* Substep pills (compact) */}
         {step.substeps && effectiveStatus !== 'pending' && (
           <div className="flex gap-1 mt-1 flex-wrap">
@@ -638,6 +663,11 @@ function RecoveryActions({ step, onAction }: {
     actions.push({ label: 'Cancel', action: 'cancel-step', color: 'text-red-400 bg-red-500/10 border-red-500/30 hover:bg-red-500/20' });
   }
   if (s === 'timeout' || s === 'failed') {
+    // Step-specific loop-back actions for test failures
+    if (step.id === 'test') {
+      actions.push({ label: 'Auto-fix (AI)', action: 'loop-test-to-implement', color: 'text-cyan-400 bg-cyan-500/10 border-cyan-500/30 hover:bg-cyan-500/20' });
+      actions.push({ label: 'Back to Deliberation', action: 'loop-test-to-deliberation', color: 'text-purple-400 bg-purple-500/10 border-purple-500/30 hover:bg-purple-500/20' });
+    }
     actions.push({ label: 'Retry', action: 'retry-step', color: 'text-amber-400 bg-amber-500/10 border-amber-500/30 hover:bg-amber-500/20' });
     actions.push({ label: 'Skip →', action: 'skip-step', color: 'text-zinc-400 bg-zinc-500/10 border-zinc-500/30 hover:bg-zinc-500/20' });
   }
@@ -755,14 +785,17 @@ function applyEventOverrides(steps: LifecycleStep[], events: LifecycleEventEntry
         }
         break;
       case 'started':
-        if (step.status === 'pending') {
+        if (step.status !== 'passed') {
           step.status = step.actor === 'human' ? 'waiting_approval' : 'active';
           step.startedAt = lastEvent.createdAt;
           step.detail = undefined;
+          step.substeps = undefined; // Clear old substeps on restart (e.g. test retry)
           if (step.actor === 'human' && step.id === 'review') {
             step.gate = { required: true, actions: [
               { label: 'Approve & Merge', action: 'merge-pr', variant: 'approve' },
-              { label: 'Request Changes', action: 'request-changes', variant: 'reject' },
+              { label: 'Request Changes \u2192 Implement', action: 'open-feedback-implement', variant: 'reject' },
+              { label: 'Back to Deliberation', action: 'open-feedback-deliberation', variant: 'loop' },
+              { label: 'Abandon', action: 'open-feedback-abandon', variant: 'reject' },
             ]};
           }
         }
@@ -998,7 +1031,7 @@ function hasLoopArrow(fromStepId: string, toStepId: string, events: LifecycleEve
 interface DevLifecycleFlowProps {
   story?: StoryLifecycleData | null;
   stories?: StoryLifecycleData[];
-  onGateAction?: (stepId: string, action: string, storyId?: string) => void;
+  onGateAction?: (stepId: string, action: string, storyId?: string, reason?: string) => void;
   onSelectStory?: (storyId: string) => void;
 }
 
@@ -1061,13 +1094,13 @@ export default function DevLifecycleFlow({ story, stories, onGateAction, onSelec
     if (!activeStory) return;
 
     const actionMap: Record<FeedbackTarget, string> = {
-      implement: 'loop-back-implement',
-      deliberation: 'loop-back-deliberation',
+      implement: 'loop-review-to-implement',
+      deliberation: 'loop-review-to-deliberation',
       abandon: 'abandon-implementation',
     };
 
-    // Pass feedback as the reason via a special action format
-    onGateAction?.('review', actionMap[target], activeStory.id);
+    // Pass feedback as the reason
+    onGateAction?.('review', actionMap[target], activeStory.id, feedback);
   };
 
   const selectedStep = selectedStepIdx !== null ? steps[selectedStepIdx] : null;
