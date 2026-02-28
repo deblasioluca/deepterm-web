@@ -425,8 +425,8 @@ function StepCard({ step, isLast, onGateAction }: {
             <GateButtons gate={step.gate} stepId={step.id} onGateAction={onGateAction} />
           )}
 
-          {/* Recovery actions for timeout/failed */}
-          <RecoveryActions step={{ ...step, status: effectiveStatus }} onAction={onGateAction} />
+          {/* Recovery actions for timeout/failed (only if no gate buttons already) */}
+          {!step.gate && <RecoveryActions step={{ ...step, status: effectiveStatus }} onAction={onGateAction} />}
 
           {/* Agent drill-down for Implement step */}
           {step.agentLoopId && (
