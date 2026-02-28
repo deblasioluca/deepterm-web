@@ -2,7 +2,7 @@
 
 **Version:** 1.2  
 **Date:** 2026-02-28  
-**Status:** IN PROGRESS — Phase 5 next  
+**Status:** ✅ ALL PHASES COMPLETE  
 **Depends on:** COCKPIT-REORG-PLAN.md (✅ complete)
 
 ---
@@ -70,16 +70,16 @@
 - [x] 4.8 Add "Abandon" button with confirmation dialog ("This will close PR and delete branch")
 - [x] 4.9 Fix gate action error handling (loading state, error banners, res.ok check)
 
-### Phase 5: Polish & Integration ⬜ NOT STARTED
+### Phase 5: Polish & Integration ✅ DONE
 
-- [ ] 5.1 Wire heartbeat-based staleness detection (warning banner after 90s gap)
-- [ ] 5.2 Add ETA display based on `StepDurationHistory` (show after 5+ completed stories)
-- [ ] 5.3 Add mini lifecycle progress bar to Planning/Backlog tab story cards
-- [ ] 5.4 Add WhatsApp notification for loop events (new Node-RED flow)
-- [ ] 5.5 Add PR comment on loop-back (GitHub API integration)
-- [ ] 5.6 Add lifecycle template selection in Planning (Full / Quick Fix / Hotfix / Web Only)
-- [ ] 5.7 E2E test: full lifecycle with deliberation → implement → test fail → auto-fix loop → review → deploy
-- [ ] 5.8 Update this plan with completion status
+- [x] 5.1 Wire heartbeat-based staleness detection (warning banner after 90s gap)
+- [x] 5.2 Add ETA display based on `StepDurationHistory` (show after 5+ completed stories)
+- [x] 5.3 Add mini lifecycle progress bar to Planning/Backlog tab story cards
+- [x] 5.4 Add WhatsApp notification for loop events (new Node-RED flow)
+- [x] 5.5 Add PR comment on loop-back (GitHub API integration)
+- [x] 5.6 Add lifecycle template selection in Planning (Full / Quick Fix / Hotfix / Web Only)
+- [x] 5.7 E2E test: full lifecycle with deliberation → implement → test fail → auto-fix loop → review → deploy
+- [x] 5.8 Update this plan with completion status
 
 ---
 
