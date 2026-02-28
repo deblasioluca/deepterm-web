@@ -582,6 +582,12 @@ model Story {
   deliberations        Deliberation[]
   implementationReport ImplementationReport?
   epic                 Epic?                 @relation(fields: [epicId], references: [id])
+  lifecycleEvents      LifecycleEvent[]
+
+  // Lifecycle resilience fields
+  lifecycleStep        String?               // Current active step ID (triage, plan, deliberation, implement, test, review, deploy, release)
+  lifecycleStartedAt   DateTime?             // When the current step started
+  lifecycleHeartbeat   DateTime?             // Last heartbeat from active process
 
   @@index([epicId])
   @@index([status])
@@ -868,4 +874,21 @@ model AgentIteration {
   loop         AgentLoop @relation(fields: [loopId], references: [id], onDelete: Cascade)
 
   @@index([loopId, iteration])
+}
+
+
+/// Lifecycle audit trail — every state change, heartbeat, and recovery action.
+model LifecycleEvent {
+  id        String   @id @default(cuid())
+  storyId   String
+  stepId    String                          // triage, plan, deliberation, implement, test, review, deploy, release
+  event     String                          // started, heartbeat, progress, completed, failed, timeout, cancelled, skipped, retried, reset
+  detail    String?                         // JSON payload with context
+  actor     String   @default("system")     // human, ai, system
+  createdAt DateTime @default(now())
+  story     Story    @relation(fields: [storyId], references: [id], onDelete: Cascade)
+
+  @@index([storyId, stepId])
+  @@index([storyId, createdAt])
+  @@index([createdAt])
 }

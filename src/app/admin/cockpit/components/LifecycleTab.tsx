@@ -159,6 +159,14 @@ export default function LifecycleTab() {
           method: 'POST',
           body: { action: 'deploy-release', storyId },
         },
+        // Recovery actions
+        'retry-step': { url: '/api/admin/cockpit/lifecycle', method: 'POST', body: { action: 'retry-step', storyId, stepId } },
+        'skip-step': { url: '/api/admin/cockpit/lifecycle', method: 'POST', body: { action: 'skip-step', storyId, stepId } },
+        'cancel-step': { url: '/api/admin/cockpit/lifecycle', method: 'POST', body: { action: 'cancel-step', storyId, stepId } },
+        'reset-all': { url: '/api/admin/cockpit/lifecycle', method: 'POST', body: { action: 'reset-all', storyId } },
+        'force-complete': { url: '/api/admin/cockpit/lifecycle', method: 'POST', body: { action: 'force-complete', storyId } },
+        'back-to-implement': { url: '/api/admin/cockpit/lifecycle', method: 'POST', body: { action: 'reset-to-step', storyId, stepId: 'implement' } },
+        'force-continue': { url: '/api/admin/cockpit/lifecycle', method: 'POST', body: { action: 'skip-step', storyId, stepId: 'test' } },
       };
       const mapped = actionMap[action];
       if (mapped) {
