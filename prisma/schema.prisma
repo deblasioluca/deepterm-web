@@ -583,11 +583,19 @@ model Story {
   implementationReport ImplementationReport?
   epic                 Epic?                 @relation(fields: [epicId], references: [id])
   lifecycleEvents      LifecycleEvent[]
+  stepDurations        StepDurationHistory[]
 
   // Lifecycle resilience fields
   lifecycleStep        String?               // Current active step ID (triage, plan, deliberation, implement, test, review, deploy, release)
   lifecycleStartedAt   DateTime?             // When the current step started
   lifecycleHeartbeat   DateTime?             // Last heartbeat from active process
+
+  // Lifecycle V2 fields
+  scope                String    @default("app")  // "app" | "web" | "both"
+  loopCount            Int       @default(0)       // Total loops across all steps
+  maxLoops             Int       @default(5)       // Circuit breaker limit
+  lastLoopFrom         String?                     // Step that initiated last loop
+  lastLoopTo           String?                     // Step that received the loop
 
   @@index([epicId])
   @@index([status])
@@ -890,5 +898,20 @@ model LifecycleEvent {
 
   @@index([storyId, stepId])
   @@index([storyId, createdAt])
+  @@index([createdAt])
+}
+
+
+/// Historical step durations for ETA estimation.
+model StepDurationHistory {
+  id        String   @id @default(cuid())
+  stepId    String                          // deliberation, implement, test, etc.
+  duration  Int                             // seconds
+  storyId   String
+  createdAt DateTime @default(now())
+  story     Story    @relation(fields: [storyId], references: [id], onDelete: Cascade)
+
+  @@index([stepId])
+  @@index([storyId])
   @@index([createdAt])
 }

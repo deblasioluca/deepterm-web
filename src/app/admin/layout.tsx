@@ -22,7 +22,6 @@ import {
   Loader2,
   Key,
   Activity,
-  Brain,
   GitMerge,
 } from 'lucide-react';
 
@@ -86,11 +85,6 @@ const navItems = [
     label: 'Announcements',
     href: '/admin/announcements',
     icon: Bell,
-  },
-  {
-    label: 'AI Config',
-    href: '/admin/ai',
-    icon: Brain,
   },
   {
     label: 'Settings',

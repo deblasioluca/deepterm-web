@@ -125,6 +125,11 @@ export async function GET(req: NextRequest) {
         lifecycleStartedAt: story.lifecycleStartedAt?.toISOString() || null,
         lifecycleHeartbeat: story.lifecycleHeartbeat?.toISOString() || null,
         stepTimeouts: STEP_TIMEOUTS,
+        scope: story.scope || 'app',
+        loopCount: story.loopCount || 0,
+        maxLoops: story.maxLoops || 5,
+        lastLoopFrom: story.lastLoopFrom || null,
+        lastLoopTo: story.lastLoopTo || null,
         recentEvents: recentEvents.reverse().map(e => ({
           id: e.id,
           stepId: e.stepId,
@@ -278,6 +283,78 @@ export async function POST(req: NextRequest) {
         updates.lifecycleStartedAt = null;
         updates.lifecycleHeartbeat = null;
         await logEvent(storyId, 'release', 'completed', reason || 'Story force-completed by operator', 'human');
+        break;
+      }
+
+      // ── Loop-back actions (Lifecycle V2) ──
+      case 'loop-test-to-implement': {
+        // Test failure → send back to implement for AI auto-fix
+        const storyLoop1 = await prisma.story.findUnique({ where: { id: storyId }, select: { loopCount: true, maxLoops: true } });
+        if (storyLoop1 && storyLoop1.loopCount >= storyLoop1.maxLoops) {
+          return NextResponse.json({ error: `Circuit breaker: max loops (${storyLoop1.maxLoops}) reached. Human intervention required.` }, { status: 400 });
+        }
+        updates.lifecycleStep = 'implement';
+        updates.lifecycleStartedAt = new Date();
+        updates.lifecycleHeartbeat = new Date();
+        updates.lastLoopFrom = 'test';
+        updates.lastLoopTo = 'implement';
+        updates.loopCount = (storyLoop1?.loopCount || 0) + 1;
+        await logEvent(storyId, 'test', 'loop-back', JSON.stringify({ from: 'test', to: 'implement', reason: reason || 'Test failure — auto-fix' }), 'system');
+        await logEvent(storyId, 'implement', 'started', JSON.stringify({ message: 'Restarted for auto-fix after test failure', context: reason }), 'system');
+        break;
+      }
+
+      case 'loop-review-to-implement': {
+        // Review rejection → send back to implement with feedback
+        if (!reason) return NextResponse.json({ error: 'Feedback text required for review → implement loop' }, { status: 400 });
+        const storyLoop2 = await prisma.story.findUnique({ where: { id: storyId }, select: { loopCount: true, maxLoops: true } });
+        if (storyLoop2 && storyLoop2.loopCount >= storyLoop2.maxLoops) {
+          return NextResponse.json({ error: `Circuit breaker: max loops (${storyLoop2.maxLoops}) reached.` }, { status: 400 });
+        }
+        updates.lifecycleStep = 'implement';
+        updates.lifecycleStartedAt = new Date();
+        updates.lifecycleHeartbeat = new Date();
+        updates.lastLoopFrom = 'review';
+        updates.lastLoopTo = 'implement';
+        updates.loopCount = (storyLoop2?.loopCount || 0) + 1;
+        await logEvent(storyId, 'review', 'loop-back', JSON.stringify({ from: 'review', to: 'implement', reason, feedback: reason }), 'human');
+        await logEvent(storyId, 'implement', 'started', JSON.stringify({ message: 'Restarted with review feedback', feedback: reason }), 'system');
+        break;
+      }
+
+      case 'loop-review-to-deliberation': {
+        // Review rejection → re-architect from deliberation
+        if (!reason) return NextResponse.json({ error: 'Reason required for review → deliberation loop' }, { status: 400 });
+        const storyLoop3 = await prisma.story.findUnique({ where: { id: storyId }, select: { loopCount: true, maxLoops: true } });
+        if (storyLoop3 && storyLoop3.loopCount >= storyLoop3.maxLoops) {
+          return NextResponse.json({ error: `Circuit breaker: max loops (${storyLoop3.maxLoops}) reached.` }, { status: 400 });
+        }
+        await prisma.agentLoop.updateMany({
+          where: { storyId, status: { in: ['queued', 'running'] } },
+          data: { status: 'cancelled' },
+        });
+        updates.lifecycleStep = 'deliberation';
+        updates.lifecycleStartedAt = new Date();
+        updates.lifecycleHeartbeat = null;
+        updates.lastLoopFrom = 'review';
+        updates.lastLoopTo = 'deliberation';
+        updates.loopCount = (storyLoop3?.loopCount || 0) + 1;
+        await logEvent(storyId, 'review', 'loop-back', JSON.stringify({ from: 'review', to: 'deliberation', reason }), 'human');
+        await logEvent(storyId, 'deliberation', 'started', JSON.stringify({ message: 'Re-architecture requested from review', feedback: reason }), 'system');
+        break;
+      }
+
+      case 'abandon-implementation': {
+        // Close PR, delete branch, reset to planned
+        updates.status = 'planned';
+        updates.lifecycleStep = 'plan';
+        updates.lifecycleStartedAt = null;
+        updates.lifecycleHeartbeat = null;
+        await prisma.agentLoop.updateMany({
+          where: { storyId, status: { in: ['queued', 'running'] } },
+          data: { status: 'cancelled' },
+        });
+        await logEvent(storyId, 'review', 'loop-back', JSON.stringify({ from: 'review', to: 'plan', reason: reason || 'Implementation abandoned' }), 'human');
         break;
       }
 

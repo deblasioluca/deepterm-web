@@ -12,6 +12,7 @@ import {
   Bot,
   Radio,
   AlertCircle,
+  Brain,
 } from 'lucide-react';
 
 import GeneralTab from './components/GeneralTab';
@@ -21,6 +22,7 @@ import NotificationsTab from './components/NotificationsTab';
 import ReleasesTab from './components/ReleasesTab';
 import IntegrationsTab from './components/IntegrationsTab';
 import DangerZoneTab from './components/DangerZoneTab';
+import AIConfigPage from '../ai/page';
 
 const TABS = [
   { key: 'general', label: 'General', icon: Globe },
@@ -29,6 +31,7 @@ const TABS = [
   { key: 'notifications', label: 'Notifications', icon: Bell },
   { key: 'releases', label: 'Releases', icon: Upload },
   { key: 'integrations', label: 'Integrations', icon: Radio },
+  { key: 'ai', label: 'AI', icon: Brain },
   { key: 'danger', label: 'Danger Zone', icon: AlertCircle },
 ] as const;
 
@@ -82,6 +85,7 @@ export default function AdminSettingsPage() {
           {activeTab === 'notifications' && <NotificationsTab />}
           {activeTab === 'releases' && <ReleasesTab />}
               {activeTab === 'integrations' && <IntegrationsTab />}
+          {activeTab === 'ai' && <AIConfigPage />}
           {activeTab === 'danger' && <DangerZoneTab />}
         </motion.div>
       </div>
