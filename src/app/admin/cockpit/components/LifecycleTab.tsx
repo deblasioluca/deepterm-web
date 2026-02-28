@@ -50,6 +50,7 @@ export default function LifecycleTab() {
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [pollFast, setPollFast] = useState(false);
 
   const fetchData = useCallback(async () => {
     try {
@@ -112,9 +113,16 @@ export default function LifecycleTab() {
 
   useEffect(() => { fetchData(); }, []);
   useEffect(() => {
-    const interval = setInterval(fetchData, 15000);
+    const interval = setInterval(fetchData, pollFast ? 3000 : 15000);
     return () => clearInterval(interval);
-  }, [fetchData]);
+  }, [fetchData, pollFast]);
+
+  // Auto-stop fast polling after 30s
+  useEffect(() => {
+    if (!pollFast) return;
+    const timeout = setTimeout(() => setPollFast(false), 30000);
+    return () => clearTimeout(timeout);
+  }, [pollFast]);
 
   const toggleEpic = (id: string) => {
     setExpandedEpics(prev => {
@@ -183,6 +191,7 @@ export default function LifecycleTab() {
         setActionError(null);
       }
       await fetchData();
+      setPollFast(true); // Fast polling for 30s after action
     } catch (err) {
       console.error('Gate action error:', err);
       setActionError(err instanceof Error ? err.message : 'Action failed');

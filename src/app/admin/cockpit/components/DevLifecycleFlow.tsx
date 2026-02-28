@@ -536,6 +536,98 @@ export interface StoryLifecycleData {
   recentEvents?: LifecycleEventEntry[];
 }
 
+
+// ── Event-based status overrides ──
+// Bridge between lifecycle events (cancel, skip, retry, reset) and the derived step statuses.
+// Without this, the UI derives status from story/deliberation/agentLoop data only,
+// so recovery actions like Cancel have no visible effect.
+
+function applyEventOverrides(steps: LifecycleStep[], events: LifecycleEventEntry[]): void {
+  // Map step IDs (UI uses 'planning', events might use 'plan')
+  const idMap: Record<string, string> = { plan: 'planning', planning: 'planning' };
+  const normalize = (id: string) => idMap[id] || id;
+
+  for (const step of steps) {
+    // Find events for this step (events are chronological, oldest first)
+    const stepEvents = events.filter(e => normalize(e.stepId) === step.id);
+    if (stepEvents.length === 0) continue;
+
+    const lastEvent = stepEvents[stepEvents.length - 1];
+
+    switch (lastEvent.event) {
+      case 'cancelled':
+        // Only override if step was active/timeout — don't override passed/pending
+        if (step.status === 'active' || step.status === 'timeout') {
+          step.status = 'failed';
+          step.detail = `Cancelled \u2014 ${lastEvent.detail || 'by operator'}`;
+          step.gate = {
+            required: false,
+            actions: [
+              { label: 'Retry Step', action: 'retry-step', variant: 'approve' },
+              { label: 'Skip \u2192', action: 'skip-step', variant: 'skip' },
+            ],
+          };
+        }
+        break;
+
+      case 'skipped':
+        if (step.status !== 'passed') {
+          step.status = 'skipped';
+          step.detail = lastEvent.detail || 'Skipped by operator';
+        }
+        break;
+
+      case 'retried':
+        if (step.status !== 'passed') {
+          step.status = 'active';
+          step.detail = 'Retrying...';
+          step.startedAt = lastEvent.createdAt;
+        }
+        break;
+
+      case 'reset':
+        if (step.status !== 'passed') {
+          step.status = 'pending';
+          step.detail = undefined;
+        }
+        break;
+
+      case 'failed':
+        if (step.status === 'active' || step.status === 'timeout') {
+          step.status = 'failed';
+          step.detail = lastEvent.detail || 'Step failed';
+          if (!step.gate) {
+            step.gate = {
+              required: false,
+              actions: [
+                { label: 'Retry Step', action: 'retry-step', variant: 'approve' },
+                { label: 'Skip \u2192', action: 'skip-step', variant: 'skip' },
+              ],
+            };
+          }
+        }
+        break;
+    }
+  }
+
+  // After overrides, fix downstream steps:
+  // If a step was cancelled/failed, all subsequent active/waiting steps should be pending
+  let blocked = false;
+  for (const step of steps) {
+    if (blocked && (step.status === 'active' || step.status === 'waiting_approval')) {
+      step.status = 'pending';
+      step.detail = undefined;
+      step.gate = undefined;
+    }
+    if (step.status === 'failed' || step.status === 'skipped') {
+      // Don't block downstream for skipped (it means we moved past it)
+      if (step.status === 'failed') blocked = true;
+    }
+    // Reset block once we hit a passed step after a failed one (shouldn't happen normally)
+    if (step.status === 'passed') blocked = false;
+  }
+}
+
 // ── Build lifecycle steps from story data ──
 
 function buildLifecycleSteps(story: StoryLifecycleData | null): LifecycleStep[] {
@@ -718,6 +810,9 @@ function buildLifecycleSteps(story: StoryLifecycleData | null): LifecycleStep[] 
     startedAt: (releaseStatus as string) === 'active' ? getStepStart('release') : null,
     events,
   });
+
+  // Apply lifecycle event overrides (cancel, skip, retry, reset)
+  applyEventOverrides(steps, events);
 
   return steps;
 }
