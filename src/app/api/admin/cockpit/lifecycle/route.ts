@@ -42,6 +42,50 @@ const STEP_TIMEOUTS: Record<string, number | null> = {
   release: 120,
 };
 
+
+// Lifecycle template step definitions
+const LIFECYCLE_TEMPLATES: Record<string, string[]> = {
+  full:      ['triage', 'plan', 'deliberation', 'implement', 'test', 'review', 'deploy', 'release'],
+  quick_fix: ['triage', 'implement', 'test', 'review', 'deploy', 'release'],
+  hotfix:    ['implement', 'test', 'deploy'],
+  web_only:  ['triage', 'plan', 'implement', 'test', 'review', 'deploy'],
+};
+
+// Helper: record step duration for ETA estimates
+async function recordStepDuration(storyId: string, stepId: string, durationSeconds: number) {
+  try {
+    await prisma.stepDurationHistory.create({
+      data: { storyId, stepId, duration: durationSeconds },
+    });
+  } catch (e) {
+    console.error('Failed to record step duration:', e);
+  }
+}
+
+// Helper: get ETA estimates from historical durations
+async function getStepETAs(): Promise<Record<string, { p50: number; p90: number; count: number }>> {
+  const histories = await prisma.stepDurationHistory.findMany({
+    orderBy: { createdAt: 'desc' },
+    take: 500,
+  });
+  const byStep: Record<string, number[]> = {};
+  for (const h of histories) {
+    if (!byStep[h.stepId]) byStep[h.stepId] = [];
+    byStep[h.stepId].push(h.duration);
+  }
+  const etas: Record<string, { p50: number; p90: number; count: number }> = {};
+  for (const [stepId, durations] of Object.entries(byStep)) {
+    if (durations.length < 3) continue; // Need at least 3 data points
+    const sorted = [...durations].sort((a, b) => a - b);
+    etas[stepId] = {
+      p50: sorted[Math.floor(sorted.length * 0.5)],
+      p90: sorted[Math.floor(sorted.length * 0.9)],
+      count: sorted.length,
+    };
+  }
+  return etas;
+}
+
 // GET /api/admin/cockpit/lifecycle?storyId=xxx or ?status=in_progress
 export async function GET(req: NextRequest) {
   try {
@@ -95,6 +139,8 @@ export async function GET(req: NextRequest) {
       },
     });
 
+    const stepETAs = await getStepETAs();
+
     const enriched = await Promise.all(stories.map(async (story) => {
       const deliberation = await prisma.deliberation.findFirst({
         where: { storyId: story.id },
@@ -143,6 +189,9 @@ export async function GET(req: NextRequest) {
         lifecycleHeartbeat: story.lifecycleHeartbeat?.toISOString() || null,
         stepTimeouts: STEP_TIMEOUTS,
         scope: story.scope || 'app',
+        lifecycleTemplate: story.lifecycleTemplate || 'full',
+        lifecycleTemplateSteps: LIFECYCLE_TEMPLATES[story.lifecycleTemplate || 'full'] || LIFECYCLE_TEMPLATES.full,
+        stepETAs,
         loopCount: story.loopCount || 0,
         maxLoops: story.maxLoops || 5,
         lastLoopFrom: story.lastLoopFrom || null,
@@ -217,16 +266,40 @@ export async function POST(req: NextRequest) {
         break;
 
       case 'mark-tests-passed':
+        // Record step duration for ETA
+        {
+          const durStory = await prisma.story.findUnique({ where: { id: storyId }, select: { lifecycleStartedAt: true } });
+          if (durStory?.lifecycleStartedAt) {
+            const dur = Math.round((Date.now() - durStory.lifecycleStartedAt.getTime()) / 1000);
+            await recordStepDuration(storyId, 'test', dur);
+          }
+        }
         updates.status = 'done';
         await logEvent(storyId, 'test', 'completed', 'Tests manually marked as passed', 'human');
         break;
 
       case 'mark-deployed':
+        // Record step duration for ETA
+        {
+          const durStory = await prisma.story.findUnique({ where: { id: storyId }, select: { lifecycleStartedAt: true } });
+          if (durStory?.lifecycleStartedAt) {
+            const dur = Math.round((Date.now() - durStory.lifecycleStartedAt.getTime()) / 1000);
+            await recordStepDuration(storyId, 'deploy', dur);
+          }
+        }
         updates.status = 'released';
         await logEvent(storyId, 'deploy', 'completed', 'Manually marked as deployed', 'human');
         break;
 
       case 'mark-released':
+        // Record step duration for ETA
+        {
+          const durStory = await prisma.story.findUnique({ where: { id: storyId }, select: { lifecycleStartedAt: true } });
+          if (durStory?.lifecycleStartedAt) {
+            const dur = Math.round((Date.now() - durStory.lifecycleStartedAt.getTime()) / 1000);
+            await recordStepDuration(storyId, 'release', dur);
+          }
+        }
         updates.status = 'released';
         await logEvent(storyId, 'release', 'completed', 'Manually marked as released', 'human');
         break;

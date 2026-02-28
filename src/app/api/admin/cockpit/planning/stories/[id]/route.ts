@@ -10,7 +10,7 @@ export async function PATCH(
   try {
     const { id } = params;
     const body = await req.json();
-    const { title, description, status, priority, epicId, sortOrder, githubIssueNumber } = body as {
+    const { title, description, status, priority, epicId, sortOrder, githubIssueNumber, scope, lifecycleTemplate } = body as {
       title?: string;
       description?: string;
       status?: string;
@@ -18,6 +18,8 @@ export async function PATCH(
       epicId?: string | null;
       sortOrder?: number;
       githubIssueNumber?: number | null;
+      scope?: string;
+      lifecycleTemplate?: string;
     };
 
     const data: Record<string, string | number | null> = {};
@@ -28,6 +30,8 @@ export async function PATCH(
     if (epicId !== undefined) data.epicId = epicId;
     if (sortOrder !== undefined) data.sortOrder = sortOrder;
     if (githubIssueNumber !== undefined) data.githubIssueNumber = githubIssueNumber;
+    if (scope !== undefined) data.scope = scope;
+    if (lifecycleTemplate !== undefined) data.lifecycleTemplate = lifecycleTemplate;
 
     if (Object.keys(data).length === 0) {
       return NextResponse.json(

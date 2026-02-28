@@ -596,6 +596,7 @@ model Story {
   maxLoops             Int       @default(5)       // Circuit breaker limit
   lastLoopFrom         String?                     // Step that initiated last loop
   lastLoopTo           String?                     // Step that received the loop
+  lifecycleTemplate    String    @default("full")  // full | quick_fix | hotfix | web_only
 
   @@index([epicId])
   @@index([status])

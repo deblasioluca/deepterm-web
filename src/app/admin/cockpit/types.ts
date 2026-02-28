@@ -139,6 +139,10 @@ export interface Story {
   activeDeliberationId?: string | null;
   hasReport?: boolean;
   aiCostCents?: number;
+  lifecycleStep?: string | null;
+  lifecycleTemplate?: string;
+  scope?: string;
+  loopCount?: number;
 }
 
 export interface PlanningData {

@@ -24,13 +24,15 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { title, epicId, description, priority, status, githubIssueNumber } = body as {
+    const { title, epicId, description, priority, status, githubIssueNumber, scope, lifecycleTemplate } = body as {
       title?: string;
       epicId?: string;
       description?: string;
       priority?: string;
       status?: string;
       githubIssueNumber?: number;
+      scope?: string;
+      lifecycleTemplate?: string;
     };
 
     if (!title || typeof title !== 'string' || title.trim().length === 0) {
@@ -52,6 +54,8 @@ export async function POST(req: NextRequest) {
         priority: priority ?? 'medium',
         status: status ?? 'backlog',
         githubIssueNumber: githubIssueNumber ?? null,
+        scope: scope ?? 'app',
+        lifecycleTemplate: lifecycleTemplate ?? 'full',
         sortOrder: nextSort,
       },
     });

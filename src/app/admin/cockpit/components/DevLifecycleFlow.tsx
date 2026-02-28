@@ -85,6 +85,9 @@ export interface StoryLifecycleData {
   maxLoops?: number;
   lastLoopFrom?: string | null;
   lastLoopTo?: string | null;
+  stepETAs?: Record<string, { p50: number; p90: number; count: number }>;
+  lifecycleTemplate?: string;
+  lifecycleTemplateSteps?: string[];
 }
 
 // ── Status styles ──
@@ -478,6 +481,14 @@ function DetailPanel({ step, allEvents, onGateAction, story }: {
           </a>
         )}
       </div>
+
+      {/* ETA estimate */}
+      {step.status === 'active' && story.stepETAs?.[step.id] && (
+        <div className="flex items-center gap-1.5 text-[10px] text-zinc-500 mt-1">
+          <Timer className="w-3 h-3" />
+          <span>Typically {formatElapsed(story.stepETAs[step.id].p50)}–{formatElapsed(story.stepETAs[step.id].p90)} ({story.stepETAs[step.id].count} samples)</span>
+        </div>
+      )}
 
       {/* Heartbeat staleness warning */}
       {heartbeatStale && (step.status === 'active' || step.status === 'timeout') && (
@@ -998,7 +1009,9 @@ export default function DevLifecycleFlow({ story, stories, onGateAction, onSelec
   const [actionError, setActionError] = useState<string | null>(null);
 
   const activeStory = story || stories?.find(s => s.id === selectedStoryId) || null;
-  const steps = buildLifecycleSteps(activeStory);
+  const allSteps = buildLifecycleSteps(activeStory);
+  const templateSteps = activeStory?.lifecycleTemplateSteps;
+  const steps = templateSteps ? allSteps.filter(s => templateSteps.includes(s.id)) : allSteps;
   const events = activeStory?.recentEvents || [];
   const loopCount = activeStory?.loopCount || 0;
   const maxLoops = activeStory?.maxLoops || 5;
@@ -1074,6 +1087,11 @@ export default function DevLifecycleFlow({ story, stories, onGateAction, onSelec
               {activeStory.scope && activeStory.scope !== 'app' && (
                 <span className="ml-1.5 px-1 py-0 rounded text-[9px] bg-cyan-500/15 text-cyan-400 border border-cyan-500/30">
                   {activeStory.scope}
+                </span>
+              )}
+              {activeStory.lifecycleTemplate && activeStory.lifecycleTemplate !== 'full' && (
+                <span className="ml-1.5 px-1 py-0 rounded text-[9px] bg-violet-500/10 text-violet-400 border border-violet-500/20">
+                  {activeStory.lifecycleTemplate.replace(/_/g, ' ')}
                 </span>
               )}
             </p>

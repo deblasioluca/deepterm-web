@@ -33,11 +33,15 @@ export async function GET() {
     for (const sc of storyCosts) { if (sc.storyId) costMap.set(sc.storyId, sc._sum.costCents || 0); }
     for (const ec of epicCosts) { if (ec.epicId) costMap.set(ec.epicId, ec._sum.costCents || 0); }
 
-    const enrich = (item: { id: string }) => ({
+    const enrich = (item: any) => ({
       deliberationCount: delibMap.get(item.id)?.count || 0,
       activeDeliberationId: delibMap.get(item.id)?.activeId || null,
       hasReport: reportIds.has(item.id),
       aiCostCents: costMap.get(item.id) || 0,
+      lifecycleStep: item.lifecycleStep || null,
+      lifecycleTemplate: item.lifecycleTemplate || 'full',
+      scope: item.scope || 'app',
+      loopCount: item.loopCount || 0,
     });
 
     return NextResponse.json({
