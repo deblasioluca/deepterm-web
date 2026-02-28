@@ -36,14 +36,36 @@ export async function GET(req: NextRequest) {
     if (storyId) where.id = storyId;
     if (status) where.status = status;
     if (!storyId && !status) {
-      const activeEpicIds = await prisma.epic.findMany({
-        where: { stories: { some: { status: { in: ['planned', 'in_progress', 'done'] } } } },
+      // Find epics that are active OR have stories with lifecycle activity
+      const activeEpics = await prisma.epic.findMany({
+        where: {
+          OR: [
+            { stories: { some: { status: { in: ['planned', 'in_progress', 'done'] } } } },
+            { status: { in: ['in_progress', 'planned', 'active'] } },
+          ],
+        },
         select: { id: true },
       });
-      const epicIds = activeEpicIds.map(e => e.id);
+      const epicIds = activeEpics.map(e => e.id);
+
+      // Also find stories with lifecycle activity (deliberations, agent loops, etc.)
+      // even if their status is still backlog
+      const storiesWithActivity = await prisma.story.findMany({
+        where: {
+          OR: [
+            { deliberations: { some: {} } },
+            { agentLoops: { some: {} } },
+            { lifecycleStep: { not: null } },
+          ],
+        },
+        select: { id: true },
+      });
+      const activityIds = storiesWithActivity.map(s => s.id);
+
       where.OR = [
         { status: { in: ['planned', 'in_progress', 'done'] } },
         ...(epicIds.length > 0 ? [{ epicId: { in: epicIds } }] : []),
+        ...(activityIds.length > 0 ? [{ id: { in: activityIds } }] : []),
       ];
     }
 
