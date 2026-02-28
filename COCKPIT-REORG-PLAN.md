@@ -1,8 +1,8 @@
 # DeepTerm Cockpit & DevOps Reorganization Plan
 
 **Version:** 2.0
-**Date:** 2026-02-27
-**Status:** COMPLETE — All 6 phases done
+**Date:** 2026-02-28
+**Status:** ✅ COMPLETE — All 6 phases done
 
 ---
 
@@ -36,8 +36,8 @@ Audit Logs
 Feedback
 Issues
 Announcements
-AI Config        (keep — remove AI tab from Settings)
-Settings         (General, Security, Billing, Notifications, Releases, Integrations, Danger Zone)
+~~AI Config~~    (MOVED into Settings as "AI" tab — Phase 6)
+Settings         (General, Security, Billing, Notifications, Releases, Integrations, AI, Danger Zone)
 ```
 
 ---
@@ -132,7 +132,8 @@ Settings         (General, Security, Billing, Notifications, Releases, Integrati
 - [x] 6.1 E2E lifecycle test with test epic (code verified)
 - [x] 6.2 Verify all quick actions work (9 actions in actions route)
 - [x] 6.3 Verify all 7 health checks (all 7 in health route)
-- [x] 6.4 Final commit and push
+- [x] 6.4 Move AI Config into Settings as "AI" tab (removed from sidebar)
+- [x] 6.5 Final commit and push
 
 ---
 
@@ -165,7 +166,7 @@ Settings         (General, Security, Billing, Notifications, Releases, Integrati
 | Phase 3: Slim Cockpit | ✅ | | | |
 | Phase 4: System Consistency | ✅ | | | |
 | Phase 5: Pipelines + Agent | ✅ | | | |
-| Phase 6: Polish | ✅ | | | |
+| Phase 6: Polish & Cleanup | ✅ | | | |
 
 ---
 
