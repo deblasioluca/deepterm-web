@@ -107,7 +107,7 @@ export async function POST(req: NextRequest) {
 
     if (event === 'completed') {
       // Record step duration for ETA tracking
-      const story = await prisma.story.findUnique({ where: { id: storyId }, select: { lifecycleStartedAt: true } });
+      const story = await prisma.story.findUnique({ where: { id: storyId }, select: { lifecycleStartedAt: true, scope: true } });
       if (story?.lifecycleStartedAt) {
         const duration = Math.round((Date.now() - story.lifecycleStartedAt.getTime()) / 1000);
         await prisma.stepDurationHistory.create({
@@ -115,6 +115,31 @@ export async function POST(req: NextRequest) {
         });
       }
       updateData.lifecycleHeartbeat = null;
+
+      // Auto-advance to next step when a step completes
+      const STEP_ORDER = ['triage', 'plan', 'deliberation', 'implement', 'test', 'review', 'deploy', 'release'];
+      const currentIdx = STEP_ORDER.indexOf(stepId);
+      const nextStep = currentIdx >= 0 && currentIdx < STEP_ORDER.length - 1 ? STEP_ORDER[currentIdx + 1] : null;
+      if (nextStep) {
+        updateData.lifecycleStep = nextStep;
+        updateData.lifecycleStartedAt = new Date();
+        // Log the next step as started
+        await prisma.lifecycleEvent.create({
+          data: {
+            storyId,
+            stepId: nextStep,
+            event: 'started',
+            detail: JSON.stringify({ message: `Auto-advanced from ${stepId}` }),
+            actor: 'system',
+          },
+        });
+      }
+      // If last step completes, mark story as done
+      if (stepId === 'release') {
+        updateData.lifecycleStep = 'done';
+        // Update story status to completed
+        await prisma.story.update({ where: { id: storyId }, data: { status: 'completed' } });
+      }
     }
 
     if (event === 'failed') {
