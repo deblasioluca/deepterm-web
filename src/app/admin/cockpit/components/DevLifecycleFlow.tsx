@@ -758,10 +758,19 @@ function applyEventOverrides(steps: LifecycleStep[], events: LifecycleEventEntry
         if (step.status === 'active' || step.status === 'timeout') {
           step.status = 'failed';
           step.detail = `Cancelled — ${lastEvent.detail || 'by operator'}`;
-          step.gate = { required: false, actions: [
-            { label: 'Retry Step', action: 'retry-step', variant: 'approve' },
-            { label: 'Skip →', action: 'skip-step', variant: 'skip' },
-          ]};
+          const cancelActions: GateAction[] = [];
+          if (step.id === 'test') {
+            cancelActions.push({ label: 'Auto-fix (AI)', action: 'loop-back-implement', variant: 'loop' });
+            cancelActions.push({ label: '← Deliberation', action: 'loop-back-deliberation-from-test', variant: 'loop' });
+          }
+          if (step.id === 'review') {
+            cancelActions.push({ label: '→ Implement', action: 'loop-review-to-implement', variant: 'loop' });
+            cancelActions.push({ label: '← Deliberation', action: 'loop-review-to-deliberation', variant: 'loop' });
+            cancelActions.push({ label: 'Abandon', action: 'abandon-implementation', variant: 'reject' });
+          }
+          cancelActions.push({ label: 'Retry Step', action: 'retry-step', variant: 'approve' });
+          cancelActions.push({ label: 'Skip →', action: 'skip-step', variant: 'skip' });
+          step.gate = { required: false, actions: cancelActions };
         }
         break;
       case 'skipped':
@@ -777,10 +786,19 @@ function applyEventOverrides(steps: LifecycleStep[], events: LifecycleEventEntry
         if (step.status === 'active' || step.status === 'timeout') {
           step.status = 'failed'; step.detail = lastEvent.detail || 'Step failed';
           if (!step.gate) {
-            step.gate = { required: false, actions: [
-              { label: 'Retry Step', action: 'retry-step', variant: 'approve' },
-              { label: 'Skip →', action: 'skip-step', variant: 'skip' },
-            ]};
+            const failActions: GateAction[] = [];
+            if (step.id === 'test') {
+              failActions.push({ label: 'Auto-fix (AI)', action: 'loop-back-implement', variant: 'loop' });
+              failActions.push({ label: '← Deliberation', action: 'loop-back-deliberation-from-test', variant: 'loop' });
+            }
+            if (step.id === 'review') {
+              failActions.push({ label: '→ Implement', action: 'loop-review-to-implement', variant: 'loop' });
+              failActions.push({ label: '← Deliberation', action: 'loop-review-to-deliberation', variant: 'loop' });
+              failActions.push({ label: 'Abandon', action: 'abandon-implementation', variant: 'reject' });
+            }
+            failActions.push({ label: 'Retry Step', action: 'retry-step', variant: 'approve' });
+            failActions.push({ label: 'Skip →', action: 'skip-step', variant: 'skip' });
+            step.gate = { required: false, actions: failActions };
           }
         }
         break;
