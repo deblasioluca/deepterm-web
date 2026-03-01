@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import {
   CheckCircle2, XCircle, Clock, Loader2, ChevronRight, AlertTriangle,
   User, Bot, Play, SkipForward, ExternalLink, GitPullRequest, TestTube,
@@ -407,56 +407,63 @@ function parseLoopArrows(events: LifecycleEventEntry[], maxLoops: number): LoopA
   }));
 }
 
-function LoopArrowsSVG({ arrows, stepCount }: { arrows: LoopArrowData[]; stepCount: number }) {
-  // Each step card is ~52px + 16px connector = ~68px per step slot
-  const stepHeight = 68;
-  const svgHeight = stepCount * stepHeight;
-  const svgWidth = 80;
+function LoopArrowsSVG({ arrows, containerRef, stepRefs }: {
+  arrows: LoopArrowData[];
+  containerRef: React.RefObject<HTMLDivElement | null>;
+  stepRefs: React.RefObject<(HTMLDivElement | null)[]>;
+}) {
+  const [positions, setPositions] = useState<{ top: number; height: number }[]>([]);
+
+  useEffect(() => {
+    const measure = () => {
+      if (!containerRef.current || !stepRefs.current) return;
+      const containerRect = containerRef.current.getBoundingClientRect();
+      const pos = stepRefs.current.map(el => {
+        if (!el) return { top: 0, height: 0 };
+        const r = el.getBoundingClientRect();
+        return { top: r.top - containerRect.top, height: r.height };
+      });
+      setPositions(pos);
+    };
+    measure();
+    const timer = setInterval(measure, 2000); // re-measure on layout changes
+    window.addEventListener('resize', measure);
+    return () => { clearInterval(timer); window.removeEventListener('resize', measure); };
+  }, [containerRef, stepRefs]);
+
+  if (positions.length === 0) return null;
+
+  const containerHeight = positions.reduce((max, p) => Math.max(max, p.top + p.height), 0) + 20;
+  const railWidth = 110;
 
   return (
-    <div className="absolute right-0 top-0 pointer-events-none" style={{ width: svgWidth, height: svgHeight }}>
-      <svg width={svgWidth} height={svgHeight} className="overflow-visible">
+    <div className="absolute pointer-events-none" style={{ right: 0, top: 0, width: railWidth, height: containerHeight }}>
+      <svg width={railWidth} height={containerHeight} className="overflow-visible">
         {arrows.map((arrow, i) => {
-          const fromY = arrow.fromStepIdx * stepHeight + 26;
-          const toY = arrow.toStepIdx * stepHeight + 26;
-          const xOffset = 8 + i * 14; // stagger arrows
-          const midX = svgWidth - xOffset;
-          const triggered = arrow.count > 0;
+          const fromPos = positions[arrow.fromStepIdx];
+          const toPos = positions[arrow.toStepIdx];
+          if (!fromPos || !toPos) return null;
 
-          // Curved path: from step -> curve right -> go up -> curve left -> to step
-          const path = `M 0 ${fromY} C ${midX} ${fromY}, ${midX} ${fromY}, ${midX} ${fromY - 12} L ${midX} ${toY + 12} C ${midX} ${toY}, ${midX} ${toY}, 0 ${toY}`;
+          const fromY = fromPos.top + fromPos.height / 2;
+          const toY = toPos.top + toPos.height / 2;
+          const triggered = arrow.count > 0;
+          const xOffset = 10 + i * 18;
+
+          const path = `M 0 ${fromY} C ${xOffset} ${fromY}, ${xOffset} ${fromY}, ${xOffset} ${fromY - 10} L ${xOffset} ${toY + 10} C ${xOffset} ${toY}, ${xOffset} ${toY}, 0 ${toY}`;
 
           return (
-            <g key={`${arrow.fromStepIdx}-${arrow.toStepIdx}-${i}`}>
-              <path
-                d={path}
-                fill="none"
-                stroke={arrow.color}
-                strokeWidth={triggered ? 1.5 : 1}
-                strokeDasharray={triggered ? "none" : "3 4"}
-                opacity={triggered ? 0.6 : 0.2}
-              />
-              {/* Arrow head */}
-              <polygon
-                points={`0,${toY} 5,${toY - 3} 5,${toY + 3}`}
-                fill={arrow.color}
-                opacity={triggered ? 0.7 : 0.25}
-              />
-              {/* Label + count badge at midpoint */}
-              <g transform={`translate(${midX + 2}, ${(fromY + toY) / 2 - 5})`}>
-                <text x="0" y="4" fontSize="7" fill={arrow.color} opacity={triggered ? 0.8 : 0.35}
-                  style={{ fontFamily: 'system-ui', fontWeight: triggered ? 600 : 400 }}>
-                  {arrow.label}
-                </text>
-                {triggered && (
-                  <>
-                    <rect x="-2" y="6" width="18" height="11" rx="2" fill={arrow.color} opacity="0.15" />
-                    <text x="7" y="14.5" textAnchor="middle" fontSize="7" fontWeight="700" fill={arrow.color} opacity="0.9">
-                      {arrow.count}/{arrow.maxLoops}
-                    </text>
-                  </>
-                )}
-              </g>
+            <g key={`loop-${arrow.fromStepIdx}-${arrow.toStepIdx}`}>
+              <path d={path} fill="none" stroke={arrow.color}
+                strokeWidth={triggered ? 2 : 1}
+                strokeDasharray={triggered ? 'none' : '4 4'}
+                opacity={triggered ? 0.65 : 0.3} />
+              <polygon points={`0,${toY} 6,${toY - 4} 6,${toY + 4}`}
+                fill={arrow.color} opacity={triggered ? 0.8 : 0.35} />
+              <text x={xOffset + 4} y={(fromY + toY) / 2 + 3}
+                fontSize="8" fill={arrow.color} opacity={triggered ? 0.85 : 0.4}
+                style={{ fontFamily: 'system-ui, sans-serif', fontWeight: triggered ? 600 : 400 }}>
+                {arrow.label}{triggered ? ` (${arrow.count}/${arrow.maxLoops})` : ''}
+              </text>
             </g>
           );
         })}
@@ -1058,6 +1065,8 @@ interface DevLifecycleFlowProps {
 export default function DevLifecycleFlow({ story, stories, onGateAction, onSelectStory }: DevLifecycleFlowProps) {
   const [selectedStoryId, setSelectedStoryId] = useState<string | null>(story?.id || null);
   const [selectedStepIdx, setSelectedStepIdx] = useState<number | null>(null);
+  const stepsContainerRef = useRef<HTMLDivElement | null>(null);
+  const stepCardRefs = useRef<(HTMLDivElement | null)[]>([]);
   const [feedbackDialog, setFeedbackDialog] = useState<{ target: FeedbackTarget; isOpen: boolean }>({ target: 'implement', isOpen: false });
   const [actionError, setActionError] = useState<string | null>(null);
 
@@ -1183,17 +1192,17 @@ export default function DevLifecycleFlow({ story, stories, onGateAction, onSelec
 
       {/* Two-column layout */}
       {activeStory ? (
-        <div className="grid grid-cols-1 xl:grid-cols-[55%_45%] gap-4">
+        <div className="grid grid-cols-1 xl:grid-cols-[42%_58%] gap-4">
           {/* Left column: Steps */}
           <div>
             {/* Global actions */}
             <GlobalActions onAction={handleGlobalAction} />
 
             {/* Step cards (compact, accordion) with loop arrows */}
-            <div className="mt-3 pl-2.5 space-y-0 relative">
-              <LoopArrowsSVG arrows={parseLoopArrows(events, maxLoops)} stepCount={steps.length} />
+            <div className="mt-3 pl-2.5 space-y-0 relative" ref={stepsContainerRef}>
+              <LoopArrowsSVG arrows={parseLoopArrows(events, maxLoops)} containerRef={stepsContainerRef} stepRefs={stepCardRefs} />
               {steps.map((step, i) => (
-                <div key={step.id}>
+                <div key={step.id} ref={el => { if (stepCardRefs.current) stepCardRefs.current[i] = el; }} className="mr-28">
                   <CompactStepCard
                     step={step}
                     index={i}

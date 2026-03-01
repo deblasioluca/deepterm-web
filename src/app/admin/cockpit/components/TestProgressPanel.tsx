@@ -85,8 +85,22 @@ function parseSuitesFromEvents(events: LifecycleEvent[], scope: string): TestSui
     };
   }
 
-  // Process events to populate suite data
-  for (const ev of events) {
+  // Find the last retry/restart boundary for the test step.
+  // Only process events AFTER this point so retry truly resets progress.
+  let boundaryIdx = -1;
+  for (let i = events.length - 1; i >= 0; i--) {
+    const ev = events[i];
+    if (ev.stepId !== "test") continue;
+    if (ev.event === "retried" || (ev.event === "started" && !ev.detail?.includes('"suite"'))) {
+      boundaryIdx = i;
+      break;
+    }
+  }
+
+  // Process only events after the boundary
+  const relevantEvents = boundaryIdx >= 0 ? events.slice(boundaryIdx + 1) : events;
+
+  for (const ev of relevantEvents) {
     if (ev.stepId !== "test") continue;
     let detail: Record<string, unknown> = {};
     try {
@@ -107,9 +121,10 @@ function parseSuitesFromEvents(events: LifecycleEvent[], scope: string): TestSui
       if (detail.total !== undefined) suites[suite].total = detail.total as number;
       if (detail.duration !== undefined) suites[suite].duration = detail.duration as number;
       if (detail.currentTest) suites[suite].currentTest = detail.currentTest as string;
+      if (!detail.currentTest && suites[suite].currentTest) suites[suite].currentTest = undefined;
       if ((detail.status as string) === "completed") {
         suites[suite].status = (detail.failed as number) > 0 ? "failed" : "passed";
-        suites[suite].currentTest = undefined; // Clear when done
+        suites[suite].currentTest = undefined;
       }
     } else if (ev.event === "completed") {
       suites[suite].status = (detail.failed as number) > 0 ? "failed" : "passed";
@@ -118,12 +133,14 @@ function parseSuitesFromEvents(events: LifecycleEvent[], scope: string): TestSui
       if (detail.total !== undefined) suites[suite].total = detail.total as number;
       if (detail.duration !== undefined) suites[suite].duration = detail.duration as number;
       if (detail.failures) suites[suite].failures = detail.failures as TestFailure[];
+      suites[suite].currentTest = undefined;
     } else if (ev.event === "failed") {
       suites[suite].status = "failed";
       if (detail.passed !== undefined) suites[suite].passed = detail.passed as number;
       if (detail.failed !== undefined) suites[suite].failed = detail.failed as number;
       if (detail.total !== undefined) suites[suite].total = detail.total as number;
       if (detail.failures) suites[suite].failures = detail.failures as TestFailure[];
+      suites[suite].currentTest = undefined;
     }
   }
 
@@ -157,20 +174,24 @@ function SuiteCard({ suite }: { suite: TestSuiteData }) {
         <Icon className={`w-4 h-4 flex-shrink-0 ${colors.text} ${suite.status === "active" ? "animate-spin" : ""}`} />
         
         <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2">
-            <span className={`text-xs font-medium ${colors.text}`}>{suite.label}</span>
-            {suite.total !== undefined && (
-              <span className="text-[10px] text-zinc-500">
-                {suite.passed !== undefined ? `${suite.passed}` : "0"}
-                {suite.failed !== undefined && suite.failed > 0 && (
-                  <span className="text-red-400">/{suite.failed}✗</span>
-                )}
-                /{suite.total}
-              </span>
-            )}
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className={`text-xs font-medium ${colors.text}`}>
+              {suite.label}
+              {suite.total !== undefined && suite.total > 0 && (
+                <span className="ml-1.5 font-mono text-[10px]">
+                  <span className={suite.status === "passed" ? "text-emerald-400" : suite.status === "failed" ? "text-red-400" : "text-zinc-400"}>
+                    {(suite.passed || 0) + (suite.failed || 0)}
+                  </span>
+                  <span className="text-zinc-600">/{suite.total}</span>
+                  {(suite.failed || 0) > 0 && (
+                    <span className="text-red-400 ml-0.5">({suite.failed} ✗)</span>
+                  )}
+                </span>
+              )}
+            </span>
             {suite.currentTest && suite.status === "active" && (
-              <span className="text-[10px] text-blue-400/70 truncate max-w-[180px]" title={suite.currentTest}>
-                \u25B8 {suite.currentTest}
+              <span className="text-[11px] text-blue-300/80 truncate max-w-[250px] font-mono" title={suite.currentTest}>
+                ▸ {suite.currentTest}
               </span>
             )}
           </div>

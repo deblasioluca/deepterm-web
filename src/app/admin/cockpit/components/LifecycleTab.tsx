@@ -237,9 +237,9 @@ export default function LifecycleTab() {
         </button>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 lg:grid-cols-[240px_1fr] gap-3">
         {/* Left: Epic / Story browser */}
-        <div className="lg:col-span-1 space-y-2">
+        <div className="space-y-2 min-w-0">
           {epics.map(epic => {
             const isExpanded = expandedEpics.has(epic.id);
             const Icon = isExpanded ? ChevronDown : ChevronRight;
@@ -324,7 +324,7 @@ export default function LifecycleTab() {
         </div>
 
         {/* Right: Lifecycle flow for selected story */}
-        <div className="lg:col-span-2">
+        <div className="min-w-0">
           {selectedStory ? (
             <div className="space-y-3">
               <div className="bg-zinc-900 border border-zinc-800 rounded-lg px-4 py-3">
