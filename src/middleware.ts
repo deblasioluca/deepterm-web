@@ -139,8 +139,8 @@ export function middleware(request: NextRequest) {
 
   // Check if the path is an admin route (protected with admin auth)
   if (pathname.startsWith('/admin') || pathname.startsWith('/api/admin')) {
-    // Skip auth routes
-    if (pathname.startsWith('/api/admin/auth')) {
+    // Skip auth routes and CI callback endpoints
+    if (pathname.startsWith('/api/admin/auth') || pathname.startsWith('/api/admin/cockpit/lifecycle/events') || pathname.startsWith('/api/admin/cockpit/github-dispatch')) {
       return NextResponse.next();
     }
 

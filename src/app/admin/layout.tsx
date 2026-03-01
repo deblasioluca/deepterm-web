@@ -23,6 +23,7 @@ import {
   Key,
   Activity,
   GitMerge,
+  Database,
 } from 'lucide-react';
 
 const navItems = [
@@ -85,6 +86,11 @@ const navItems = [
     label: 'Announcements',
     href: '/admin/announcements',
     icon: Bell,
+  },
+  {
+    label: 'Database',
+    href: '/admin/database',
+    icon: Database,
   },
   {
     label: 'Settings',

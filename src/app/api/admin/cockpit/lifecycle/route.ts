@@ -3,6 +3,45 @@ import { prisma } from '@/lib/prisma';
 import { closePR, deleteBranch, commentOnPR, findStoryPR } from '@/lib/github-pulls';
 
 const NODE_RED_URL = process.env.NODE_RED_URL || 'http://192.168.1.30:1880';
+const GITHUB_TOKEN = process.env.GITHUB_TOKEN || '';
+const CI_REPO = 'deblasioluca/deepterm';
+
+// Helper: dispatch pr-check.yml on the CI Mac with story context
+async function dispatchCIWorkflow(storyId: string) {
+  if (!GITHUB_TOKEN) {
+    console.error('GITHUB_TOKEN not configured — cannot dispatch CI workflow');
+    return { ok: false, error: 'GITHUB_TOKEN not configured' };
+  }
+  try {
+    const res = await fetch(
+      `https://api.github.com/repos/${CI_REPO}/actions/workflows/pr-check.yml/dispatches`,
+      {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${GITHUB_TOKEN}`,
+          Accept: 'application/vnd.github+json',
+          'X-GitHub-Api-Version': '2022-11-28',
+        },
+        body: JSON.stringify({
+          ref: 'main',
+          inputs: { story_id: storyId },
+        }),
+        signal: AbortSignal.timeout(10000),
+      }
+    );
+    if (res.status === 204) {
+      console.log(`CI workflow dispatched for story ${storyId}`);
+      return { ok: true };
+    }
+    const body = await res.text();
+    console.error(`CI dispatch failed: ${res.status} ${body}`);
+    return { ok: false, error: `GitHub returned ${res.status}` };
+  } catch (e) {
+    console.error('CI dispatch error:', e);
+    return { ok: false, error: String(e) };
+  }
+}
+
 
 // Helper: send loop-back webhook to Node-RED
 async function notifyLoopBack(storyId: string, storyTitle: string, fromStep: string, toStep: string, reason: string, loopCount: number, maxLoops: number) {
@@ -36,7 +75,7 @@ const STEP_TIMEOUTS: Record<string, number | null> = {
   plan: null,
   deliberation: 300,
   implement: 600,
-  test: 300,
+  test: 1200,  // 20 min — build + unit + UI tests on CI Mac
   review: null,
   deploy: 600,
   release: 120,
@@ -313,6 +352,14 @@ export async function POST(req: NextRequest) {
         await logEvent(storyId, stepId, 'retried', reason || `Step retried by operator`, 'human');
         // Emit started event so UI clears old progress and shows fresh active state
         await logEvent(storyId, stepId, 'started', JSON.stringify({ message: `Step restarted (retry)` }), 'system');
+        // Trigger CI workflow on the CI Mac when test step starts
+        if (stepId === 'test') {
+          const ciResult = await dispatchCIWorkflow(storyId);
+          await logEvent(storyId, 'test', 'progress', JSON.stringify({
+            message: ciResult.ok ? 'CI workflow dispatched on CI Mac (pr-check.yml)' : `CI dispatch failed: ${ciResult.error}`,
+            ciDispatched: ciResult.ok,
+          }), 'system');
+        }
         break;
       }
 
@@ -325,6 +372,14 @@ export async function POST(req: NextRequest) {
         updates.lifecycleHeartbeat = new Date();
         await logEvent(storyId, stepId, 'skipped', reason || `Step skipped by operator`, 'human');
         if (nextStep) await logEvent(storyId, nextStep, 'started', `Started after ${stepId} was skipped`, 'system');
+        // Trigger CI workflow when advancing to test step
+        if (nextStep === 'test') {
+          const ciResult = await dispatchCIWorkflow(storyId);
+          await logEvent(storyId, 'test', 'progress', JSON.stringify({
+            message: ciResult.ok ? 'CI workflow dispatched on CI Mac (pr-check.yml)' : `CI dispatch failed: ${ciResult.error}`,
+            ciDispatched: ciResult.ok,
+          }), 'system');
+        }
         break;
       }
 
