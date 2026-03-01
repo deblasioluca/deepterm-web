@@ -1,7 +1,7 @@
 # DeepTerm Lifecycle V2 — Event-Driven, Loopable, Observable
 
-**Version:** 1.2  
-**Date:** 2026-02-28  
+**Version:** 1.3  
+**Date:** 2026-03-01  
 **Status:** ✅ ALL PHASES COMPLETE  
 **Depends on:** COCKPIT-REORG-PLAN.md (✅ complete)
 
@@ -29,6 +29,33 @@
 
 ## 6. Implementation Phases
 
+
+### Session 3 (2026-03-01) — CI Integration + Phase 2 Verification
+
+**CI Integration (see CI-INTEGRATION-STATUS.md for full details):**
+- Fixed: Retry-step now dispatches pr-check.yml via GitHub API (`dispatchCIWorkflow()`)
+- Fixed: Middleware blocking CI callbacks (401) — added exceptions for lifecycle endpoints
+- Fixed: Missing test plan — removed TestPlanReference from scheme, using inline Testables
+- Fixed: Grep parsing bug — `0\n0` multi-line output breaking integer comparisons
+- Fixed: Unit test isolation — added `-only-testing:DeepTermTests`
+- Added: Auto-advance lifecycle step on CI completion (events/route.ts)
+- Verified: 509 unit tests pass, all 5 lifecycle events reach Pi (run 22543360425)
+- Commits: 82c1709 (middleware fix), a725623 (scheme fix), 36809ed (auto-advance)
+
+**Phase 2 End-to-End Verification:**
+- loop-review-to-implement: DB update + event log + PR #35 comment ✅
+- Circuit breaker: correctly blocks at maxLoops=5 ✅
+- abandon-implementation: PR closed + branch deleted + story reset to planned ✅
+- All 6 `notifyLoopBack()` call sites verified in route.ts (610 lines)
+- Test story restored to clean state after testing
+
+**Phase 5 Audit:**
+- 5.1 Heartbeat staleness: UI ✅, backend ✅ (progress events update heartbeat)
+- 5.2 ETA: UI ✅, StepDurationHistory recording ✅, API returns p50/p90 ✅
+- 5.3 MiniLifecycleBar in PlanningTab ✅
+- 5.5 PR comments: 6 comments verified on PR #35 ✅
+- 5.6 Template dropdown in story edit form ✅
+
 ### Phase 1: Event Infrastructure ✅ MOSTLY COMPLETE
 
 - [x] 1.1 Create event ingestion endpoint — `POST /api/internal/lifecycle/events` (API key auth for CI/agent) + `GET /api/admin/cockpit/lifecycle/events` (admin auth for UI)
@@ -53,9 +80,9 @@
 
 - [x] 3.1 Create `pr-check.yml` workflow on CI Mac with per-suite event emission to Pi
 - [x] 3.2 Parse XCTest xcresult bundle for individual test names + failure details
-- [x] 3.3 Parse Playwright JSON report for E2E results (when scope = "both")
+- [ ] 3.3 Parse Playwright JSON report for E2E results (when scope = "both") — deferred, web-only feature
 - [x] 3.4 Replace global 5-min timeout with per-suite timeouts (build 5m, unit 5m, UI 10m)
-- [x] 3.5 Conditionally include Playwright E2E based on story `scope` field
+- [ ] 3.5 Conditionally include Playwright E2E based on story `scope` field — deferred, requires e2e.yml changes
 - [x] 3.6 Build `TestProgressPanel.tsx` component (pass/fail counts, failure messages, progress bar per suite)
 
 ### Phase 4: UI Redesign ✅ DONE
@@ -75,10 +102,10 @@
 - [x] 5.1 Wire heartbeat-based staleness detection (warning banner after 90s gap)
 - [x] 5.2 Add ETA display based on `StepDurationHistory` (show after 5+ completed stories)
 - [x] 5.3 Add mini lifecycle progress bar to Planning/Backlog tab story cards
-- [x] 5.4 Add WhatsApp notification for loop events (new Node-RED flow)
+- [x] 5.4 WhatsApp notification: `notifyLoopBack()` calls Node-RED on all 6 loop paths _(Node-RED flow not yet built)_
 - [x] 5.5 Add PR comment on loop-back (GitHub API integration)
 - [x] 5.6 Add lifecycle template selection in Planning (Full / Quick Fix / Hotfix / Web Only)
-- [x] 5.7 E2E test: full lifecycle with deliberation → implement → test fail → auto-fix loop → review → deploy
+- [ ] 5.7 E2E test: full lifecycle with deliberation → implement → test fail → auto-fix loop → review → deploy
 - [x] 5.8 Update this plan with completion status
 
 ---
