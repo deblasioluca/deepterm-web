@@ -66,7 +66,7 @@ export async function POST(
       const VOTE_THRESHOLD = 5;
       if (voteCount === VOTE_THRESHOLD) {
         try {
-          await fetch('http://192.168.1.30:1880/deepterm/idea-popular', {
+          await fetch(`${process.env.NODE_RED_URL || 'http://192.168.1.30:1880'}/deepterm/idea-popular`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({

@@ -291,7 +291,7 @@ export default function IntegrationsTab() {
               type="url"
               value={afUrl}
               onChange={e => setAfUrl(e.target.value)}
-              placeholder="http://192.168.1.249:8080"
+              placeholder={process.env.NEXT_PUBLIC_AIRFLOW_URL || "http://localhost:8080"}
               className="w-full px-3 py-2 bg-background-secondary border border-border rounded-lg text-sm text-text-primary placeholder:text-text-tertiary focus:outline-none focus:border-accent-primary"
             />
           </div>

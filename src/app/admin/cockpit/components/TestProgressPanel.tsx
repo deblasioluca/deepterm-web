@@ -98,7 +98,8 @@ function parseSuitesFromEvents(events: LifecycleEvent[], scope: string): TestSui
   }
 
   // Process only events after the boundary
-  const relevantEvents = boundaryIdx >= 0 ? events.slice(boundaryIdx + 1) : events;
+  // Include the boundary event itself so hasStepStarted can detect it
+  const relevantEvents = boundaryIdx >= 0 ? events.slice(boundaryIdx) : events;
 
   for (const ev of relevantEvents) {
     if (ev.stepId !== "test") continue;
@@ -141,6 +142,17 @@ function parseSuitesFromEvents(events: LifecycleEvent[], scope: string): TestSui
       if (detail.total !== undefined) suites[suite].total = detail.total as number;
       if (detail.failures) suites[suite].failures = detail.failures as TestFailure[];
       suites[suite].currentTest = undefined;
+    }
+  }
+
+  // If test step is active but no suites have progress yet, mark first suite active
+  const hasStepStarted = relevantEvents.some(e => e.stepId === "test" && (e.event === "started" || e.event === "retried"));
+  const anySuiteActive = Object.values(suites).some(s => s.status !== "pending");
+  if (hasStepStarted && !anySuiteActive) {
+    const sorted = Object.values(suites).sort((a, b) => (SUITE_CONFIG[a.suite]?.order ?? 99) - (SUITE_CONFIG[b.suite]?.order ?? 99));
+    if (sorted.length > 0) {
+      suites[sorted[0].suite].status = "active";
+      suites[sorted[0].suite].currentTest = "Waiting for CI runner\u2026";
     }
   }
 

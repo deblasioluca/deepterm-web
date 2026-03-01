@@ -1,4 +1,5 @@
 export interface HealthData {
+  addresses?: { nodeRed?: string; ciMac?: string; aiDevMac?: string; airflow?: string };
   pi: { status: string; uptimeSeconds: number; memoryMB: number; heapMB: number; osUptimeSeconds?: number; diskTotal?: string; diskUsed?: string; diskPercent?: string; tempC?: string | null };
   webApp: { status: string; uptimeSeconds: number; memoryMB: number; heapMB: number; nodeVersion?: string };
   ciMac: { status: string; runnerName?: string };

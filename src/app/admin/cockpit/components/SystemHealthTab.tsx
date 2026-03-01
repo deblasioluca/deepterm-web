@@ -68,7 +68,7 @@ export default function SystemHealthTab({ health, builds }: SystemHealthTabProps
 
         {/* Node-RED */}
         <SystemCard icon={Radio} iconColor="text-amber-400" name="Node-RED" status={health?.nodeRed?.status || "unknown"}>
-          <Row label="Address" value="192.168.1.30:1880" />
+          <Row label="Address" value={health?.addresses?.nodeRed || "192.168.1.30:1880"} />
           <Row label="Flows" value="WhatsApp + DeepTerm" />
         </SystemCard>
 
@@ -80,13 +80,13 @@ export default function SystemHealthTab({ health, builds }: SystemHealthTabProps
 
         {/* AI Dev Mac */}
         <SystemCard icon={Brain} iconColor="text-cyan-400" name="AI Dev Mac" status={health?.aiDevMac?.status || "unknown"}>
-          <Row label="Address" value="192.168.1.249" />
+          <Row label="Address" value={health?.addresses?.aiDevMac || "unknown"} />
           <Row label="Detail" value={health?.aiDevMac?.detail || "—"} />
         </SystemCard>
 
         {/* Airflow */}
         <SystemCard icon={Workflow} iconColor="text-orange-400" name="Airflow" status={health?.airflow?.status || "unknown"}>
-          <Row label="Address" value="192.168.1.249:8080" />
+          <Row label="Address" value={health?.addresses?.airflow || "unknown"} />
           <Row label="Status" value={health?.airflow?.status === "online" ? "Scheduler healthy" : health?.airflow?.status || "—"} />
         </SystemCard>
 

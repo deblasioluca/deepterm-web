@@ -12,7 +12,7 @@ async function getSystemHealth() {
   try {
     const ctrl = new AbortController();
     const tid = setTimeout(() => ctrl.abort(), 3000);
-    const res = await fetch('http://192.168.1.30:1880', { signal: ctrl.signal });
+    const res = await fetch(process.env.NODE_RED_URL || 'http://192.168.1.30:1880', { signal: ctrl.signal });
     clearTimeout(tid);
     nodeRedStatus = res.ok ? 'online' : 'degraded';
   } catch { nodeRedStatus = 'offline'; }

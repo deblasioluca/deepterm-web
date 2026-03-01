@@ -18,7 +18,7 @@ async function checkNodeRed() {
   try {
     const ctrl = new AbortController();
     const tid = setTimeout(() => ctrl.abort(), 3000);
-    const res = await fetch("http://192.168.1.30:1880", { signal: ctrl.signal });
+    const res = await fetch(process.env.NODE_RED_URL || "http://192.168.1.30:1880", { signal: ctrl.signal });
     clearTimeout(tid);
     return { status: res.ok ? "online" : "degraded" };
   } catch { return { status: "offline" }; }
@@ -68,7 +68,7 @@ async function checkAiDevMac() {
   try {
     const ctrl = new AbortController();
     const tid = setTimeout(() => ctrl.abort(), 3000);
-    const res = await fetch("http://192.168.1.249:8080/api/v1/health", {
+    const res = await fetch(`${process.env.AIRFLOW_URL || "http://192.168.1.249:8080"}/api/v1/health`, {
       signal: ctrl.signal,
     });
     clearTimeout(tid);
@@ -77,7 +77,7 @@ async function checkAiDevMac() {
   } catch {
     // Airflow might not be running but Mac might be reachable
     try {
-      const { stdout } = await execAsync("ping -c 1 -W 2 192.168.1.249 2>/dev/null");
+      const { stdout } = await execAsync(`ping -c 1 -W 2 ${process.env.AI_DEV_MAC_HOST || "192.168.1.249"} 2>/dev/null`);
       if (stdout.includes("1 packets received") || stdout.includes("1 received")) {
         return { status: "degraded", detail: "Reachable but Airflow not responding" };
       }
@@ -89,7 +89,7 @@ async function checkAiDevMac() {
 async function checkAirflow() {
   try {
     const settings = await prisma.systemSettings.findFirst({ where: { key: "airflow_base_url" } });
-    const url = settings?.value || "http://192.168.1.249:8080";
+    const url = settings?.value || process.env.AIRFLOW_URL || "http://192.168.1.249:8080";
     const ctrl = new AbortController();
     const tid = setTimeout(() => ctrl.abort(), 3000);
     const res = await fetch(`${url}/api/v1/health`, { signal: ctrl.signal });
@@ -137,6 +137,12 @@ export async function GET() {
 
     return NextResponse.json({
       health: {
+        addresses: {
+          nodeRed: process.env.NODE_RED_URL || "http://192.168.1.30:1880",
+          ciMac: process.env.CI_MAC_HOST || "unknown",
+          aiDevMac: process.env.AI_DEV_MAC_HOST || "unknown",
+          airflow: process.env.AIRFLOW_URL || "http://192.168.1.249:8080",
+        },
         pi: {
           status: "online",
           uptimeSeconds: Math.floor(process.uptime()),
