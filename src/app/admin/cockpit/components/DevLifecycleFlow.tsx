@@ -378,47 +378,40 @@ interface LoopArrowData {
 
 function parseLoopArrows(events: LifecycleEventEntry[], maxLoops: number): LoopArrowData[] {
   const STEP_ORDER = ['triage', 'planning', 'deliberation', 'implement', 'test', 'review', 'deploy', 'release'];
-  const loopEvents = events.filter(e => e.event === 'loop-back');
-  const grouped: Record<string, { count: number; label: string }> = {};
 
-  for (const ev of loopEvents) {
+  // Count actual triggered loops from events
+  const loopCounts: Record<string, number> = {};
+  for (const ev of events.filter(e => e.event === 'loop-back')) {
     try {
       const d = JSON.parse(ev.detail || '{}');
-      const from = d.from || '';
-      const to = d.to || '';
-      const key = `${from}->${to}`;
-      if (!grouped[key]) grouped[key] = { count: 0, label: '' };
-      grouped[key].count++;
-      grouped[key].label = from === 'test' ? 'test failed' : from === 'review' ? 'changes requested' : 'loop';
+      const key = `${d.from}->${d.to}`;
+      loopCounts[key] = (loopCounts[key] || 0) + 1;
     } catch { /* skip */ }
   }
 
-  const arrows: LoopArrowData[] = [];
-  for (const [key, val] of Object.entries(grouped)) {
-    const [from, to] = key.split('->');
-    const fromIdx = STEP_ORDER.indexOf(from);
-    const toIdx = STEP_ORDER.indexOf(to);
-    if (fromIdx >= 0 && toIdx >= 0 && fromIdx > toIdx) {
-      arrows.push({
-        fromStepIdx: fromIdx,
-        toStepIdx: toIdx,
-        label: `${val.label} \u2192 retry`,
-        count: val.count,
-        maxLoops,
-        color: from === 'test' ? '#f59e0b' : '#ef4444',
-      });
-    }
-  }
-  return arrows;
+  // Always show these potential loop paths
+  const POTENTIAL_LOOPS: { from: string; to: string; label: string; color: string }[] = [
+    { from: 'test', to: 'implement', label: 'auto-fix', color: '#f59e0b' },
+    { from: 'test', to: 'deliberation', label: 're-architect', color: '#f59e0b' },
+    { from: 'review', to: 'implement', label: 'revise code', color: '#ef4444' },
+    { from: 'review', to: 'deliberation', label: 're-architect', color: '#ef4444' },
+  ];
+
+  return POTENTIAL_LOOPS.map(loop => ({
+    fromStepIdx: STEP_ORDER.indexOf(loop.from),
+    toStepIdx: STEP_ORDER.indexOf(loop.to),
+    label: loop.label,
+    count: loopCounts[`${loop.from}->${loop.to}`] || 0,
+    maxLoops,
+    color: loop.color,
+  }));
 }
 
 function LoopArrowsSVG({ arrows, stepCount }: { arrows: LoopArrowData[]; stepCount: number }) {
-  if (arrows.length === 0) return null;
-
   // Each step card is ~52px + 16px connector = ~68px per step slot
   const stepHeight = 68;
   const svgHeight = stepCount * stepHeight;
-  const svgWidth = 64;
+  const svgWidth = 80;
 
   return (
     <div className="absolute right-0 top-0 pointer-events-none" style={{ width: svgWidth, height: svgHeight }}>
@@ -426,8 +419,9 @@ function LoopArrowsSVG({ arrows, stepCount }: { arrows: LoopArrowData[]; stepCou
         {arrows.map((arrow, i) => {
           const fromY = arrow.fromStepIdx * stepHeight + 26;
           const toY = arrow.toStepIdx * stepHeight + 26;
-          const xOffset = 12 + i * 16; // stagger multiple arrows
+          const xOffset = 8 + i * 14; // stagger arrows
           const midX = svgWidth - xOffset;
+          const triggered = arrow.count > 0;
 
           // Curved path: from step -> curve right -> go up -> curve left -> to step
           const path = `M 0 ${fromY} C ${midX} ${fromY}, ${midX} ${fromY}, ${midX} ${fromY - 12} L ${midX} ${toY + 12} C ${midX} ${toY}, ${midX} ${toY}, 0 ${toY}`;
@@ -438,22 +432,30 @@ function LoopArrowsSVG({ arrows, stepCount }: { arrows: LoopArrowData[]; stepCou
                 d={path}
                 fill="none"
                 stroke={arrow.color}
-                strokeWidth="1.5"
-                strokeDasharray="4 3"
-                opacity="0.5"
+                strokeWidth={triggered ? 1.5 : 1}
+                strokeDasharray={triggered ? "none" : "3 4"}
+                opacity={triggered ? 0.6 : 0.2}
               />
               {/* Arrow head */}
               <polygon
-                points={`0,${toY} 6,${toY - 4} 6,${toY + 4}`}
+                points={`0,${toY} 5,${toY - 3} 5,${toY + 3}`}
                 fill={arrow.color}
-                opacity="0.7"
+                opacity={triggered ? 0.7 : 0.25}
               />
-              {/* Count badge */}
-              <g transform={`translate(${midX - 10}, ${(fromY + toY) / 2 - 7})`}>
-                <rect x="0" y="0" width="20" height="14" rx="3" fill={arrow.color} opacity="0.2" />
-                <text x="10" y="10" textAnchor="middle" fontSize="8" fontWeight="600" fill={arrow.color} opacity="0.9">
-                  {arrow.count}/{arrow.maxLoops}
+              {/* Label + count badge at midpoint */}
+              <g transform={`translate(${midX + 2}, ${(fromY + toY) / 2 - 5})`}>
+                <text x="0" y="4" fontSize="7" fill={arrow.color} opacity={triggered ? 0.8 : 0.35}
+                  style={{ fontFamily: 'system-ui', fontWeight: triggered ? 600 : 400 }}>
+                  {arrow.label}
                 </text>
+                {triggered && (
+                  <>
+                    <rect x="-2" y="6" width="18" height="11" rx="2" fill={arrow.color} opacity="0.15" />
+                    <text x="7" y="14.5" textAnchor="middle" fontSize="7" fontWeight="700" fill={arrow.color} opacity="0.9">
+                      {arrow.count}/{arrow.maxLoops}
+                    </text>
+                  </>
+                )}
               </g>
             </g>
           );
