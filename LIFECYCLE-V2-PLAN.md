@@ -105,7 +105,7 @@
 - [x] 5.4 WhatsApp notification: `notifyLoopBack()` calls Node-RED on all 6 loop paths _(Node-RED flow not yet built)_
 - [x] 5.5 Add PR comment on loop-back (GitHub API integration)
 - [x] 5.6 Add lifecycle template selection in Planning (Full / Quick Fix / Hotfix / Web Only)
-- [ ] 5.7 E2E test: full lifecycle with deliberation → implement → test fail → auto-fix loop → review → deploy
+- [x] 5.7 E2E test: 17 tests (full flow + circuit breaker) — commit 63d4cad → implement → test fail → auto-fix loop → review → deploy
 - [x] 5.8 Update this plan with completion status
 
 ---
