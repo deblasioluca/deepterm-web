@@ -525,6 +525,76 @@ src/app/admin/cockpit/
 
 ---
 
+## Admin DevOps Portal
+
+The admin DevOps portal (`/admin/devops`) is the engineering operations dashboard, focused on pipeline activity, CI status, and observability. It is structured into 8 tabs and uses lazy data loading — each tab fetches its own data on first activation, then refreshes on an interval.
+
+### Tab Structure
+
+| Tab | Purpose | Data Source |
+|-----|---------|-------------|
+| **Triage** | Active issue and idea triage | `Issue` + `Idea` models |
+| **Backlog** | GitHub Issues view | GitHub API (live) |
+| **Planning** | Epic/Story management | `Epic` + `Story` models |
+| **Lifecycle** | Per-story lifecycle step state | `LifecycleEvent` + `Story` models |
+| **Code & PRs** | Recent pull requests | GitHub API (live) |
+| **Builds** | CI build history | `CiBuild` model + GitHub Actions |
+| **Pipelines** | Airflow DAG run status | Airflow REST API |
+| **Observability** | Unified 3-lane timeline + run log | `LifecycleEvent` + `AgentLoop` + GitHub Actions + Airflow |
+
+### Observability Tab
+
+The Observability tab (`/api/admin/cockpit/tab/observability`) provides a unified timeline across the three infrastructure lanes:
+
+| Lane | Machine | Shows |
+|------|---------|-------|
+| **Pi** | Raspberry Pi (webapp server) | Lifecycle steps reconstructed from `LifecycleEvent` records |
+| **AI Dev Mac** | AI development Mac (M4) | `AgentLoop` runs + Airflow DAG runs linked by `storyId` |
+| **CI Mac** | CI runner Mac | GitHub Actions workflow runs matched via branch name |
+
+**Story connectors:** Phases belonging to the same Story are visually linked with a colour-coded bar in a "Stories" row below the three lanes. Each story gets a palette colour (8-colour cycle); a dot indicator marks multi-lane stories.
+
+**Stuck detection thresholds:**
+- Pi lifecycle step running > 40 minutes → `stuck`
+- Agent loop running > 60 minutes → `stuck`
+- CI workflow running > 45 minutes → `stuck`
+
+**Time window selector:** 6h / 24h / 7d — triggers a fresh fetch when changed.
+
+**Unlinked runs:** GitHub and Airflow runs with no matching Story branch are shown in a separate section of the Unified Run Log with reduced opacity (stuck unlinked runs shown at full opacity and highlighted).
+
+### File Structure
+
+```
+src/app/admin/devops/
+└── page.tsx                              # Main DevOps portal: lazy tab loader, 8 tabs
+
+src/app/api/admin/cockpit/tab/
+└── observability/route.ts                # GET — assembles 3-lane data from DB + GitHub + Airflow
+
+src/app/admin/cockpit/components/
+└── ObservabilityTab.tsx                  # Timeline chart, lane rows, story connectors, run log
+```
+
+---
+
+## Settings Page
+
+The admin settings page (`/admin/settings`) is organised into 8 tabs. Each tab is a self-contained component under `src/app/admin/settings/components/`. The main `page.tsx` acts as a tab container only (~100 lines), delegating all state, API calls, and rendering to the individual tab components.
+
+| Tab | Component File | Contents |
+|-----|---------------|---------|
+| **General** | `GeneralTab.tsx` | Site name, URL, support email, maintenance mode, help page content |
+| **Security** | `SecurityTab.tsx` | Allow registration toggle, require email verification, admin 2FA setup/status/backup codes, passkey management |
+| **Billing** | `BillingTab.tsx` | Subscription defaults (max team size, trial days, default plan), Stripe webhook secret, Stripe mode indicator |
+| **Notifications** | `NotificationsTab.tsx` | Release email notification toggle, SMTP test email, WhatsApp/Node-RED test messages |
+| **Releases** | `ReleasesTab.tsx` | App release upload form (platform, version, binary, notes), release version history |
+| **AI & LLM** | `AISettingsTab.tsx` | AI provider configuration (API keys, model registry), model assignments per activity, agent loop presets, usage budget limits |
+| **Integrations** | `IntegrationsTab.tsx` | Connection status and configuration for GitHub (token, webhook secret, repos), Node-RED (URL, API key), Airflow (URL, credentials), and AI Dev Mac (SSH host, heartbeat) |
+| **Danger Zone** | `DangerZoneTab.tsx` | Reset statistics, purge soft-deleted items, reset admin password, factory reset |
+
+---
+
 ## Payment Architecture
 
 ### Stripe Integration

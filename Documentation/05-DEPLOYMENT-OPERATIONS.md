@@ -538,6 +538,7 @@ pm2 reload deepterm  # Rolling restart
 | SSL certificate warnings | Self-signed cert | Replace with Let's Encrypt for production |
 | High memory usage | Node.js heap growth | Check `max-old-space-size` in ecosystem.config.js |
 | Slow first request | Next.js cold start | Expected; subsequent requests are fast |
+| "PI callback failed (non-fatal)" in CI logs | CI workflow sent lifecycle event with unknown `storyId` | Expected when PR Check runs from direct push (not lifecycle dispatch) or after story deletion — returns 404, not a crash. No action needed; the story existence check in `lifecycle/events/route.ts` handles this gracefully |
 
 ---
 

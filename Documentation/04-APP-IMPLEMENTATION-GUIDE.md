@@ -155,6 +155,385 @@ POST /api/zk/accounts/check { email }
 
 ---
 
+## 3. OAuth Sign-In (GitHub & Apple)
+
+### Configuration Values
+
+Hardcode these values in the app:
+
+| Value | Setting |
+|---|---|
+| **Server base URL** | `https://deepterm.net` |
+| **GitHub Client ID** | `Ov23li9EGGrs0nCNjU7N` |
+| **GitHub OAuth redirect URI** | `deepterm://oauth/github` |
+| **Apple App Bundle ID** | `com.DeepTerm.app` (already your bundle ID) |
+| **ZK login endpoint** | `POST https://deepterm.net/api/zk/accounts/login-oauth` |
+| **ZK keys/initialize endpoint** | `POST https://deepterm.net/api/zk/accounts/keys/initialize` |
+
+> **IMPORTANT:** The `GITHUB_SECRET` is **never** included in the app. The server performs the OAuth code exchange. The app only sends the `code` it received back to the DeepTerm server, which then exchanges it for a GitHub access token internally.
+
+---
+
+### Xcode Setup
+
+#### 1. URL Scheme (required for GitHub OAuth callback)
+
+In `Info.plist`, add a URL type:
+
+```xml
+<key>CFBundleURLTypes</key>
+<array>
+    <dict>
+        <key>CFBundleURLSchemes</key>
+        <array>
+            <string>deepterm</string>
+        </array>
+        <key>CFBundleURLName</key>
+        <string>net.deepterm.app.oauth</string>
+    </dict>
+</array>
+```
+
+This lets `ASWebAuthenticationSession` redirect back to the app as `deepterm://oauth/github?code=...`.
+
+#### 2. Sign In with Apple Capability (required for Apple Sign In)
+
+In Xcode → Target → **Signing & Capabilities** → click **+** → add **Sign In with Apple**.
+
+No additional configuration is needed — Apple's servers validate the app bundle ID automatically.
+
+---
+
+### Apple Sign In
+
+Apple provides an `identityToken` (a signed JWT) directly from `ASAuthorizationAppleIDCredential`. The app sends it to the server as-is. No secrets required.
+
+#### Swift Implementation
+
+```swift
+import AuthenticationServices
+
+class AuthViewModel: NSObject, ObservableObject, ASAuthorizationControllerDelegate,
+                    ASAuthorizationControllerPresentationContextProviding {
+
+    func signInWithApple() {
+        let provider = ASAuthorizationAppleIDProvider()
+        let request = provider.createRequest()
+        request.requestedScopes = [.fullName, .email]
+
+        let controller = ASAuthorizationController(authorizationRequests: [request])
+        controller.delegate = self
+        controller.presentationContextProvider = self
+        controller.performRequests()
+    }
+
+    // MARK: - ASAuthorizationControllerDelegate
+
+    func authorizationController(controller: ASAuthorizationController,
+                                 didCompleteWithAuthorization authorization: ASAuthorization) {
+        guard
+            let appleCredential = authorization.credential as? ASAuthorizationAppleIDCredential,
+            let identityTokenData = appleCredential.identityToken,
+            let identityToken = String(data: identityTokenData, encoding: .utf8)
+        else {
+            // Handle error
+            return
+        }
+
+        Task { await loginWithOAuth(provider: "apple", identityToken: identityToken) }
+    }
+
+    func authorizationController(controller: ASAuthorizationController,
+                                 didCompleteWithError error: Error) {
+        // Handle cancellation / error
+        print("Apple Sign In error: \(error.localizedDescription)")
+    }
+
+    // MARK: - ASAuthorizationControllerPresentationContextProviding
+
+    func presentationAnchor(for controller: ASAuthorizationController) -> ASPresentationAnchor {
+        // Return the key window
+        UIApplication.shared.windows.first { $0.isKeyWindow }!
+    }
+}
+```
+
+#### POST body for Apple
+
+```swift
+func loginWithOAuth(provider: String, identityToken: String) async {
+    let deviceName = UIDevice.current.name  // or ProcessInfo on macOS
+    let body: [String: Any] = [
+        "provider": provider,
+        "identityToken": identityToken,
+        "deviceName": deviceName,
+        "deviceType": "mobile"   // or "desktop" on macOS
+    ]
+    await callLoginOAuthEndpoint(body: body)
+}
+```
+
+---
+
+### GitHub Sign In
+
+GitHub OAuth uses a browser-based flow. The app launches a `ASWebAuthenticationSession`, gets an auth `code` back in the redirect URL, then posts that code to the DeepTerm server. The server exchanges the code for a GitHub access token using the server-side `GITHUB_SECRET`.
+
+#### GitHub Authorization URL
+
+```
+https://github.com/login/oauth/authorize
+  ?client_id=Ov23li9EGGrs0nCNjU7N
+  &redirect_uri=deepterm%3A%2F%2Foauth%2Fgithub
+  &scope=user%3Aemail
+```
+
+URL-decoded:
+- `client_id` = `Ov23li9EGGrs0nCNjU7N`
+- `redirect_uri` = `deepterm://oauth/github`
+- `scope` = `user:email`
+
+#### Swift Implementation
+
+```swift
+import AuthenticationServices
+
+extension AuthViewModel {
+
+    func signInWithGitHub() {
+        var components = URLComponents(string: "https://github.com/login/oauth/authorize")!
+        components.queryItems = [
+            URLQueryItem(name: "client_id", value: "Ov23li9EGGrs0nCNjU7N"),
+            URLQueryItem(name: "redirect_uri", value: "deepterm://oauth/github"),
+            URLQueryItem(name: "scope", value: "user:email"),
+        ]
+        guard let authURL = components.url else { return }
+
+        let session = ASWebAuthenticationSession(
+            url: authURL,
+            callbackURLScheme: "deepterm"
+        ) { callbackURL, error in
+            guard error == nil, let callbackURL = callbackURL else {
+                print("GitHub Sign In error: \(error?.localizedDescription ?? "cancelled")")
+                return
+            }
+
+            // Extract code from deepterm://oauth/github?code=abc123
+            guard
+                let components = URLComponents(url: callbackURL, resolvingAgainstBaseURL: false),
+                let code = components.queryItems?.first(where: { $0.name == "code" })?.value
+            else {
+                print("No code in GitHub callback URL")
+                return
+            }
+
+            Task { await self.loginWithGitHubCode(code: code) }
+        }
+
+        session.presentationContextProvider = self
+        session.prefersEphemeralWebBrowserSession = false  // allow saved passwords
+        session.start()
+    }
+
+    func loginWithGitHubCode(code: String) async {
+        let deviceName = UIDevice.current.name  // or ProcessInfo on macOS
+        let body: [String: Any] = [
+            "provider": "github",
+            "code": code,
+            "redirectUri": "deepterm://oauth/github",
+            "deviceName": deviceName,
+            "deviceType": "mobile"   // or "desktop" on macOS
+        ]
+        await callLoginOAuthEndpoint(body: body)
+    }
+}
+```
+
+> **Note for macOS:** Replace `UIDevice.current.name` with `ProcessInfo.processInfo.hostName` and use `NSApp.keyWindow` for the presentation anchor.
+
+---
+
+### Calling the Login Endpoint
+
+```swift
+struct OAuthLoginResponse: Codable {
+    let accessToken: String
+    let refreshToken: String
+    let expiresIn: Int
+    let defaultVaultId: String
+    let user: UserInfo
+    let protectedSymmetricKey: String?
+    let publicKey: String?
+    let encryptedPrivateKey: String?
+    let kdfType: Int?
+    let kdfIterations: Int?
+    let kdfMemory: Int?
+    let kdfParallelism: Int?
+    let device: DeviceInfo?
+    let subscription: SubscriptionInfo?
+}
+
+struct UserInfo: Codable {
+    let id: String
+    let email: String
+    let name: String
+    let hasKeys: Bool
+}
+
+func callLoginOAuthEndpoint(body: [String: Any]) async {
+    guard
+        let url = URL(string: "https://deepterm.net/api/zk/accounts/login-oauth"),
+        let bodyData = try? JSONSerialization.data(withJSONObject: body)
+    else { return }
+
+    var request = URLRequest(url: url)
+    request.httpMethod = "POST"
+    request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+    request.httpBody = bodyData
+
+    do {
+        let (data, response) = try await URLSession.shared.data(for: request)
+        guard let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 else {
+            // Handle error response
+            if let errorBody = try? JSONDecoder().decode([String: String].self, from: data) {
+                print("Login failed: \(errorBody["message"] ?? "unknown error")")
+            }
+            return
+        }
+
+        // Decode wrapper: { "success": true, "data": { ... } }
+        let json = try JSONDecoder().decode([String: OAuthLoginResponse].self, from: data)
+        guard let loginData = json["data"] else { return }
+
+        // Store tokens securely (Keychain)
+        storeTokens(access: loginData.accessToken, refresh: loginData.refreshToken)
+
+        if loginData.user.hasKeys {
+            // Returning user — decrypt vault with master password
+            // loginData.protectedSymmetricKey, .publicKey, .encryptedPrivateKey are present
+            handleExistingVaultUser(loginData: loginData)
+        } else {
+            // New user — must set up vault encryption keys before vault can be used
+            await initializeVaultKeys(accessToken: loginData.accessToken)
+        }
+
+    } catch {
+        print("Network error: \(error)")
+    }
+}
+```
+
+---
+
+### Server Response: hasKeys=false (New OAuth User)
+
+When `user.hasKeys == false`, the vault has no encryption keys yet. Before the user can store credentials, the app must call `POST /api/zk/accounts/keys/initialize`.
+
+This endpoint requires the master password (user-chosen) to derive encryption keys. The full initialization flow:
+
+1. Prompt user to create a **master password** (separate from their OAuth credentials — this encrypts their vault)
+2. Derive Argon2id master key from master password + email (client-side)
+3. Generate RSA-2048 keypair (client-side)
+4. Encrypt private key with derived symmetric key (client-side)
+5. POST to `keys/initialize` with the encrypted key material
+
+For full details on the `keys/initialize` endpoint and the cryptographic parameters, see [Section 5](#5-key-initialization-first-time-setup) and [03-API-REFERENCE.md](03-API-REFERENCE.md).
+
+---
+
+### Server Response: hasKeys=true (Returning OAuth User)
+
+When `user.hasKeys == true`, the server returns the encrypted key material alongside the ZK tokens:
+
+| Field | Description |
+|---|---|
+| `protectedSymmetricKey` | Symmetric key encrypted with master-derived key |
+| `publicKey` | RSA public key (unencrypted) |
+| `encryptedPrivateKey` | RSA private key encrypted with symmetric key |
+| `kdfType` | `0` = PBKDF2, `1` = Argon2id |
+| `kdfIterations` | KDF iteration count |
+| `kdfMemory` | Argon2id memory parameter (KB) |
+| `kdfParallelism` | Argon2id parallelism parameter |
+
+The app prompts for the master password, derives the master key using the same KDF params, decrypts `protectedSymmetricKey`, then uses the symmetric key to decrypt `encryptedPrivateKey`. Vault items are decrypted with the private key or symmetric key depending on item type.
+
+---
+
+### Error Handling
+
+The server returns errors in this format:
+
+```json
+{
+  "error": "Bad Request",
+  "message": "Human-readable explanation"
+}
+```
+
+Common error cases:
+
+| HTTP Status | Cause |
+|---|---|
+| `400` | Missing or invalid `provider`, `code`, `identityToken` |
+| `401` | GitHub code invalid / expired; Apple token invalid |
+| `429` | Rate limit exceeded (5 attempts per 15 min per email+IP) — check `Retry-After` header |
+| `500` | Server error — retry with exponential backoff |
+
+For `401` from GitHub, the auth `code` may have expired (GitHub codes expire after ~10 minutes). Restart the OAuth flow.
+
+---
+
+### Token Storage
+
+Store ZK tokens in the Keychain, not UserDefaults:
+
+```swift
+// Store
+KeychainHelper.save(key: "deepterm.accessToken", value: loginData.accessToken)
+KeychainHelper.save(key: "deepterm.refreshToken", value: loginData.refreshToken)
+
+// Refresh when access token expires (expiresIn = 900 seconds = 15 minutes)
+// Call: POST https://deepterm.net/api/zk/accounts/token/refresh
+// Body: { "refreshToken": "<stored refresh token>" }
+```
+
+The refresh token is valid for 365 days (configurable server-side). On refresh, a new token pair is returned and the old refresh token is invalidated (rotation).
+
+---
+
+### Summary Flow Diagram
+
+```
+Apple Sign In:
+  App → ASAuthorizationAppleIDProvider
+     → identityToken (JWT from Apple)
+     → POST /api/zk/accounts/login-oauth { provider:"apple", identityToken }
+     → Server verifies JWT against Apple JWKS
+     → Returns ZK { accessToken, refreshToken, hasKeys }
+
+GitHub Sign In:
+  App → ASWebAuthenticationSession
+     → GitHub OAuth page (client_id=Ov23li9EGGrs0nCNjU7N)
+     → deepterm://oauth/github?code=XYZ (callback)
+     → POST /api/zk/accounts/login-oauth { provider:"github", code:"XYZ", redirectUri:"deepterm://oauth/github" }
+     → Server exchanges code → GitHub access token (using server-side GITHUB_SECRET)
+     → Server verifies identity via GET api.github.com/user
+     → Returns ZK { accessToken, refreshToken, hasKeys }
+
+hasKeys=false (new user):
+  App → prompt master password
+     → derive keys (Argon2id, client-side)
+     → POST /api/zk/accounts/keys/initialize { masterPasswordHash, protectedSymmetricKey, ... }
+     → Vault ready
+
+hasKeys=true (returning user):
+  App → prompt master password
+     → decrypt protectedSymmetricKey with master-derived key
+     → decrypt vault items as normal
+```
+
+---
+
 ## 4. Cryptographic Key Derivation
 
 ### Key Hierarchy
