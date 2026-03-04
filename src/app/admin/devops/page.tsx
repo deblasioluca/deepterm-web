@@ -1,9 +1,9 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import {
   Zap, CircleDot, Map, Milestone, GitPullRequest, Cpu, Workflow,
-  Loader2, XCircle, RefreshCw, Wifi, WifiOff, Play, Send,
+  Loader2, XCircle, RefreshCw, Wifi, WifiOff, Play, Activity,
 } from 'lucide-react';
 import { formatTimeAgo } from '../cockpit/utils';
 import TriageQueueTab from '../cockpit/components/TriageQueueTab';
@@ -13,6 +13,8 @@ import LifecycleTab from '../cockpit/components/LifecycleTab';
 import BuildsTab from '../cockpit/components/BuildsTab';
 import PipelinesTab from '../cockpit/components/PipelinesTab';
 import CodeAndPRsTab from './components/CodeAndPRsTab';
+import ObservabilityTab from '../cockpit/components/ObservabilityTab';
+import { useAdminAI } from '@/components/admin/AdminAIContext';
 
 const TABS = [
   { key: 'triage', label: 'Triage', icon: Zap },
@@ -22,6 +24,7 @@ const TABS = [
   { key: 'code', label: 'Code & PRs', icon: GitPullRequest },
   { key: 'builds', label: 'Builds', icon: Cpu },
   { key: 'pipelines', label: 'Pipelines', icon: Workflow },
+  { key: 'observability', label: 'Observability', icon: Activity },
 ] as const;
 
 type TabKey = typeof TABS[number]['key'];
@@ -30,6 +33,15 @@ function useLazyTabData<T>(url: string, active: boolean, refreshInterval = 30000
   const [data, setData] = useState<T | null>(null);
   const [loading, setLoading] = useState(false);
   const [loaded, setLoaded] = useState(false);
+  const prevUrlRef = useRef(url);
+
+  // Reset when URL changes so the new URL is fetched immediately
+  useEffect(() => {
+    if (prevUrlRef.current !== url) {
+      prevUrlRef.current = url;
+      setLoaded(false);
+    }
+  }, [url]);
 
   const fetchData = useCallback(async () => {
     try {
@@ -64,6 +76,22 @@ export default function DevOpsPage() {
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [actionResult, setActionResult] = useState<{ msg: string; ok: boolean } | null>(null);
 
+  const { setPageContext } = useAdminAI();
+
+  useEffect(() => {
+    setPageContext({
+      page: 'DevOps',
+      summary: `DevOps pipeline — active tab: ${activeTab}`,
+      data: {
+        activeTab,
+        triageCount: coreData?.triageCount ?? 0,
+        autoRefresh,
+        lastUpdated: coreData?.timestamp ?? null,
+      },
+    });
+    return () => setPageContext(null);
+  }, [activeTab, coreData, autoRefresh, setPageContext]);
+
   const fetchCore = useCallback(async () => {
     try {
       const res = await fetch('/api/admin/cockpit/core');
@@ -89,6 +117,8 @@ export default function DevOpsPage() {
   const healthTab = useLazyTabData<any>('/api/admin/cockpit/tab/health', activeTab === 'builds');
   const planningData = useLazyTabData<any>('/api/admin/cockpit/tab/planning', activeTab === 'planning');
   const pipelinesData = useLazyTabData<any>('/api/admin/cockpit/tab/pipelines', activeTab === 'pipelines');
+  const [obsWindow, setObsWindow] = useState<number>(24);
+  const obsData = useLazyTabData<any>(`/api/admin/cockpit/tab/observability?window=${obsWindow}`, activeTab === 'observability', 15000);
 
   if (loading) {
     return (
@@ -191,7 +221,7 @@ export default function DevOpsPage() {
           return (
             <button key={tab.key} onClick={() => setActiveTab(tab.key)}
               className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium whitespace-nowrap transition ${
-                isActive ? 'bg-zinc-800 text-white border border-zinc-700' : 'text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800/50 border border-transparent'
+                isActive ? 'bg-zinc-600 text-white border border-zinc-500' : 'text-zinc-500 hover:text-zinc-300 hover:bg-zinc-700/50 border border-transparent'
               }`}>
               <Icon className="w-3.5 h-3.5" /> {tab.label}
               {badge !== null && (
@@ -210,6 +240,7 @@ export default function DevOpsPage() {
       {activeTab === 'code' && <CodeAndPRsTab />}
       {activeTab === 'builds' && <BuildsTab builds={buildsData} />}
       {activeTab === 'pipelines' && <PipelinesTab pipelines={pipelinesData.data || { connected: false, dags: [], activeRuns: [], recentRuns: [] }} runAction={runAction} actionLoading={actionLoading} />}
+      {activeTab === 'observability' && <ObservabilityTab data={obsData.data} loading={obsData.loading} onRefetch={obsData.refetch} onWindowChange={setObsWindow} windowHours={obsWindow} />}
     </div>
   );
 }

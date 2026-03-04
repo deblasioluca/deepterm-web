@@ -34,7 +34,7 @@ export async function POST() {
     const options = await generatePasskeyRegistrationOptions(
       user.id,
       user.email,
-      user.name,
+      user.name ?? user.email,
       existingPasskeys
     );
 

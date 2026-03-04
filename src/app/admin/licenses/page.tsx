@@ -20,6 +20,7 @@ import {
   Shield,
   Zap,
 } from 'lucide-react';
+import { useAdminAI } from '@/components/admin/AdminAIContext';
 
 interface License {
   id: string;
@@ -98,6 +99,22 @@ export default function LicensesPage() {
     seats: 1,
     expiresAt: '',
   });
+
+  const { setPageContext } = useAdminAI();
+
+  useEffect(() => {
+    setPageContext({
+      page: 'Licenses',
+      summary: `${licenses.length} licenses`,
+      data: {
+        total: licenses.length,
+        typeFilter: filterType,
+        search: search || null,
+        editing: editingLicense ? { name: editingLicense.name, plan: editingLicense.plan } : null,
+      },
+    });
+    return () => setPageContext(null);
+  }, [licenses.length, filterType, search, editingLicense, setPageContext]);
 
   useEffect(() => {
     fetchLicenses();

@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Loader2, RefreshCw, ChevronRight, ChevronDown, Layers, BookOpen, Circle, CheckCircle2, XCircle, Clock, Zap } from 'lucide-react';
 import DevLifecycleFlow, { StoryLifecycleData } from './DevLifecycleFlow';
+import { useAdminAI } from '@/components/admin/AdminAIContext';
 
 interface EpicGroup {
   id: string;
@@ -51,6 +52,75 @@ export default function LifecycleTab() {
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [pollFast, setPollFast] = useState(false);
+
+  const { setPageContext } = useAdminAI();
+
+  // Update AI context with live lifecycle data so the assistant can see what's on screen
+  useEffect(() => {
+    const allStories = [...epics.flatMap(e => e.stories), ...unassigned];
+    const activeStories = allStories.filter(s => s.status === 'in_progress');
+    const blockedStories = allStories.filter(s =>
+      s.status === 'in_progress' && (
+        s.testsPass === false ||
+        s.agentLoopStatus === 'failed' ||
+        s.agentLoopStatus === 'error'
+      )
+    );
+
+    setPageContext({
+      page: 'DevOps / Lifecycle',
+      summary: `${allStories.length} stories — ${activeStories.length} active${blockedStories.length > 0 ? `, ${blockedStories.length} blocked/failing` : ''}`,
+      data: {
+        totalStories: allStories.length,
+        activeStories: activeStories.length,
+        blockedStories: blockedStories.length,
+        epics: epics.map(e => ({
+          title: e.title,
+          status: e.status,
+          storyCount: e.stories.length,
+        })),
+        stories: allStories.map(s => ({
+          id: s.id.slice(0, 8),
+          title: s.title,
+          status: s.status,
+          lifecycleStep: s.lifecycleStep ?? null,
+          agentLoopStatus: s.agentLoopStatus ?? null,
+          deliberationStatus: s.deliberationStatus ?? null,
+          testsPass: s.testsPass ?? null,
+          e2ePass: s.e2ePass ?? null,
+          unitPass: s.unitPass ?? null,
+          prNumber: s.prNumber ?? null,
+          prMerged: s.prMerged ?? false,
+          deployed: s.deployed ?? false,
+          loopCount: s.loopCount ?? null,
+          lastLoopFrom: s.lastLoopFrom ?? null,
+        })),
+        selectedStory: selectedStory ? {
+          id: selectedStory.id,
+          title: selectedStory.title,
+          status: selectedStory.status,
+          lifecycleStep: selectedStory.lifecycleStep ?? null,
+          agentLoopStatus: selectedStory.agentLoopStatus ?? null,
+          deliberationStatus: selectedStory.deliberationStatus ?? null,
+          prNumber: selectedStory.prNumber ?? null,
+          prUrl: selectedStory.prUrl ?? null,
+          prMerged: selectedStory.prMerged ?? false,
+          testsPass: selectedStory.testsPass ?? null,
+          e2ePass: selectedStory.e2ePass ?? null,
+          unitPass: selectedStory.unitPass ?? null,
+          uiPass: selectedStory.uiPass ?? null,
+          deployed: selectedStory.deployed ?? false,
+          released: selectedStory.released ?? false,
+          loopCount: selectedStory.loopCount ?? null,
+          lastLoopFrom: selectedStory.lastLoopFrom ?? null,
+          lastLoopTo: selectedStory.lastLoopTo ?? null,
+          recentEvents: (selectedStory.recentEvents ?? []).slice(0, 8),
+          stepTimeouts: selectedStory.stepTimeouts ?? null,
+        } : null,
+      },
+    });
+    // No cleanup: when the tab changes, the DevOps parent's effect re-fires and overwrites
+  }, [epics, unassigned, selectedStory, setPageContext]);
 
   const fetchData = useCallback(async () => {
     try {

@@ -1,9 +1,14 @@
 import NextAuth from 'next-auth';
 import Credentials from 'next-auth/providers/credentials';
+import GitHub from 'next-auth/providers/github';
+import Apple from 'next-auth/providers/apple';
+import { PrismaAdapter } from '@auth/prisma-adapter';
 import bcrypt from 'bcryptjs';
 import { prisma } from './prisma';
 
 export const { handlers, signIn, signOut, auth } = NextAuth({
+  // @ts-expect-error — known type mismatch between @auth/prisma-adapter@2 and next-auth@5.0.0-beta.4
+  adapter: PrismaAdapter(prisma),
   trustHost: true,
   providers: [
     Credentials({
@@ -27,7 +32,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
           include: { team: true },
         });
 
-        if (!user) {
+        if (!user || !user.passwordHash) {
           return null;
         }
 
@@ -90,6 +95,16 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         };
       },
     }),
+    GitHub({
+      clientId: process.env.GITHUB_ID!,
+      clientSecret: process.env.GITHUB_SECRET!,
+      allowDangerousEmailAccountLinking: true,
+    }),
+    Apple({
+      clientId: process.env.APPLE_ID!,
+      clientSecret: process.env.APPLE_SECRET!,
+      allowDangerousEmailAccountLinking: true,
+    }),
   ],
   session: {
     strategy: 'jwt',
@@ -100,11 +115,37 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
     error: '/login',
   },
   callbacks: {
+    async redirect({ url, baseUrl }) {
+      // Relative URLs — standard behaviour
+      if (url.startsWith('/')) return `${baseUrl}${url}`;
+      // Same-origin URLs
+      if (new URL(url).origin === baseUrl) {
+        const path = new URL(url).pathname;
+        // Apple uses response_mode=form_post which is a cross-site POST.
+        // SameSite=Lax prevents the callbackUrl cookie from being sent,
+        // so NextAuth falls back to the base URL. Redirect to /dashboard instead.
+        if (path === '/' || path === '') return `${baseUrl}/dashboard`;
+        return url;
+      }
+      return baseUrl;
+    },
+    async signIn({ user, account }) {
+      // For OAuth sign-ins, set a name fallback if the provider didn't supply one
+      if (
+        (account?.provider === 'github' || account?.provider === 'apple') &&
+        user.id &&
+        !user.name
+      ) {
+        const fallback = (user.email ?? '').split('@')[0];
+        await prisma.user.update({ where: { id: user.id }, data: { name: fallback } });
+      }
+      return true;
+    },
     async jwt({ token, user }) {
       if (user) {
         token.id = user.id;
-        token.role = user.role;
-        token.teamId = user.teamId;
+        token.role = user.role ?? 'member';
+        token.teamId = user.teamId ?? null;
         token.teamName = user.teamName;
       }
       return token;

@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { Card, Badge, Button, Input } from '@/components/ui';
+import { useAdminAI } from '@/components/admin/AdminAIContext';
 
 type AdminIssueRow = {
   id: string;
@@ -18,6 +19,20 @@ export default function AdminIssuesPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [query, setQuery] = useState('');
+
+  const { setPageContext } = useAdminAI();
+
+  useEffect(() => {
+    setPageContext({
+      page: 'Issues',
+      summary: `${issues.length} support issues`,
+      data: {
+        total: issues.length,
+        search: query || null,
+      },
+    });
+    return () => setPageContext(null);
+  }, [issues.length, query, setPageContext]);
 
   useEffect(() => {
     const load = async () => {

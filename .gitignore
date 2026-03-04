@@ -16,3 +16,9 @@ logs/
 # Playwright
 playwright-report/
 test-results/
+
+# Apple private keys
+*.p8
+
+# TypeScript build cache
+tsconfig.tsbuildinfo

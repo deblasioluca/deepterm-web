@@ -17,6 +17,7 @@ import {
   Globe,
   X,
 } from 'lucide-react';
+import { useAdminAI } from '@/components/admin/AdminAIContext';
 
 // ── Types ────────────────────────────────────────
 
@@ -128,6 +129,21 @@ export default function AIConfigPage() {
   const [allModels, setAllModels] = useState<(ProviderModel & { provider: { name: string; slug: string; isEnabled: boolean } })[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeSection, setActiveSection] = useState<'providers' | 'models' | 'assignments'>('providers');
+
+  const { setPageContext } = useAdminAI();
+
+  useEffect(() => {
+    setPageContext({
+      page: 'AI Configuration',
+      summary: 'LLM provider config, model assignments, and activity routing',
+      data: {
+        providersLoaded: providers.length,
+        enabledProviders: providers.filter((p) => p.isEnabled && p.hasKey).map((p) => p.name),
+        activitiesCount: assignments.length,
+      },
+    });
+    return () => setPageContext(null);
+  }, [providers, assignments, setPageContext]);
 
   const fetchData = useCallback(async () => {
     try {

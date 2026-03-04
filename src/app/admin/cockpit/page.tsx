@@ -9,6 +9,7 @@ import { formatTimeAgo } from './utils';
 import OverviewTab from './components/OverviewTab';
 import SystemHealthTab from './components/SystemHealthTab';
 import AIUsageTab from './components/AIUsageTab';
+import { useAdminAI } from '@/components/admin/AdminAIContext';
 
 const TABS = [
   { key: 'overview', label: 'Overview', icon: LayoutDashboard },
@@ -55,6 +56,16 @@ export default function CockpitPage() {
   const [activeTab, setActiveTab] = useState<TabKey>('overview');
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [actionResult, setActionResult] = useState<{ msg: string; ok: boolean } | null>(null);
+
+  const { setPageContext } = useAdminAI();
+  useEffect(() => {
+    setPageContext({
+      page: 'Cockpit',
+      summary: `System monitoring — ${activeTab} tab`,
+      data: { activeTab, autoRefresh },
+    });
+    return () => setPageContext(null);
+  }, [activeTab, autoRefresh, setPageContext]);
 
   const fetchCore = useCallback(async () => {
     try {
@@ -175,8 +186,8 @@ export default function CockpitPage() {
             <button key={tab.key} onClick={() => setActiveTab(tab.key)}
               className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-medium transition whitespace-nowrap ${
                 isActive
-                  ? 'bg-zinc-800 text-white shadow-sm'
-                  : 'text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800/50'
+                  ? 'bg-zinc-600 text-white shadow-sm'
+                  : 'text-zinc-500 hover:text-zinc-300 hover:bg-zinc-700/50'
               }`}>
               <Icon className="w-3.5 h-3.5" /> {tab.label}
             </button>

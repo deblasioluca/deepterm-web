@@ -20,6 +20,7 @@ import DataTable from './components/DataTable';
 import RecordForm from './components/RecordForm';
 import DeleteConfirmation from './components/DeleteConfirmation';
 import type { ModelFieldInfo } from '@/lib/database-explorer';
+import { useAdminAI } from '@/components/admin/AdminAIContext';
 
 interface ModelListItem {
   name: string;
@@ -72,6 +73,24 @@ export default function AdminDatabasePage() {
   // Status
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const { setPageContext } = useAdminAI();
+
+  useEffect(() => {
+    setPageContext({
+      page: 'Database Explorer',
+      summary: selectedModel
+        ? `Browsing ${selectedModel} — ${pagination.total} records`
+        : `${models.length} tables available`,
+      data: {
+        selectedTable: selectedModel ?? null,
+        totalRecords: selectedModel ? pagination.total : null,
+        totalTables: models.length,
+        search: searchQuery || null,
+      },
+    });
+    return () => setPageContext(null);
+  }, [selectedModel, pagination.total, models.length, searchQuery, setPageContext]);
 
   // Fetch models list
   const fetchModels = useCallback(async () => {

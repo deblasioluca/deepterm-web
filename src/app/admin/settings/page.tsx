@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import {
   Settings,
@@ -14,6 +14,7 @@ import {
   AlertCircle,
   Brain,
 } from 'lucide-react';
+import { useAdminAI } from '@/components/admin/AdminAIContext';
 
 import GeneralTab from './components/GeneralTab';
 import SecurityTab from './components/SecurityTab';
@@ -23,6 +24,7 @@ import ReleasesTab from './components/ReleasesTab';
 import IntegrationsTab from './components/IntegrationsTab';
 import DangerZoneTab from './components/DangerZoneTab';
 import AIConfigPage from '../ai/page';
+import AdminAISettingsTab from './components/AdminAISettingsTab';
 
 const TABS = [
   { key: 'general', label: 'General', icon: Globe },
@@ -32,6 +34,7 @@ const TABS = [
   { key: 'releases', label: 'Releases', icon: Upload },
   { key: 'integrations', label: 'Integrations', icon: Radio },
   { key: 'ai', label: 'AI', icon: Brain },
+  { key: 'admin-ai', label: 'Admin AI', icon: Bot },
   { key: 'danger', label: 'Danger Zone', icon: AlertCircle },
 ] as const;
 
@@ -39,6 +42,27 @@ type TabKey = typeof TABS[number]['key'];
 
 export default function AdminSettingsPage() {
   const [activeTab, setActiveTab] = useState<TabKey>('general');
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const tab = params.get('tab') as TabKey | null;
+    if (tab && TABS.some((t) => t.key === tab)) {
+      setActiveTab(tab);
+    }
+  }, []);
+
+  const { setPageContext } = useAdminAI();
+
+  useEffect(() => {
+    setPageContext({
+      page: 'Settings',
+      summary: `Settings — ${activeTab} tab`,
+      data: {
+        activeTab,
+      },
+    });
+    return () => setPageContext(null);
+  }, [activeTab, setPageContext]);
 
   return (
     <div className="min-h-screen bg-background-primary">
@@ -86,6 +110,7 @@ export default function AdminSettingsPage() {
           {activeTab === 'releases' && <ReleasesTab />}
               {activeTab === 'integrations' && <IntegrationsTab />}
           {activeTab === 'ai' && <AIConfigPage />}
+          {activeTab === 'admin-ai' && <AdminAISettingsTab />}
           {activeTab === 'danger' && <DangerZoneTab />}
         </motion.div>
       </div>

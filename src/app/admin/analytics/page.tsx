@@ -14,6 +14,7 @@ import {
   Calendar,
   Loader2,
 } from 'lucide-react';
+import { useAdminAI } from '@/components/admin/AdminAIContext';
 
 interface AnalyticsData {
   overview: {
@@ -32,6 +33,20 @@ export default function AdminAnalyticsPage() {
   const [data, setData] = useState<AnalyticsData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [period, setPeriod] = useState<'7d' | '30d' | '90d'>('30d');
+
+  const { setPageContext } = useAdminAI();
+  useEffect(() => {
+    const periodLabel = period === '7d' ? 'last 7 days' : period === '30d' ? 'last 30 days' : 'last 90 days';
+    setPageContext({
+      page: 'Analytics',
+      summary: `Platform analytics for ${periodLabel}`,
+      data: {
+        period,
+        overview: data?.overview ?? null,
+      },
+    });
+    return () => setPageContext(null);
+  }, [data, period, setPageContext]);
 
   useEffect(() => {
     fetchAnalytics();

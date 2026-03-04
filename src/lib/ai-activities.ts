@@ -154,6 +154,17 @@ export const AI_ACTIVITIES: Record<string, AIActivityDef> = {
     defaultTemperature: 0.3,
     defaultMaxTokens: 4096,
   },
+
+  // Admin AI Assistant
+  'admin.chat': {
+    key: 'admin.chat',
+    label: 'Admin AI Chat',
+    description: 'Admin panel AI assistant — context-aware, tool-enabled chat',
+    category: 'agent',
+    defaultModel: 'claude-opus-4-6',
+    defaultTemperature: 0.7,
+    defaultMaxTokens: 8000,
+  },
 };
 
 export type AIActivityKey = keyof typeof AI_ACTIVITIES;

@@ -61,7 +61,7 @@ export async function POST(request: NextRequest) {
     let user: {
       id: string;
       email: string;
-      passwordHash: string;
+      passwordHash: string | null;
       twoFactorEnabled: boolean;
       twoFactorSecret: string | null;
       twoFactorBackupCodes: string | null;
@@ -131,6 +131,9 @@ export async function POST(request: NextRequest) {
       });
       if (!user) {
         return NextResponse.json({ error: 'User not found' }, { status: 404 });
+      }
+      if (!user.passwordHash) {
+        return NextResponse.json({ error: 'This account uses social login. Please authenticate via the app.' }, { status: 401 });
       }
 
       const ok = await bcrypt.compare(password, user.passwordHash);

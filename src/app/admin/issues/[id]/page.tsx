@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Card, Button, Badge } from '@/components/ui';
 import { ThumbsDown, ThumbsUp } from 'lucide-react';
+import { useAdminAI } from '@/components/admin/AdminAIContext';
 
 const STATUSES = ['open', 'in_progress', 'waiting_on_user', 'resolved', 'closed'] as const;
 
@@ -53,6 +54,27 @@ export default function AdminIssueDetailPage({ params }: { params: { id: string 
     if (!issue) return false;
     return status !== issue.status;
   }, [issue, status]);
+
+  const { setPageContext } = useAdminAI();
+
+  useEffect(() => {
+    if (!issue) return;
+    setPageContext({
+      page: 'Issue Detail',
+      summary: `Issue: ${issue.title} — ${issue.status}`,
+      data: {
+        issueId: issue.id,
+        title: issue.title,
+        area: issue.area,
+        status: issue.status,
+        reporter: issue.user.email,
+        updatesCount: issue.updates.length,
+        attachmentsCount: issue.attachments.length,
+        createdAt: issue.createdAt,
+      },
+    });
+    return () => setPageContext(null);
+  }, [issue, setPageContext]);
 
   const load = async () => {
     try {

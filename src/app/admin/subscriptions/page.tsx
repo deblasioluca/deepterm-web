@@ -18,6 +18,7 @@ import {
   ExternalLink,
   RefreshCw,
 } from 'lucide-react';
+import { useAdminAI } from '@/components/admin/AdminAIContext';
 
 type Offering = {
   key: string;
@@ -69,6 +70,24 @@ export default function AdminSubscriptionsPage() {
   const [isSavingDraft, setIsSavingDraft] = useState(false);
   const [isDeploying, setIsDeploying] = useState(false);
   const [offeringsMessage, setOfferingsMessage] = useState<string | null>(null);
+
+  const { setPageContext } = useAdminAI();
+
+  useEffect(() => {
+    setPageContext({
+      page: 'Subscriptions',
+      summary: `${stats?.totalActive ?? 0} active subscriptions — MRR $${((stats?.totalRevenue ?? 0) / 100).toLocaleString()}`,
+      data: stats ? {
+        activeSubscriptions: stats.totalActive,
+        mrr: `$${(stats.totalRevenue / 100).toLocaleString()}`,
+        churnRate: `${stats.churnRate?.toFixed(1)}%`,
+        avgSeatsPerTeam: stats.avgSeats?.toFixed(1),
+        totalSubscriptions: pagination.total,
+        statusFilter: statusFilter || 'all',
+      } : { loading: true },
+    });
+    return () => setPageContext(null);
+  }, [stats, pagination.total, statusFilter, setPageContext]);
 
   const fetchOfferings = useCallback(async () => {
     try {

@@ -16,6 +16,7 @@ import {
   EyeOff,
   Calendar,
 } from 'lucide-react';
+import { useAdminAI } from '@/components/admin/AdminAIContext';
 
 interface Announcement {
   id: string;
@@ -55,6 +56,22 @@ export default function AdminAnnouncementsPage() {
     total: 0,
     totalPages: 0,
   });
+
+  const { setPageContext } = useAdminAI();
+
+  useEffect(() => {
+    const active = announcements.filter((a) => a.isActive).length;
+    setPageContext({
+      page: 'Announcements',
+      summary: `${announcements.length} announcements (${active} active)`,
+      data: {
+        total: announcements.length,
+        active,
+        editing: editingAnnouncement ? editingAnnouncement.title : null,
+      },
+    });
+    return () => setPageContext(null);
+  }, [announcements, editingAnnouncement, setPageContext]);
 
   const fetchAnnouncements = useCallback(async () => {
     try {

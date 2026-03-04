@@ -16,6 +16,7 @@ import {
   Lightbulb,
   Wrench,
 } from 'lucide-react';
+import { useAdminAI } from '@/components/admin/AdminAIContext';
 
 interface Idea {
   id: string;
@@ -58,6 +59,22 @@ export default function AdminFeedbackPage() {
     total: 0,
     totalPages: 0,
   });
+
+  const { setPageContext } = useAdminAI();
+
+  useEffect(() => {
+    setPageContext({
+      page: 'Feedback',
+      summary: `${pagination.total} feature requests / ideas`,
+      data: {
+        totalIdeas: pagination.total,
+        statusFilter: statusFilter || 'all',
+        search: searchQuery || null,
+        selectedIdea: selectedIdea ? { id: selectedIdea.id, title: selectedIdea.title, status: selectedIdea.status } : null,
+      },
+    });
+    return () => setPageContext(null);
+  }, [pagination.total, statusFilter, searchQuery, selectedIdea, setPageContext]);
 
   const fetchIdeas = useCallback(async () => {
     try {

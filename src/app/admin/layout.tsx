@@ -24,172 +24,47 @@ import {
   Activity,
   GitMerge,
   Database,
+  Bot,
 } from 'lucide-react';
+import { AdminAIProvider, useAdminAI } from '@/components/admin/AdminAIContext';
+import AdminAIPanel from '@/components/admin/AdminAIPanel';
 
 const navItems = [
-  {
-    label: 'Overview',
-    href: '/admin',
-    icon: LayoutDashboard,
-  },
-  {
-    label: 'Cockpit',
-    href: '/admin/cockpit',
-    icon: Activity,
-  },
-  {
-    label: 'DevOps',
-    href: '/admin/devops',
-    icon: GitMerge,
-  },
-  {
-    label: 'Users',
-    href: '/admin/users',
-    icon: Users,
-  },
-  {
-    label: 'Teams',
-    href: '/admin/teams',
-    icon: Building2,
-  },
-  {
-    label: 'Licenses',
-    href: '/admin/licenses',
-    icon: Key,
-  },
-  {
-    label: 'Subscriptions',
-    href: '/admin/subscriptions',
-    icon: CreditCard,
-  },
-  {
-    label: 'Analytics',
-    href: '/admin/analytics',
-    icon: BarChart3,
-  },
-  {
-    label: 'Audit Logs',
-    href: '/admin/audit-logs',
-    icon: FileText,
-  },
-  {
-    label: 'Feedback',
-    href: '/admin/feedback',
-    icon: MessageSquare,
-  },
-  {
-    label: 'Issues',
-    href: '/admin/issues',
-    icon: HelpCircle,
-  },
-  {
-    label: 'Announcements',
-    href: '/admin/announcements',
-    icon: Bell,
-  },
-  {
-    label: 'Database',
-    href: '/admin/database',
-    icon: Database,
-  },
-  {
-    label: 'Settings',
-    href: '/admin/settings',
-    icon: Settings,
-  },
+  { label: 'Overview',     href: '/admin',              icon: LayoutDashboard },
+  { label: 'Cockpit',      href: '/admin/cockpit',      icon: Activity },
+  { label: 'DevOps',       href: '/admin/devops',       icon: GitMerge },
+  { label: 'Users',        href: '/admin/users',        icon: Users },
+  { label: 'Teams',        href: '/admin/teams',        icon: Building2 },
+  { label: 'Licenses',     href: '/admin/licenses',     icon: Key },
+  { label: 'Subscriptions',href: '/admin/subscriptions',icon: CreditCard },
+  { label: 'Analytics',    href: '/admin/analytics',    icon: BarChart3 },
+  { label: 'Audit Logs',   href: '/admin/audit-logs',   icon: FileText },
+  { label: 'Feedback',     href: '/admin/feedback',     icon: MessageSquare },
+  { label: 'Issues',       href: '/admin/issues',       icon: HelpCircle },
+  { label: 'Announcements',href: '/admin/announcements',icon: Bell },
+  { label: 'Database',     href: '/admin/database',     icon: Database },
+  { label: 'Settings',     href: '/admin/settings',     icon: Settings },
 ];
 
-export default function AdminLayout({
+// ── Inner layout — can access AdminAIContext ──────────────────────────────────
+
+function AdminLayoutInner({
   children,
+  collapsed,
+  setCollapsed,
+  isAuthenticated,
 }: {
   children: React.ReactNode;
+  collapsed: boolean;
+  setCollapsed: (v: boolean) => void;
+  isAuthenticated: boolean | null;
 }) {
-  const [collapsed, setCollapsed] = useState(false);
-  const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null);
   const pathname = usePathname();
-  const buildIdRef = useRef<string | null>(null);
+  const { isPanelOpen, togglePanel } = useAdminAI();
 
-  // Detect stale deployment and force a full reload when the server has been rebuilt
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
+  if (pathname === '/admin/login') return <>{children}</>;
 
-    const fetchBuildId = async () => {
-      try {
-        const res = await fetch('/api/version', { cache: 'no-store' });
-        if (!res.ok) return null;
-        const data = await res.json() as { buildId: string };
-        return data.buildId ?? null;
-      } catch {
-        return null;
-      }
-    };
-
-    fetchBuildId().then((id) => {
-      if (id) buildIdRef.current = id;
-    });
-
-    const interval = setInterval(async () => {
-      const id = await fetchBuildId();
-      if (id && buildIdRef.current && id !== buildIdRef.current) {
-        // Server restarted with a new build — reload so JS stays in sync
-        window.location.reload();
-      }
-    }, 60_000); // check every 60 s
-
-    return () => clearInterval(interval);
-  }, []);
-
-  // Check authentication on mount and route changes
-  useEffect(() => {
-    // Skip auth check for login page
-    if (pathname === '/admin/login') {
-      setIsAuthenticated(false);
-      return;
-    }
-
-    const checkAuth = async () => {
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 10_000);
-
-      try {
-        const response = await fetch('/api/admin/auth/check', {
-          signal: controller.signal,
-          cache: 'no-store',
-        });
-        clearTimeout(timeoutId);
-        if (response.ok) {
-          setIsAuthenticated(true);
-        } else {
-          setIsAuthenticated(false);
-          // Use full-page navigation so a stale JS build cannot silently drop the redirect
-          window.location.href = '/admin/login';
-        }
-      } catch {
-        clearTimeout(timeoutId);
-        setIsAuthenticated(false);
-        window.location.href = '/admin/login';
-      }
-    };
-
-    checkAuth();
-  }, [pathname]);
-
-  // Show login page without sidebar
-  if (pathname === '/admin/login') {
-    return <>{children}</>;
-  }
-
-  // Show loading while checking auth
-  if (isAuthenticated === null) {
-    return (
-      <div className="min-h-screen bg-background-primary flex items-center justify-center">
-        <Loader2 className="w-8 h-8 animate-spin text-accent-primary" />
-      </div>
-    );
-  }
-
-  // Not authenticated - will redirect
-  if (!isAuthenticated) {
+  if (isAuthenticated === null || !isAuthenticated) {
     return (
       <div className="min-h-screen bg-background-primary flex items-center justify-center">
         <Loader2 className="w-8 h-8 animate-spin text-accent-primary" />
@@ -199,7 +74,7 @@ export default function AdminLayout({
 
   return (
     <div className="min-h-screen bg-background-primary flex">
-      {/* Sidebar */}
+      {/* ── Sidebar ── */}
       <motion.aside
         initial={false}
         animate={{ width: collapsed ? 72 : 260 }}
@@ -226,21 +101,17 @@ export default function AdminLayout({
             onClick={() => setCollapsed(!collapsed)}
             className="p-2 rounded-lg hover:bg-background-tertiary text-text-secondary hover:text-text-primary transition-colors"
           >
-            {collapsed ? (
-              <ChevronRight className="w-4 h-4" />
-            ) : (
-              <ChevronLeft className="w-4 h-4" />
-            )}
+            {collapsed ? <ChevronRight className="w-4 h-4" /> : <ChevronLeft className="w-4 h-4" />}
           </button>
         </div>
 
         {/* Navigation */}
         <nav className="flex-1 p-3 space-y-1 overflow-y-auto">
           {navItems.map((item) => {
-            const isActive = pathname === item.href || 
+            const isActive =
+              pathname === item.href ||
               (item.href !== '/admin' && pathname.startsWith(item.href));
             const Icon = item.icon;
-
             return (
               <Link
                 key={item.href}
@@ -271,6 +142,31 @@ export default function AdminLayout({
 
         {/* Footer */}
         <div className="p-3 border-t border-border space-y-1">
+          {/* AI Assistant toggle */}
+          <button
+            onClick={togglePanel}
+            title={isPanelOpen ? 'Close AI Assistant (Cmd+Shift+A)' : 'Open AI Assistant (Cmd+Shift+A)'}
+            className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all ${
+              isPanelOpen
+                ? 'bg-accent-primary/20 text-accent-primary'
+                : 'text-text-secondary hover:text-text-primary hover:bg-background-tertiary'
+            }`}
+          >
+            <Bot className={`w-5 h-5 flex-shrink-0 ${isPanelOpen ? 'text-accent-primary' : ''}`} />
+            <AnimatePresence mode="wait">
+              {!collapsed && (
+                <motion.span
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  className="text-sm font-medium"
+                >
+                  AI Assistant
+                </motion.span>
+              )}
+            </AnimatePresence>
+          </button>
+
           <Link
             href="/dashboard"
             className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-text-secondary hover:text-text-primary hover:bg-background-tertiary transition-all"
@@ -289,6 +185,7 @@ export default function AdminLayout({
               )}
             </AnimatePresence>
           </Link>
+
           <button
             onClick={async () => {
               await fetch('/api/admin/auth/logout', { method: 'POST' });
@@ -313,14 +210,101 @@ export default function AdminLayout({
         </div>
       </motion.aside>
 
-      {/* Main Content */}
+      {/* ── Main Content ── */}
       <main
         className={`flex-1 transition-all duration-300 ${
           collapsed ? 'ml-[72px]' : 'ml-[260px]'
-        }`}
+        } ${isPanelOpen ? 'mr-[380px]' : ''}`}
       >
         <div className="p-8">{children}</div>
       </main>
+
+      {/* ── AI Panel ── */}
+      <AdminAIPanel />
     </div>
+  );
+}
+
+// ── Outer layout — manages auth state, wraps Provider ────────────────────────
+
+export default function AdminLayout({ children }: { children: React.ReactNode }) {
+  const [collapsed, setCollapsed] = useState(false);
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null);
+  const pathname = usePathname();
+  const buildIdRef = useRef<string | null>(null);
+
+  // Detect stale deployment and force a full reload when the server has been rebuilt
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const fetchBuildId = async () => {
+      try {
+        const res = await fetch('/api/version', { cache: 'no-store' });
+        if (!res.ok) return null;
+        const data = await res.json() as { buildId: string };
+        return data.buildId ?? null;
+      } catch {
+        return null;
+      }
+    };
+
+    fetchBuildId().then((id) => { if (id) buildIdRef.current = id; });
+
+    const interval = setInterval(async () => {
+      const id = await fetchBuildId();
+      if (id && buildIdRef.current && id !== buildIdRef.current) {
+        window.location.reload();
+      }
+    }, 60_000);
+
+    return () => clearInterval(interval);
+  }, []);
+
+  // Check authentication on mount and route changes
+  useEffect(() => {
+    if (pathname === '/admin/login') {
+      setIsAuthenticated(false);
+      return;
+    }
+
+    const checkAuth = async () => {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 10_000);
+      try {
+        const response = await fetch('/api/admin/auth/check', {
+          signal: controller.signal,
+          cache: 'no-store',
+        });
+        clearTimeout(timeoutId);
+        if (response.ok) {
+          setIsAuthenticated(true);
+        } else {
+          setIsAuthenticated(false);
+          window.location.href = '/admin/login';
+        }
+      } catch {
+        clearTimeout(timeoutId);
+        setIsAuthenticated(false);
+        window.location.href = '/admin/login';
+      }
+    };
+
+    void checkAuth();
+  }, [pathname]);
+
+  if (pathname === '/admin/login') {
+    return <>{children}</>;
+  }
+
+  return (
+    <AdminAIProvider>
+      <AdminLayoutInner
+        collapsed={collapsed}
+        setCollapsed={setCollapsed}
+        isAuthenticated={isAuthenticated}
+      >
+        {children}
+      </AdminLayoutInner>
+    </AdminAIProvider>
   );
 }

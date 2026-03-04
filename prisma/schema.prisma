@@ -166,9 +166,11 @@ model RateLimitEntry {
 
 model User {
   id                            String    @id @default(cuid())
-  name                          String
+  name                          String?
   email                         String    @unique
-  passwordHash                  String
+  passwordHash                  String?
+  emailVerified                 DateTime?
+  image                         String?
   avatarUrl                     String?
   role                          String    @default("member")
   teamId                        String?
@@ -183,6 +185,7 @@ model User {
   appStoreOriginalTransactionId String?   @unique
   subscriptionSource            String    @default("none")
   subscriptionExpiresAt         DateTime?
+  accounts                      Account[]
   ideas                         Idea[]
   issues                        Issue[]
   passkeys                      Passkey[]
@@ -190,6 +193,25 @@ model User {
   team                          Team?     @relation(fields: [teamId], references: [id])
   votes                         Vote[]
   zkUser                        ZKUser?
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String?
+  access_token      String?
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?
+  session_state     String?
+  user              User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@index([userId])
 }
 
 model Passkey {
@@ -283,6 +305,7 @@ model AdminUser {
   updatedAt            DateTime       @updatedAt
   passkeys             AdminPasskey[]
   auditLogs            AuditLog[]
+  aiConversations      AdminAIConversation[]
 }
 
 model AdminPasskey {
@@ -915,4 +938,67 @@ model StepDurationHistory {
   @@index([stepId])
   @@index([storyId])
   @@index([createdAt])
+}
+
+
+// ─── Admin AI Assistant ───────────────────────────────────────────────────────
+
+/// Admin AI chat conversation — one per admin user, per conversation thread.
+model AdminAIConversation {
+  id          String   @id @default(cuid())
+  adminUserId String
+  title       String?                   // Auto-generated from first message (60 chars)
+  pageContext String?                   // JSON: {page, summary, data} snapshot at start
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  messages    AdminAIMessage[]
+  adminUser   AdminUser @relation(fields: [adminUserId], references: [id], onDelete: Cascade)
+
+  @@index([adminUserId, createdAt])
+}
+
+/// Individual messages within an admin AI conversation.
+model AdminAIMessage {
+  id             String   @id @default(cuid())
+  conversationId String
+  role           String                 // user | assistant
+  content        String                 // Text content
+  toolCalls      String?                // JSON: [{id, name, input}]
+  toolResults    String?                // JSON: [{toolUseId, name, output}]
+  inputTokens    Int?
+  outputTokens   Int?
+  costCents      Float?
+  createdAt      DateTime @default(now())
+  conversation   AdminAIConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@index([conversationId, createdAt])
+}
+
+/// Singleton config for the admin AI assistant (id is always "singleton").
+model AdminAIConfig {
+  id                  String   @id @default("singleton")
+  modelId             String   @default("claude-opus-4-6")
+  systemPrompt        String?                           // Override CLAUDE.md content
+  additionalPrompts   String?                           // JSON: [{name, content, shortcut}]
+  toolPermissions     String?                           // JSON: {tool_name: boolean}
+  sshMachines         String?                           // JSON: [{name, host, user, authType, keyPath, encryptedKey}]
+  mcpServers          String?                           // JSON: [{name, url, encryptedAuth, toolPrefix, enabled}]
+  githubPat           String?                           // AES-encrypted GitHub PAT
+  voyageApiKey        String?                           // AES-encrypted Voyage AI key
+  maxTokensPerMessage Int      @default(8000)
+  conversationTtlDays Int      @default(30)
+  updatedAt           DateTime @default(now()) @updatedAt
+}
+
+/// Document chunks + embeddings for semantic search (Phase 2 — populated by vector indexer).
+model DocumentVector {
+  id         String   @id @default(cuid())
+  filename   String
+  chunkIndex Int
+  chunkText  String
+  embedding  String?                   // JSON float[] — null until indexed by Voyage AI
+  createdAt  DateTime @default(now())
+
+  @@unique([filename, chunkIndex])
+  @@index([filename])
 }

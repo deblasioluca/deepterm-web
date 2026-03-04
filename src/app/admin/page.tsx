@@ -16,6 +16,7 @@ import {
   MoreHorizontal,
 } from 'lucide-react';
 import Link from 'next/link';
+import { useAdminAI } from '@/components/admin/AdminAIContext';
 
 interface DashboardStats {
   totalUsers: number;
@@ -43,6 +44,24 @@ interface DashboardStats {
 export default function AdminDashboard() {
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+
+  const { setPageContext } = useAdminAI();
+
+  useEffect(() => {
+    setPageContext({
+      page: 'Dashboard',
+      summary: 'Platform overview — users, teams, subscriptions, revenue',
+      data: stats ? {
+        totalUsers: stats.totalUsers,
+        userGrowth: `${stats.userGrowth}%`,
+        totalTeams: stats.totalTeams,
+        activeSubscriptions: stats.activeSubscriptions,
+        mrr: `$${(stats.mrr / 100).toLocaleString()}`,
+        mrrGrowth: `${stats.mrrGrowth}%`,
+      } : { loading: true },
+    });
+    return () => setPageContext(null);
+  }, [stats, setPageContext]);
 
   useEffect(() => {
     fetchDashboardStats();

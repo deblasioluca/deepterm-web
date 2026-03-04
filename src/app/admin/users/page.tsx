@@ -19,6 +19,7 @@ import {
   X,
   AlertTriangle,
 } from 'lucide-react';
+import { useAdminAI } from '@/components/admin/AdminAIContext';
 
 interface User {
   id: string;
@@ -53,6 +54,22 @@ export default function AdminUsersPage() {
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const { setPageContext } = useAdminAI();
+  useEffect(() => {
+    setPageContext({
+      page: 'Users',
+      summary: `${pagination.total} users total, page ${pagination.page}/${pagination.totalPages}`,
+      data: {
+        total: pagination.total,
+        page: pagination.page,
+        search: searchQuery || undefined,
+        roleFilter: roleFilter || undefined,
+        selectedUser: selectedUser?.email ?? null,
+      },
+    });
+    return () => setPageContext(null);
+  }, [users, pagination, searchQuery, roleFilter, selectedUser, setPageContext]);
   const [error, setError] = useState<string | null>(null);
 
   // Form state

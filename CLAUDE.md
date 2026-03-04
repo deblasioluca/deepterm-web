@@ -564,6 +564,13 @@ const platforms = [
 | **Planning API (stories)** | `src/app/api/admin/cockpit/planning/stories/` |
 | **AI Dev Mac tasks** | `src/app/api/internal/ai-dev/tasks/route.ts` |
 | **AI Dev Mac status** | `src/app/api/internal/ai-dev/task-status/route.ts` |
+| **Admin AI panel** | `src/components/admin/AdminAIPanel.tsx` |
+| **Admin AI context** | `src/components/admin/AdminAIContext.tsx` |
+| **Admin AI chat lib** | `src/lib/admin-ai/chat.ts` |
+| **Admin AI tools** | `src/lib/admin-ai/tools.ts` |
+| **Admin AI system prompt** | `src/lib/admin-ai/context.ts` |
+| **Admin AI chat API** | `src/app/api/admin/ai/chat/route.ts` |
+| **Admin AI config (DB)** | `AdminAIConfig` model — singleton, id `"singleton"` |
 
 ### Internal API — AI Dev Mac
 

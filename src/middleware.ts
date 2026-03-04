@@ -200,8 +200,11 @@ export function middleware(request: NextRequest) {
     }
   }
 
-  // Redirect logged-in users away from auth pages
-  if (pathname === '/login' || pathname === '/register') {
+  // Redirect logged-in users away from auth pages and the home page.
+  // Apple Sign In uses response_mode=form_post (cross-site POST), which prevents
+  // the SameSite=Lax callbackUrl cookie from being sent back — NextAuth then falls
+  // through to baseUrl ("/"). Catching "/" here sends authenticated users to /dashboard.
+  if (pathname === '/' || pathname === '/login' || pathname === '/register') {
     const sessionToken = request.cookies.get('authjs.session-token')?.value ||
                          request.cookies.get('__Secure-authjs.session-token')?.value;
 
@@ -214,5 +217,5 @@ export function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ['/dashboard/:path*', '/admin/:path*', '/api/admin/:path*', '/login', '/register'],
+  matcher: ['/', '/dashboard/:path*', '/admin/:path*', '/api/admin/:path*', '/login', '/register'],
 };

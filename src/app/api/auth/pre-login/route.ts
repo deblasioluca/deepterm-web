@@ -23,7 +23,7 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    if (!user) {
+    if (!user || !user.passwordHash) {
       // Don't reveal if user exists or not
       return NextResponse.json(
         { error: 'Invalid credentials' },

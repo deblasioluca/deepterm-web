@@ -19,6 +19,7 @@ import {
   Key,
   Shield,
 } from 'lucide-react';
+import { useAdminAI } from '@/components/admin/AdminAIContext';
 
 interface Team {
   id: string;
@@ -64,6 +65,23 @@ export default function AdminTeamsPage() {
     ssoEnabled: false,
     ssoDomain: '',
   });
+
+  const { setPageContext } = useAdminAI();
+
+  useEffect(() => {
+    setPageContext({
+      page: 'Teams',
+      summary: `Managing ${pagination.total} teams`,
+      data: {
+        totalTeams: pagination.total,
+        currentPage: pagination.page,
+        planFilter: planFilter || 'all',
+        search: searchQuery || null,
+        selectedTeam: selectedTeam?.name ?? null,
+      },
+    });
+    return () => setPageContext(null);
+  }, [pagination.total, pagination.page, planFilter, searchQuery, selectedTeam, setPageContext]);
 
   const fetchTeams = useCallback(async () => {
     try {

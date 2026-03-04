@@ -321,7 +321,7 @@ export async function POST(request: NextRequest) {
         users.map((user) =>
           sendVersionReleaseEmail(
             {
-              name: user.name,
+              name: user.name ?? '',
               email: user.email,
             },
             {

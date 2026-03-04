@@ -191,6 +191,12 @@ export async function POST(request: NextRequest) {
     // If password provided, validate it (and enforce 2FA if enabled)
     let authenticated = false;
     if (password) {
+      if (!user.passwordHash) {
+        return NextResponse.json(
+          { valid: false, error: 'This account uses social login. Please authenticate via the app.' },
+          { status: 401 }
+        );
+      }
       authenticated = await bcrypt.compare(password, user.passwordHash);
       if (!authenticated) {
         return NextResponse.json(

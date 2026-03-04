@@ -27,8 +27,13 @@ export async function POST(request: Request) {
     });
 
     if (existingUser) {
+      const isOAuthOnly = !existingUser.passwordHash;
       return NextResponse.json(
-        { error: 'An account with this email already exists' },
+        {
+          error: isOAuthOnly
+            ? 'This email is linked to a social login. Please sign in with GitHub or Apple.'
+            : 'An account with this email already exists.',
+        },
         { status: 409 }
       );
     }

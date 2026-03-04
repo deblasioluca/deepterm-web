@@ -16,6 +16,7 @@ import {
   Settings,
   Filter,
 } from 'lucide-react';
+import { useAdminAI } from '@/components/admin/AdminAIContext';
 
 interface AuditLog {
   id: string;
@@ -48,6 +49,22 @@ export default function AdminAuditLogsPage() {
     total: 0,
     totalPages: 0,
   });
+
+  const { setPageContext } = useAdminAI();
+
+  useEffect(() => {
+    setPageContext({
+      page: 'Audit Logs',
+      summary: `${pagination.total} audit log entries`,
+      data: {
+        totalLogs: pagination.total,
+        currentPage: pagination.page,
+        entityTypeFilter: entityTypeFilter || 'all',
+        search: searchQuery || null,
+      },
+    });
+    return () => setPageContext(null);
+  }, [pagination.total, pagination.page, entityTypeFilter, searchQuery, setPageContext]);
 
   const fetchLogs = useCallback(async () => {
     try {

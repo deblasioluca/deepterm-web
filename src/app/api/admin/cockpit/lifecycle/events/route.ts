@@ -69,6 +69,14 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'storyId, stepId, and event required' }, { status: 400 });
     }
 
+    // Verify the story exists — prevents FK constraint crashes when CI callbacks
+    // arrive with a stale or unrecognised storyId (e.g. PR Check triggered by a
+    // direct push rather than a lifecycle dispatch, or after a story was reset)
+    const storyExists = await prisma.story.findUnique({ where: { id: storyId }, select: { id: true } });
+    if (!storyExists) {
+      return NextResponse.json({ error: `Story not found: ${storyId}` }, { status: 404 });
+    }
+
     // Validate event type
     const validEvents = [
       'started', 'progress', 'heartbeat', 'completed', 'failed',
