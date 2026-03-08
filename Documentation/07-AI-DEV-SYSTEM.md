@@ -306,7 +306,9 @@ PENDING → RUNNING → [iterating] → AWAITING_REVIEW → COMPLETED
 
 **Finalization:** On completion or limit-hit, the agent commits, pushes the branch, and creates a PR. Status moves to `awaiting_review`. A WhatsApp notification is sent.
 
-**Human review:** The PR is reviewed in GitHub or the cockpit. Approve and merge → story moves to `done` → implementation report is generated. Request changes → agent loop can resume with feedback. Reject → story returns to `planned`.
+**Auto-advance:** When an agent loop completes successfully with a PR number, the lifecycle automatically advances the story from `implement` to `test`. Two lifecycle events are emitted (`implement.completed` and `test.started`), and the story's `lifecycleStep` is updated to `test`. This triggers CI workflow dispatch if configured. If auto-advance fails, the error is logged but the agent loop status is unaffected.
+
+**Human review:** The PR is reviewed in GitHub or the cockpit. The `merge-pr` gate action calls `mergePR()` via the GitHub API and advances the story to the deploy step. Request changes → triggers `loop-review-to-implement` (AI revises with feedback) or `loop-review-to-deliberation` (re-architecture). Reject / Abandon → story returns to `planned`.
 
 ### Structured Agent Actions
 

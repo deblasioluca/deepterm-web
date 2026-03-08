@@ -542,6 +542,75 @@ The admin DevOps portal (`/admin/devops`) is the engineering operations dashboar
 | **Pipelines** | Airflow DAG run status | Airflow REST API |
 | **Observability** | Unified 3-lane timeline + run log | `LifecycleEvent` + `AgentLoop` + GitHub Actions + Airflow |
 
+### Lifecycle Tab
+
+The Lifecycle tab (`LifecycleTab.tsx`) provides per-story lifecycle management with gate actions, visual progress tracking, and real-time status.
+
+**Header features:**
+- **LIVE / IDLE badge** — Pulsing green when any story has an active lifecycle step; grey when idle
+- Story/epic counts with active and completed tallies
+
+**Lifecycle steps:** `triage → plan → deliberation → implement → test → review → deploy → release`
+
+**Gate actions** (wired in `actionMap` → `POST /api/admin/cockpit/lifecycle`):
+
+| Action | Step | Effect |
+|--------|------|--------|
+| `approve-triage` | Triage | Story → planned, advance to plan step |
+| `reject-triage` | Triage | Story → cancelled |
+| `defer-triage` | Triage | Story deferred (no step change) |
+| `start-deliberation` | Deliberation | Starts multi-LLM deliberation (passes story description as instructions) |
+| `skip-deliberation` | Deliberation | Creates skipped deliberation record |
+| `approve-decision` | Deliberation | Marks deliberation decided |
+| `restart-deliberation` | Deliberation | Retries failed deliberation |
+| `start-agent` / `retry-agent` | Implement | Starts/retries agent loop |
+| `manual-pr` / `manual-fix` | Implement | Manual intervention |
+| `merge-pr` | Review | Calls `mergePR()` via GitHub API, advances to deploy |
+| `approve-pr` | Review | Story → done |
+| `reject-pr` | Review | Story → in_progress |
+| `mark-tests-passed` | Test | Story → done |
+| `mark-deployed` | Deploy | Story → released |
+| `hold-deploy` | Deploy | Cancels deploy step |
+| `mark-released` | Release | Story → released |
+
+**Loop-back actions** (Lifecycle V2 with circuit breaker):
+
+| Action | From → To | Behaviour |
+|--------|-----------|----------|
+| `loop-test-to-implement` | test → implement | AI auto-fix, increments loopCount |
+| `loop-test-to-deliberation` | test → deliberation | Re-architecture, closes PR |
+| `loop-review-to-implement` | review → implement | Feedback-driven revision |
+| `loop-review-to-deliberation` | review → deliberation | Scraps implementation, closes PR |
+| `abandon-implementation` | review → plan | Closes PR, deletes branch, resets to planned |
+
+**Recovery actions** (any step): `retry-step`, `skip-step`, `cancel-step`, `reset-to-step`, `reset-all`, `force-complete`
+
+**Smart polling:**
+- 3 seconds after a gate action (auto-stops after 30s)
+- 5 seconds when any story has an active lifecycle step
+- 15 seconds when idle
+
+**UI features:**
+- Mini progress bars per story with active-step highlight (blue pulse) and percentage
+- Type badges (Story / Epic) and breadcrumb trail (Epic > Story) in lifecycle header
+- Deliberation phase badge (proposing/debating/voting — purple pulse) on the deliberation step
+- Decision summary shown on completed deliberation steps
+- Context panel with story description in the detail view
+- Loop-back arrows with count/max display
+- Agent drill-down panel for running agent loops
+
+**File structure:**
+
+```
+src/app/admin/cockpit/components/
+├── LifecycleTab.tsx          # Parent: data fetch, handleGateAction, polling, story browser
+├── DevLifecycleFlow.tsx      # Lifecycle visualization: step cards, detail panel, loop arrows
+└── TestProgressPanel.tsx     # Test suite progress with per-failure detail
+
+src/app/api/admin/cockpit/lifecycle/
+└── route.ts                  # GET (enriched story data) + POST (gate/recovery/loop-back actions)
+```
+
 ### Observability Tab
 
 The Observability tab (`/api/admin/cockpit/tab/observability`) provides a unified timeline across the three infrastructure lanes:
