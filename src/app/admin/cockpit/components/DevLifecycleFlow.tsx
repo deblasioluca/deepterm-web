@@ -85,9 +85,12 @@ export interface StoryLifecycleData {
   prUrl?: string | null;
   prMerged?: boolean;
   testsPass?: boolean | null;
+  ciDispatched?: boolean | null;
+  buildPass?: StepStatus;
   e2ePass?: StepStatus;
   unitPass?: StepStatus;
   uiPass?: StepStatus;
+  testDetail?: string | null;
   deployed?: boolean;
   released?: boolean;
   version?: string | null;
@@ -1077,15 +1080,35 @@ function buildLifecycleSteps(story: StoryLifecycleData | null): LifecycleStep[] 
     testGateActions.push({ label: 'Fix Manually', action: 'back-to-implement', variant: 'reject' });
     testGateActions.push({ label: 'Force Continue', action: 'force-continue', variant: 'skip' });
   }
+  // Build test detail text from API data
+  const testDetailText = testStatus === 'failed'
+    ? (s.testDetail || 'Tests failed — choose recovery action')
+    : testStatus === 'active'
+    ? (s.testDetail || (s.ciDispatched === true ? 'CI dispatched — waiting for runner…' : s.ciDispatched === false ? 'CI dispatch failed' : 'Waiting for CI…'))
+    : testStatus === 'passed'
+    ? (s.testDetail || 'All tests passed')
+    : undefined;
+  // Build substeps with real data from API
+  const scope = s.scope || 'app';
+  const testSubsteps = s.prNumber ? (
+    scope === 'web' ? [
+      { label: 'E2E', status: s.e2ePass ?? 'pending' as StepStatus },
+    ] : scope === 'both' ? [
+      { label: 'Build', status: s.buildPass ?? 'pending' as StepStatus },
+      { label: 'Unit', status: s.unitPass ?? 'pending' as StepStatus },
+      { label: 'UI', status: s.uiPass ?? 'pending' as StepStatus },
+      { label: 'E2E', status: s.e2ePass ?? 'pending' as StepStatus },
+    ] : [
+      { label: 'Build', status: s.buildPass ?? 'pending' as StepStatus },
+      { label: 'Unit', status: s.unitPass ?? 'pending' as StepStatus },
+      { label: 'UI', status: s.uiPass ?? 'pending' as StepStatus },
+    ]
+  ) : undefined;
   steps.push({
     id: 'test', label: 'Test', description: 'CI runs: build + unit + UI tests',
     icon: <TestTube className="w-3.5 h-3.5" />, actor: 'system', status: testStatus,
-    substeps: s.prNumber ? [
-      { label: 'E2E', status: s.e2ePass ?? 'pending' as StepStatus },
-      { label: 'Unit', status: s.unitPass ?? 'pending' as StepStatus },
-      { label: 'UI', status: s.uiPass ?? 'pending' as StepStatus },
-    ] : undefined,
-    detail: testStatus === 'failed' ? 'Tests failed — choose recovery action' : undefined,
+    substeps: testSubsteps,
+    detail: testDetailText,
     timeout: timeouts.test ?? 300, startedAt: testStatus === 'active' ? getStepStart('test') : null, events,
     gate: testGateActions.length > 0 ? { required: false, actions: testGateActions } : undefined,
   });

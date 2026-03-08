@@ -233,6 +233,90 @@ export async function GET(req: NextRequest) {
         take: 30,
       }).catch(() => []);
 
+      // ── Parse test step progress from lifecycle events ──
+      let ciDispatched: boolean | null = null;
+      let buildPass: 'pending' | 'active' | 'passed' | 'failed' = 'pending';
+      let unitPass: 'pending' | 'active' | 'passed' | 'failed' = 'pending';
+      let uiPass: 'pending' | 'active' | 'passed' | 'failed' = 'pending';
+      let e2ePass: 'pending' | 'active' | 'passed' | 'failed' = 'pending';
+      let testDetail: string | null = null;
+
+      if (story.lifecycleStep === 'test' || story.status === 'done' || story.status === 'released') {
+        // Walk events oldest-first to build up test state
+        // Find the last retry/restart boundary, only process events after it
+        const testEvents = [...recentEvents].reverse().filter(e => e.stepId === 'test');
+        let boundaryIdx = -1;
+        for (let i = testEvents.length - 1; i >= 0; i--) {
+          const ev = testEvents[i];
+          if (ev.event === 'retried' || (ev.event === 'started' && !(ev.detail || '').includes('"suite"'))) {
+            boundaryIdx = i;
+            break;
+          }
+        }
+        const relevantEvents = boundaryIdx >= 0 ? testEvents.slice(boundaryIdx) : testEvents;
+
+        for (const ev of relevantEvents) {
+          let detail: Record<string, unknown> = {};
+          try { detail = ev.detail ? JSON.parse(ev.detail) : {}; } catch { continue; }
+
+          // CI dispatch tracking
+          if (detail.ciDispatched !== undefined) {
+            ciDispatched = !!detail.ciDispatched;
+          }
+
+          // Suite-level progress
+          const suite = detail.suite as string;
+          if (suite) {
+            const status = ev.event === 'completed' ? 'passed'
+              : ev.event === 'failed' ? 'failed'
+              : ev.event === 'started' ? 'active'
+              : ev.event === 'progress' ? 'active'
+              : null;
+            if (status) {
+              if (suite === 'build') buildPass = status;
+              else if (suite === 'unit') unitPass = status;
+              else if (suite === 'ui') uiPass = status;
+              else if (suite === 'e2e') e2ePass = status;
+            }
+          }
+
+          // Overall test completion
+          if (ev.event === 'completed' && !detail.suite) {
+            buildPass = 'passed'; unitPass = 'passed'; uiPass = 'passed';
+          }
+          if (ev.event === 'failed' && !detail.suite && detail.message) {
+            testDetail = detail.message as string;
+          }
+        }
+
+        // Build summary detail text for compact card
+        if (!testDetail) {
+          const scope = story.scope || 'app';
+          const suitesConfig = scope === 'web' ? { e2e: e2ePass }
+            : scope === 'both' ? { build: buildPass, unit: unitPass, ui: uiPass, e2e: e2ePass }
+            : { build: buildPass, unit: unitPass, ui: uiPass };
+          const suiteEntries = Object.entries(suitesConfig);
+          const passedCount = suiteEntries.filter(([, s]) => s === 'passed').length;
+          const failedCount = suiteEntries.filter(([, s]) => s === 'failed').length;
+          const activeCount = suiteEntries.filter(([, s]) => s === 'active').length;
+          const allPending = suiteEntries.every(([, s]) => s === 'pending');
+
+          if (failedCount > 0) {
+            const failedSuites = suiteEntries.filter(([, s]) => s === 'failed').map(([k]) => k);
+            testDetail = `Failed: ${failedSuites.join(', ')}`;
+          } else if (passedCount === suiteEntries.length) {
+            testDetail = 'All suites passed';
+          } else if (activeCount > 0) {
+            const activeSuites = suiteEntries.filter(([, s]) => s === 'active').map(([k]) => k);
+            testDetail = `Running: ${activeSuites.join(', ')} (${passedCount}/${suiteEntries.length} passed)`;
+          } else if (ciDispatched && allPending) {
+            testDetail = 'CI dispatched — waiting for runner…';
+          } else if (ciDispatched === null && allPending) {
+            testDetail = 'Waiting for CI dispatch…';
+          }
+        }
+      }
+
       return {
         id: story.id,
         title: story.title,
@@ -267,6 +351,13 @@ export async function GET(req: NextRequest) {
         prUrl: agentLoop?.prUrl || null,
         prMerged: story.status === 'done' || story.status === 'released',
         testsPass: story.status === 'done' || story.status === 'released' ? true : null,
+        // Test step progress (parsed from events)
+        ciDispatched,
+        buildPass: buildPass !== 'pending' ? buildPass : undefined,
+        e2ePass: e2ePass !== 'pending' ? e2ePass : undefined,
+        unitPass: unitPass !== 'pending' ? unitPass : undefined,
+        uiPass: uiPass !== 'pending' ? uiPass : undefined,
+        testDetail,
         deployed: story.status === 'released',
         released: story.status === 'released',
         version: null,
@@ -305,8 +396,19 @@ export async function GET(req: NextRequest) {
 }
 
 // POST /api/admin/cockpit/lifecycle — Gate + recovery actions
+// Auth: admin-session cookie (browser) OR x-api-key header (internal engine calls)
+const LIFECYCLE_API_KEY = process.env.AI_DEV_API_KEY || process.env.NODE_RED_API_KEY || '';
+
 export async function POST(req: NextRequest) {
   try {
+    // Validate x-api-key for internal (non-cookie) callers
+    const apiKey = req.headers.get('x-api-key');
+    if (apiKey) {
+      if (!LIFECYCLE_API_KEY || apiKey !== LIFECYCLE_API_KEY) {
+        return NextResponse.json({ error: 'Invalid API key' }, { status: 401 });
+      }
+    }
+
     const { action, storyId, reason, stepId } = await req.json();
     if (!storyId || !action) {
       return NextResponse.json({ error: 'storyId and action required' }, { status: 400 });
@@ -442,6 +544,19 @@ export async function POST(req: NextRequest) {
         updates.status = 'released';
         await logEvent(storyId, 'release', 'completed', 'Manually marked as released', 'human');
         break;
+
+      // ── Internal CI dispatch (called by engine auto-advance) ──
+      case 'dispatch-ci': {
+        if (!stepId || stepId !== 'test') {
+          return NextResponse.json({ error: 'dispatch-ci only supports stepId=test' }, { status: 400 });
+        }
+        const ciResult = await dispatchCIWorkflow(storyId);
+        await logEvent(storyId, 'test', 'progress', JSON.stringify({
+          message: ciResult.ok ? 'CI workflow dispatched on CI Mac (pr-check.yml)' : `CI dispatch failed: ${ciResult.error}`,
+          ciDispatched: ciResult.ok,
+        }), 'system');
+        return NextResponse.json({ ok: ciResult.ok, error: ciResult.error || null });
+      }
 
       // ── Recovery actions ──
       case 'retry-step': {

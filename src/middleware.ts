@@ -139,8 +139,12 @@ export function middleware(request: NextRequest) {
 
   // Check if the path is an admin route (protected with admin auth)
   if (pathname.startsWith('/admin') || pathname.startsWith('/api/admin')) {
-    // Skip auth routes and CI callback endpoints
+    // Skip auth routes, CI callback endpoints, and internal API-key-authenticated requests
     if (pathname.startsWith('/api/admin/auth') || pathname.startsWith('/api/admin/cockpit/lifecycle/events') || pathname.startsWith('/api/admin/cockpit/github-dispatch')) {
+      return NextResponse.next();
+    }
+    // Allow x-api-key authenticated requests to the lifecycle endpoint (engine auto-advance)
+    if (pathname === '/api/admin/cockpit/lifecycle' && request.headers.get('x-api-key')) {
       return NextResponse.next();
     }
 

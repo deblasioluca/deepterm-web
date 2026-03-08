@@ -656,44 +656,24 @@ export async function runAgentLoop(loopId: string, feedbackContext?: string): Pr
           });
           console.log(`[AgentLoop] ${loopId} auto-advanced story ${loop.storyId} to test step`);
 
-          // Dispatch CI workflow for the test step
-          const ghToken = process.env.GITHUB_TOKEN;
-          if (ghToken) {
-            try {
-              const ciRepo = config.targetRepo || 'deblasioluca/deepterm';
-              const ciRes = await fetch(
-                `https://api.github.com/repos/${ciRepo}/actions/workflows/pr-check.yml/dispatches`,
-                {
-                  method: 'POST',
-                  headers: {
-                    Authorization: `Bearer ${ghToken}`,
-                    Accept: 'application/vnd.github+json',
-                    'X-GitHub-Api-Version': '2022-11-28',
-                  },
-                  body: JSON.stringify({
-                    ref: 'main',
-                    inputs: { story_id: loop.storyId },
-                  }),
-                  signal: AbortSignal.timeout(10000),
-                }
-              );
-              if (ciRes.status === 204) {
-                console.log(`[AgentLoop] ${loopId} CI workflow dispatched for story ${loop.storyId}`);
-                await prisma.lifecycleEvent.create({
-                  data: { storyId: loop.storyId, stepId: 'test', event: 'progress', detail: JSON.stringify({ message: 'CI workflow dispatched (pr-check.yml)', ciDispatched: true }), actor: 'system' },
-                });
-              } else {
-                const errText = await ciRes.text().catch(() => '');
-                console.error(`[AgentLoop] ${loopId} CI dispatch failed: ${ciRes.status} ${errText}`);
-                await prisma.lifecycleEvent.create({
-                  data: { storyId: loop.storyId, stepId: 'test', event: 'progress', detail: JSON.stringify({ message: `CI dispatch failed: ${ciRes.status}`, ciDispatched: false }), actor: 'system' },
-                });
-              }
-            } catch (ciErr) {
-              console.error(`[AgentLoop] ${loopId} CI dispatch error:`, ciErr);
+          // Dispatch CI workflow via lifecycle API (handles dispatch + event logging)
+          try {
+            const baseUrl = process.env.NEXTAUTH_URL || 'http://localhost:3000';
+            const apiKey = process.env.AI_DEV_API_KEY || process.env.NODE_RED_API_KEY || '';
+            const ciRes = await fetch(`${baseUrl}/api/admin/cockpit/lifecycle`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey },
+              body: JSON.stringify({ action: 'dispatch-ci', storyId: loop.storyId, stepId: 'test' }),
+              signal: AbortSignal.timeout(15000),
+            });
+            if (ciRes.ok) {
+              console.log(`[AgentLoop] ${loopId} CI dispatched via lifecycle API for story ${loop.storyId}`);
+            } else {
+              const errBody = await ciRes.text().catch(() => '');
+              console.error(`[AgentLoop] ${loopId} lifecycle CI dispatch failed: ${ciRes.status} ${errBody}`);
             }
-          } else {
-            console.warn(`[AgentLoop] ${loopId} GITHUB_TOKEN not set — cannot dispatch CI`);
+          } catch (ciErr) {
+            console.error(`[AgentLoop] ${loopId} lifecycle CI dispatch error:`, ciErr);
           }
         }
       } catch (advanceErr) {
