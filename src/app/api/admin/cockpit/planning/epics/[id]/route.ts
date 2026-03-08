@@ -10,12 +10,13 @@ export async function PATCH(
   try {
     const { id } = params;
     const body = await req.json();
-    const { title, description, status, priority, sortOrder } = body as {
+    const { title, description, status, priority, sortOrder, releaseType } = body as {
       title?: string;
       description?: string;
       status?: string;
       priority?: string;
       sortOrder?: number;
+      releaseType?: string;
     };
 
     const data: Record<string, string | number> = {};
@@ -24,6 +25,7 @@ export async function PATCH(
     if (status !== undefined) data.status = status;
     if (priority !== undefined) data.priority = priority;
     if (sortOrder !== undefined) data.sortOrder = sortOrder;
+    if (releaseType !== undefined) data.releaseType = releaseType === 'major' ? 'major' : 'minor';
 
     if (Object.keys(data).length === 0) {
       return NextResponse.json(

@@ -24,11 +24,12 @@ export async function GET() {
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { title, description, priority, status } = body as {
+    const { title, description, priority, status, releaseType } = body as {
       title?: string;
       description?: string;
       priority?: string;
       status?: string;
+      releaseType?: string;
     };
 
     if (!title || typeof title !== 'string' || title.trim().length === 0) {
@@ -48,6 +49,7 @@ export async function POST(req: NextRequest) {
         description: description ?? '',
         priority: priority ?? 'medium',
         status: status ?? 'backlog',
+        releaseType: (releaseType === 'major' ? 'major' : 'minor'),
         sortOrder: nextSort,
       },
     });
