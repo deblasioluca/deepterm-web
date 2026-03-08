@@ -871,7 +871,20 @@ function applyEventOverrides(steps: LifecycleStep[], events: LifecycleEventEntry
   for (const step of steps) {
     const stepEvents = events.filter(e => normalize(e.stepId) === step.id);
     if (stepEvents.length === 0) continue;
-    const lastEvent = stepEvents[stepEvents.length - 1];
+
+    // Find the most significant event: completed > failed > started > retried > progress
+    // This prevents late-arriving progress events from overriding a completed/failed status
+    const PRIORITY: Record<string, number> = { completed: 5, failed: 4, retried: 3, started: 2, skipped: 2, cancelled: 4, reset: 3, progress: 0 };
+    let bestEvent = stepEvents[0];
+    for (const ev of stepEvents) {
+      const evPri = PRIORITY[ev.event] ?? 0;
+      const bestPri = PRIORITY[bestEvent.event] ?? 0;
+      // Higher priority wins; at same priority, later event wins
+      if (evPri > bestPri || (evPri === bestPri && ev.createdAt >= bestEvent.createdAt)) {
+        bestEvent = ev;
+      }
+    }
+    const lastEvent = bestEvent;
 
     switch (lastEvent.event) {
       case 'cancelled':

@@ -391,7 +391,15 @@ export async function GET(req: NextRequest) {
         prNumber: agentLoop?.prNumber || null,
         prUrl: agentLoop?.prUrl || null,
         prMerged: story.status === 'done' || story.status === 'released',
-        testsPass: story.status === 'done' || story.status === 'released' ? true : null,
+        // testsPass: true when lifecycle is past the test step (review/deploy/release/done)
+        testsPass: (() => {
+          if (story.status === 'done' || story.status === 'released') return true;
+          const stepOrder = ['triage', 'plan', 'deliberation', 'implement', 'test', 'review', 'deploy', 'release'];
+          const currentIdx = stepOrder.indexOf(story.lifecycleStep || '');
+          const testIdx = stepOrder.indexOf('test');
+          if (currentIdx > testIdx) return true; // past test step
+          return null;
+        })(),
         // Test step progress (parsed from events)
         ciDispatched,
         buildPass: buildPass !== 'pending' ? buildPass : undefined,
