@@ -254,7 +254,7 @@ export default function LifecycleTab() {
         'hold-deploy': { url: '/api/admin/cockpit/lifecycle', method: 'POST', body: { action: 'hold-deploy', storyId, reason: reason || 'Deployment held' } },
         'mark-released': { url: '/api/admin/cockpit/lifecycle', method: 'POST', body: { action: 'mark-released', storyId } },
         'deploy-release': {
-          url: '/api/admin/cockpit/actions',
+          url: '/api/admin/cockpit/lifecycle',
           method: 'POST',
           body: { action: 'deploy-release', storyId },
         },

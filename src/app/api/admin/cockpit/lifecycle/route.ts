@@ -571,6 +571,7 @@ export async function POST(req: NextRequest) {
         await logEvent(storyId, 'test', 'completed', 'Tests manually marked as passed', 'human');
         break;
 
+      case 'deploy-release':
       case 'mark-deployed':
         // Record step duration for ETA
         {
@@ -581,7 +582,10 @@ export async function POST(req: NextRequest) {
           }
         }
         updates.status = 'released';
-        await logEvent(storyId, 'deploy', 'completed', 'Manually marked as deployed', 'human');
+        updates.lifecycleStep = 'release';
+        updates.lifecycleStartedAt = new Date();
+        await logEvent(storyId, 'deploy', 'completed', action === 'deploy-release' ? 'Deploy release triggered by operator' : 'Manually marked as deployed', 'human');
+        await logEvent(storyId, 'release', 'started', 'Release step started after deploy', 'system');
         break;
 
       case 'mark-released':
@@ -594,6 +598,9 @@ export async function POST(req: NextRequest) {
           }
         }
         updates.status = 'released';
+        updates.lifecycleStep = 'release';
+        updates.lifecycleStartedAt = null;
+        updates.lifecycleHeartbeat = null;
         await logEvent(storyId, 'release', 'completed', 'Manually marked as released', 'human');
         break;
 
