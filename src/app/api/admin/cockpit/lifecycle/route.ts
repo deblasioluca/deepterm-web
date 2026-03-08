@@ -197,14 +197,14 @@ export async function GET(req: NextRequest) {
       let deliberation = await prisma.deliberation.findFirst({
         where: { storyId: story.id },
         orderBy: { createdAt: 'desc' },
-        select: { id: true, status: true },
+        select: { id: true, status: true, summary: true },
       }).catch(() => null);
 
       if (!deliberation && story.epicId) {
         deliberation = await prisma.deliberation.findFirst({
           where: { epicId: story.epicId },
           orderBy: { createdAt: 'desc' },
-          select: { id: true, status: true },
+          select: { id: true, status: true, summary: true },
         }).catch(() => null);
       }
 
@@ -224,6 +224,7 @@ export async function GET(req: NextRequest) {
       return {
         id: story.id,
         title: story.title,
+        description: story.description || '',
         status: story.status,
         epicId: story.epicId,
         epicTitle: story.epic?.title,
@@ -231,6 +232,7 @@ export async function GET(req: NextRequest) {
         triageApproved: story.status !== 'backlog' ? true : null,
         deliberationStatus: deliberation?.status || null,
         deliberationId: deliberation?.id || null,
+        deliberationSummary: deliberation?.summary || null,
         agentLoopStatus: agentLoop?.status || null,
         agentLoopId: agentLoop?.id || null,
         prNumber: agentLoop?.prNumber || null,
@@ -288,6 +290,55 @@ export async function POST(req: NextRequest) {
     const updates: Record<string, unknown> = {};
 
     switch (action) {
+      // ── Triage gate actions ──
+      case 'approve-triage':
+        updates.status = 'planned';
+        updates.lifecycleStep = 'plan';
+        updates.lifecycleStartedAt = new Date();
+        await logEvent(storyId, 'triage', 'completed', 'Triage approved by operator', 'human');
+        await logEvent(storyId, 'plan', 'started', 'Planning started after triage approval', 'system');
+        break;
+
+      case 'reject-triage':
+        updates.status = 'cancelled';
+        updates.lifecycleStep = null;
+        updates.lifecycleStartedAt = null;
+        await logEvent(storyId, 'triage', 'failed', reason || 'Rejected at triage', 'human');
+        break;
+
+      case 'defer-triage':
+        updates.lifecycleStep = null;
+        updates.lifecycleStartedAt = null;
+        await logEvent(storyId, 'triage', 'skipped', reason || 'Deferred for later', 'human');
+        break;
+
+      // ── Merge PR action ──
+      case 'merge-pr': {
+        const prInfo = await findStoryPR(storyId, prisma);
+        if (!prInfo) {
+          return NextResponse.json({ error: 'No PR found for this story' }, { status: 400 });
+        }
+        const { mergePR } = await import('@/lib/github-pulls');
+        const mergeResult = await mergePR(prInfo.repo, prInfo.prNumber);
+        if (!mergeResult.merged) {
+          return NextResponse.json({ error: `Merge failed: ${mergeResult.message}` }, { status: 400 });
+        }
+        updates.status = 'done';
+        updates.lifecycleStep = 'deploy';
+        updates.lifecycleStartedAt = new Date();
+        await logEvent(storyId, 'review', 'completed', `PR #${prInfo.prNumber} merged`, 'human');
+        await logEvent(storyId, 'deploy', 'started', 'Deploy step started after PR merge', 'system');
+        break;
+      }
+
+      // ── Hold deploy action ──
+      case 'hold-deploy':
+        updates.lifecycleStep = 'deploy';
+        updates.lifecycleStartedAt = null;
+        updates.lifecycleHeartbeat = null;
+        await logEvent(storyId, 'deploy', 'cancelled', reason || 'Deployment held by operator', 'human');
+        break;
+
       // ── Existing gate actions ──
       case 'skip-deliberation':
         await prisma.deliberation.create({

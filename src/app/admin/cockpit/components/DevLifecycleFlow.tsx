@@ -55,12 +55,14 @@ interface LifecycleStep {
 export interface StoryLifecycleData {
   id: string;
   title: string;
+  description?: string;
   status: string;
   epicId?: string | null;
   epicTitle?: string;
   triageApproved?: boolean | null;
   deliberationStatus?: string | null;
   deliberationId?: string | null;
+  deliberationSummary?: string | null;
   agentLoopStatus?: string | null;
   agentLoopId?: string | null;
   prNumber?: number | null;
@@ -498,11 +500,25 @@ function DetailPanel({ step, allEvents, onGateAction, story }: {
 
   return (
     <div className="space-y-3">
+      {/* T3-3: Context panel — story description */}
+      {story.description && (
+        <div className="rounded-lg border border-zinc-700/40 bg-zinc-800/30 p-2.5">
+          <h5 className="text-[10px] font-medium text-zinc-500 mb-1">Context</h5>
+          <p className="text-xs text-zinc-400 leading-relaxed">{story.description.length > 200 ? story.description.slice(0, 200) + '…' : story.description}</p>
+        </div>
+      )}
+
       {/* Step header */}
       <div className={`rounded-lg border p-3 ${cfg.bg} ${cfg.border}`}>
         <div className="flex items-center gap-2 mb-1">
           {step.icon}
           <h4 className={`font-semibold text-sm ${cfg.text}`}>{step.label}</h4>
+          {/* T2-1: Deliberation phase badge */}
+          {step.id === 'deliberation' && story.deliberationStatus && !['decided', 'none'].includes(story.deliberationStatus) && (
+            <span className="px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider bg-purple-500/20 text-purple-300 border border-purple-500/30 animate-pulse">
+              {story.deliberationStatus}
+            </span>
+          )}
           <span className={`text-[10px] ${cfg.text} ml-auto`}>{effectiveStatus}</span>
         </div>
         <p className="text-xs text-zinc-500">{step.description}</p>
@@ -775,8 +791,8 @@ function applyEventOverrides(steps: LifecycleStep[], events: LifecycleEventEntry
           step.detail = `Cancelled — ${lastEvent.detail || 'by operator'}`;
           const cancelActions: GateAction[] = [];
           if (step.id === 'test') {
-            cancelActions.push({ label: 'Auto-fix (AI)', action: 'loop-back-implement', variant: 'loop' });
-            cancelActions.push({ label: '← Deliberation', action: 'loop-back-deliberation-from-test', variant: 'loop' });
+            cancelActions.push({ label: 'Auto-fix (AI)', action: 'loop-test-to-implement', variant: 'loop' });
+            cancelActions.push({ label: '← Deliberation', action: 'loop-test-to-deliberation', variant: 'loop' });
           }
           if (step.id === 'review') {
             cancelActions.push({ label: '→ Implement', action: 'loop-review-to-implement', variant: 'loop' });
@@ -803,8 +819,8 @@ function applyEventOverrides(steps: LifecycleStep[], events: LifecycleEventEntry
           if (!step.gate) {
             const failActions: GateAction[] = [];
             if (step.id === 'test') {
-              failActions.push({ label: 'Auto-fix (AI)', action: 'loop-back-implement', variant: 'loop' });
-              failActions.push({ label: '← Deliberation', action: 'loop-back-deliberation-from-test', variant: 'loop' });
+              failActions.push({ label: 'Auto-fix (AI)', action: 'loop-test-to-implement', variant: 'loop' });
+              failActions.push({ label: '← Deliberation', action: 'loop-test-to-deliberation', variant: 'loop' });
             }
             if (step.id === 'review') {
               failActions.push({ label: '→ Implement', action: 'loop-review-to-implement', variant: 'loop' });
@@ -920,7 +936,9 @@ function buildLifecycleSteps(story: StoryLifecycleData | null): LifecycleStep[] 
     id: 'deliberation', label: 'AI Deliberation', description: '4 AI agents propose, debate, vote on architecture',
     icon: <Brain className="w-3.5 h-3.5" />, actor: 'ai', status: delibStatus,
     substeps: delibStatus !== 'pending' && delibStatus !== 'waiting_approval' ? delibSubsteps : undefined,
-    detail: delibStatus === 'failed' ? 'Deliberation failed — retry or skip' : undefined,
+    detail: delibStatus === 'failed' ? 'Deliberation failed — retry or skip'
+      : delibStatus === 'passed' && s.deliberationSummary ? `Decision: ${s.deliberationSummary.slice(0, 120)}${s.deliberationSummary.length > 120 ? '…' : ''}`
+      : undefined,
     timeout: timeouts.deliberation ?? 300, startedAt: delibStatus === 'active' ? getStepStart('deliberation') : null, events,
     gate: delibStatus === 'waiting_approval' ? { required: false, actions: [
       { label: 'Start Deliberation', action: 'start-deliberation', variant: 'approve' },
@@ -953,8 +971,8 @@ function buildLifecycleSteps(story: StoryLifecycleData | null): LifecycleStep[] 
   const testStatus: StepStatus = s.testsPass === true ? 'passed' : s.testsPass === false ? 'failed' : s.prNumber ? 'active' : 'pending';
   const testGateActions: GateAction[] = [];
   if (testStatus === 'failed') {
-    if (!loopsDisabled) testGateActions.push({ label: 'Auto-fix (AI)', action: 'loop-back-implement', variant: 'loop' });
-    if (!loopsDisabled) testGateActions.push({ label: '← Deliberation', action: 'loop-back-deliberation-from-test', variant: 'loop' });
+    if (!loopsDisabled) testGateActions.push({ label: 'Auto-fix (AI)', action: 'loop-test-to-implement', variant: 'loop' });
+    if (!loopsDisabled) testGateActions.push({ label: '← Deliberation', action: 'loop-test-to-deliberation', variant: 'loop' });
     testGateActions.push({ label: 'Fix Manually', action: 'back-to-implement', variant: 'reject' });
     testGateActions.push({ label: 'Force Continue', action: 'force-continue', variant: 'skip' });
   }
@@ -1150,8 +1168,20 @@ export default function DevLifecycleFlow({ story, stories, onGateAction, onSelec
             Development Lifecycle
           </h3>
           {activeStory && (
-            <p className="text-xs text-zinc-500 mt-0.5">
-              {activeStory.title}
+            <p className="text-xs text-zinc-500 mt-0.5 flex items-center gap-1.5 flex-wrap">
+              {/* T3-1: Type badge */}
+              <span className="px-1 py-0 rounded text-[9px] font-medium bg-blue-500/15 text-blue-400 border border-blue-500/30">
+                Story
+              </span>
+              {/* T3-2: Breadcrumb trail */}
+              {activeStory.epicTitle && (
+                <>
+                  <span className="px-1 py-0 rounded text-[9px] bg-zinc-700/50 text-zinc-400 border border-zinc-600/30">Epic</span>
+                  <span className="text-zinc-600">{activeStory.epicTitle}</span>
+                  <span className="text-zinc-600">›</span>
+                </>
+              )}
+              <span className="text-zinc-300">{activeStory.title}</span>
               {activeStory.scope && activeStory.scope !== 'app' && (
                 <span className="ml-1.5 px-1 py-0 rounded text-[9px] bg-cyan-500/15 text-cyan-400 border border-cyan-500/30">
                   {activeStory.scope}

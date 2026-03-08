@@ -589,6 +589,37 @@ export async function runAgentLoop(loopId: string, feedbackContext?: string): Pr
       },
     });
 
+    // T1-5: Auto-advance lifecycle when agent loop completes with a PR
+    if (finalStatus === 'completed' && loop.storyId) {
+      try {
+        const updatedLoop = await prisma.agentLoop.findUnique({
+          where: { id: loopId },
+          select: { prNumber: true },
+        });
+        if (updatedLoop?.prNumber) {
+          // Advance story: implement → test
+          await prisma.story.update({
+            where: { id: loop.storyId },
+            data: {
+              lifecycleStep: 'test',
+              lifecycleStartedAt: new Date(),
+              lifecycleHeartbeat: new Date(),
+            },
+          });
+          // Log lifecycle events
+          await prisma.lifecycleEvent.create({
+            data: { storyId: loop.storyId, stepId: 'implement', event: 'completed', detail: `Agent loop completed — PR #${updatedLoop.prNumber}`, actor: 'system' },
+          });
+          await prisma.lifecycleEvent.create({
+            data: { storyId: loop.storyId, stepId: 'test', event: 'started', detail: 'Auto-advanced after agent loop completion', actor: 'system' },
+          });
+          console.log(`[AgentLoop] ${loopId} auto-advanced story ${loop.storyId} to test step`);
+        }
+      } catch (advanceErr) {
+        console.error(`[AgentLoop] ${loopId} lifecycle auto-advance failed:`, advanceErr);
+      }
+    }
+
     console.log(`[AgentLoop] ${loopId} finished: ${finalStatus} (${accumulatedFiles.length} files committed)`);
 
   } catch (error) {

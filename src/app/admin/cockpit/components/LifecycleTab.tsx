@@ -33,12 +33,21 @@ function StoryProgress({ story }: { story: StoryLifecycleData }) {
     { key: 'release', done: story.released },
   ];
   const completed = phases.filter(p => p.done).length;
+  const pct = Math.round((completed / phases.length) * 100);
+  const activeStep = story.lifecycleStep;
   return (
-    <div className="flex items-center gap-0.5">
-      {phases.map((p, i) => (
-        <div key={p.key} className={`w-2 h-2 rounded-full ${p.done ? 'bg-emerald-500' : 'bg-zinc-700'}`} title={p.key} />
-      ))}
-      <span className="text-xs text-zinc-500 ml-1.5">{completed}/{phases.length}</span>
+    <div className="flex items-center gap-1">
+      {/* T4-3: Mini progress bar */}
+      <div className="flex gap-px">
+        {phases.map((p) => (
+          <div key={p.key} className={`w-2.5 h-1.5 rounded-sm ${
+            p.done ? 'bg-emerald-500'
+            : p.key === activeStep ? 'bg-blue-500 animate-pulse'
+            : 'bg-zinc-700'
+          }`} title={p.key} />
+        ))}
+      </div>
+      <span className="text-[10px] text-zinc-500 ml-0.5 tabular-nums">{pct}%</span>
     </div>
   );
 }
@@ -182,10 +191,14 @@ export default function LifecycleTab() {
   }, [selectedStory, expandedEpics.size]);
 
   useEffect(() => { fetchData(); }, []);
+  // T4-2: Smart polling — fast (3s) after actions with 30s auto-stop, medium (5s) when active, slow (15s) idle
+  const hasActiveLifecycle = [...epics.flatMap(e => e.stories), ...unassigned].some(s => s.lifecycleStep && s.status === 'in_progress');
+  const pollInterval = pollFast ? 3000 : hasActiveLifecycle ? 5000 : 15000;
+
   useEffect(() => {
-    const interval = setInterval(fetchData, pollFast ? 3000 : 15000);
+    const interval = setInterval(fetchData, pollInterval);
     return () => clearInterval(interval);
-  }, [fetchData, pollFast]);
+  }, [fetchData, pollInterval]);
 
   // Auto-stop fast polling after 30s
   useEffect(() => {
@@ -210,7 +223,7 @@ export default function LifecycleTab() {
         'start-deliberation': {
           url: '/api/admin/cockpit/deliberation',
           method: 'POST',
-          body: { type: 'implementation', storyId, title: selectedStory?.title || 'Review' },
+          body: { type: 'implementation', storyId, title: selectedStory?.title || 'Review', instructions: selectedStory?.description || '' },
         },
         'start-agent': {
           url: '/api/admin/cockpit/agent-loop',
@@ -222,6 +235,9 @@ export default function LifecycleTab() {
           method: 'POST',
           body: { storyId, configId: 'default' },
         },
+        'approve-triage': { url: '/api/admin/cockpit/lifecycle', method: 'POST', body: { action: 'approve-triage', storyId } },
+        'reject-triage': { url: '/api/admin/cockpit/lifecycle', method: 'POST', body: { action: 'reject-triage', storyId, reason: reason || 'Rejected at triage' } },
+        'defer-triage': { url: '/api/admin/cockpit/lifecycle', method: 'POST', body: { action: 'defer-triage', storyId, reason: reason || 'Deferred for later' } },
         'skip-deliberation': { url: '/api/admin/cockpit/lifecycle', method: 'POST', body: { action: 'skip-deliberation', storyId } },
         'approve-decision': { url: '/api/admin/cockpit/lifecycle', method: 'POST', body: { action: 'approve-decision', storyId } },
         'restart-deliberation': { url: '/api/admin/cockpit/lifecycle', method: 'POST', body: { action: 'restart-deliberation', storyId } },
@@ -229,8 +245,10 @@ export default function LifecycleTab() {
         'manual-fix': { url: '/api/admin/cockpit/lifecycle', method: 'POST', body: { action: 'manual-fix', storyId } },
         'approve-pr': { url: '/api/admin/cockpit/lifecycle', method: 'POST', body: { action: 'approve-pr', storyId } },
         'reject-pr': { url: '/api/admin/cockpit/lifecycle', method: 'POST', body: { action: 'reject-pr', storyId } },
+        'merge-pr': { url: '/api/admin/cockpit/lifecycle', method: 'POST', body: { action: 'merge-pr', storyId } },
         'mark-tests-passed': { url: '/api/admin/cockpit/lifecycle', method: 'POST', body: { action: 'mark-tests-passed', storyId } },
         'mark-deployed': { url: '/api/admin/cockpit/lifecycle', method: 'POST', body: { action: 'mark-deployed', storyId } },
+        'hold-deploy': { url: '/api/admin/cockpit/lifecycle', method: 'POST', body: { action: 'hold-deploy', storyId, reason: reason || 'Deployment held' } },
         'mark-released': { url: '/api/admin/cockpit/lifecycle', method: 'POST', body: { action: 'mark-released', storyId } },
         'deploy-release': {
           url: '/api/admin/cockpit/actions',
@@ -288,12 +306,25 @@ export default function LifecycleTab() {
   const totalStories = allStories.length;
   const activeStories = allStories.filter(s => s.status === 'in_progress').length;
   const doneStories = allStories.filter(s => s.status === 'done' || s.status === 'released').length;
+  const hasLiveStep = allStories.some(s => s.lifecycleStep && s.status === 'in_progress');
 
   return (
     <div className="space-y-4">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-4 text-xs text-zinc-500">
+          {/* T4-1: LIVE/IDLE badge */}
+          {hasLiveStep ? (
+            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+              LIVE
+            </span>
+          ) : (
+            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-zinc-700/30 text-zinc-500 border border-zinc-700/40">
+              <span className="w-1.5 h-1.5 rounded-full bg-zinc-500" />
+              IDLE
+            </span>
+          )}
           <span>{totalStories} stories across {epics.length} epics</span>
           {activeStories > 0 && <span className="text-amber-400">{activeStories} active</span>}
           {doneStories > 0 && <span className="text-emerald-400">{doneStories} completed</span>}
