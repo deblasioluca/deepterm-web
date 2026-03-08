@@ -6,6 +6,42 @@ const NODE_RED_URL = process.env.NODE_RED_URL || 'http://192.168.1.30:1880';
 const GITHUB_TOKEN = process.env.GITHUB_TOKEN || '';
 const CI_REPO = 'deblasioluca/deepterm';
 
+// ── Cached CI runner status (60s TTL) ──
+let cachedRunnerStatus: { status: string; name: string; busy: boolean; labels: string[]; checkedAt: string } | null = null;
+let runnerCacheExpiry = 0;
+
+async function getCIRunnerStatus() {
+  const now = Date.now();
+  if (cachedRunnerStatus && now < runnerCacheExpiry) return cachedRunnerStatus;
+  if (!GITHUB_TOKEN) return null;
+  try {
+    const res = await fetch(`https://api.github.com/repos/${CI_REPO}/actions/runners`, {
+      headers: { Authorization: `Bearer ${GITHUB_TOKEN}`, Accept: 'application/vnd.github+json' },
+      signal: AbortSignal.timeout(8000),
+    });
+    if (!res.ok) return cachedRunnerStatus; // keep stale on error
+    const data = await res.json();
+    const runners = data.runners || [];
+    // Find the self-hosted mac runner (or first runner)
+    const mac = runners.find((r: { labels: { name: string }[] }) => r.labels?.some((l: { name: string }) => l.name === 'self-hosted-mac')) || runners[0];
+    if (mac) {
+      cachedRunnerStatus = {
+        status: mac.status,
+        name: mac.name,
+        busy: mac.busy || false,
+        labels: (mac.labels || []).map((l: { name: string }) => l.name),
+        checkedAt: new Date().toISOString(),
+      };
+    } else {
+      cachedRunnerStatus = { status: 'not_found', name: 'ci-mac', busy: false, labels: [], checkedAt: new Date().toISOString() };
+    }
+    runnerCacheExpiry = now + 60000; // 60s cache
+    return cachedRunnerStatus;
+  } catch {
+    return cachedRunnerStatus; // keep stale on network error
+  }
+}
+
 // Helper: dispatch pr-check.yml on the CI Mac with story context
 async function dispatchCIWorkflow(storyId: string) {
   if (!GITHUB_TOKEN) {
@@ -310,7 +346,12 @@ export async function GET(req: NextRequest) {
             const activeSuites = suiteEntries.filter(([, s]) => s === 'active').map(([k]) => k);
             testDetail = `Running: ${activeSuites.join(', ')} (${passedCount}/${suiteEntries.length} passed)`;
           } else if (ciDispatched && allPending) {
-            testDetail = 'CI dispatched — waiting for runner…';
+            const runner = await getCIRunnerStatus();
+            if (runner && runner.status !== 'online') {
+              testDetail = 'CI dispatched — ⚠ runner offline, jobs queued';
+            } else {
+              testDetail = 'CI dispatched — waiting for runner…';
+            }
           } else if (ciDispatched === null && allPending) {
             testDetail = 'Waiting for CI dispatch…';
           }
@@ -388,7 +429,10 @@ export async function GET(req: NextRequest) {
       };
     }));
 
-    return NextResponse.json({ stories: enriched });
+    // Fetch CI runner status (cached, ~60s TTL)
+    const ciRunner = await getCIRunnerStatus();
+
+    return NextResponse.json({ stories: enriched, ciRunner: ciRunner || null });
   } catch (error) {
     console.error('Lifecycle API error:', error);
     return NextResponse.json({ error: 'Failed to fetch lifecycle data' }, { status: 500 });

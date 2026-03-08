@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { Loader2, RefreshCw, ChevronRight, ChevronDown, Layers, BookOpen, Circle, CheckCircle2, XCircle, Clock, Zap } from 'lucide-react';
+import { Loader2, RefreshCw, ChevronRight, ChevronDown, Layers, BookOpen, Circle, CheckCircle2, XCircle, Clock, Zap, Wifi, WifiOff } from 'lucide-react';
 import DevLifecycleFlow, { StoryLifecycleData } from './DevLifecycleFlow';
 import { useAdminAI } from '@/components/admin/AdminAIContext';
 
@@ -61,6 +61,7 @@ export default function LifecycleTab() {
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [pollFast, setPollFast] = useState(false);
+  const [ciRunner, setCiRunner] = useState<{ status: string; name: string; busy: boolean; checkedAt: string } | null>(null);
 
   const { setPageContext } = useAdminAI();
 
@@ -136,6 +137,8 @@ export default function LifecycleTab() {
       const res = await fetch('/api/admin/cockpit/lifecycle');
       const data = await res.json();
       if (data.stories) {
+        // Store CI runner status
+        if (data.ciRunner !== undefined) setCiRunner(data.ciRunner);
         // Group by epic
         const epicMap = new Map<string, EpicGroup>();
         const noEpic: StoryLifecycleData[] = [];
@@ -324,6 +327,20 @@ export default function LifecycleTab() {
               <span className="w-1.5 h-1.5 rounded-full bg-zinc-500" />
               IDLE
             </span>
+          )}
+          {/* CI Runner status badge */}
+          {ciRunner && (
+            ciRunner.status === 'online' ? (
+              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-emerald-500/10 text-emerald-400/80 border border-emerald-500/20" title={`${ciRunner.name} — ${ciRunner.busy ? 'busy' : 'idle'} (checked ${new Date(ciRunner.checkedAt).toLocaleTimeString()})`}>
+                <Wifi className="w-2.5 h-2.5" />
+                CI Mac {ciRunner.busy ? 'busy' : 'ready'}
+              </span>
+            ) : (
+              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-red-500/15 text-red-400 border border-red-500/30 animate-pulse" title={`${ciRunner.name} is ${ciRunner.status} — CI jobs will queue until runner comes online (checked ${new Date(ciRunner.checkedAt).toLocaleTimeString()})`}>
+                <WifiOff className="w-2.5 h-2.5" />
+                CI Mac offline
+              </span>
+            )
           )}
           <span>{totalStories} stories across {epics.length} epics</span>
           {activeStories > 0 && <span className="text-amber-400">{activeStories} active</span>}
