@@ -211,7 +211,19 @@ export async function GET(req: NextRequest) {
       const agentLoop = await prisma.agentLoop.findFirst({
         where: { storyId: story.id },
         orderBy: { createdAt: 'desc' },
-        select: { id: true, status: true, prNumber: true, prUrl: true, startedAt: true, completedAt: true },
+        select: {
+          id: true, status: true, prNumber: true, prUrl: true,
+          startedAt: true, completedAt: true, errorLog: true,
+          totalIterations: true, maxIterations: true,
+          inputTokens: true, outputTokens: true,
+          iterations: {
+            orderBy: { iteration: 'asc' },
+            select: {
+              iteration: true, phase: true, observation: true,
+              filesChanged: true, durationMs: true, createdAt: true,
+            },
+          },
+        },
       }).catch(() => null);
 
       // Get recent lifecycle events for this story (last 5 per step for the active step)
@@ -235,6 +247,22 @@ export async function GET(req: NextRequest) {
         deliberationSummary: deliberation?.summary || null,
         agentLoopStatus: agentLoop?.status || null,
         agentLoopId: agentLoop?.id || null,
+        agentLoopErrorLog: agentLoop?.errorLog || null,
+        agentLoopProgress: agentLoop ? {
+          current: agentLoop.totalIterations || 0,
+          max: agentLoop.maxIterations || 10,
+          startedAt: agentLoop.startedAt?.toISOString() || null,
+          completedAt: agentLoop.completedAt?.toISOString() || null,
+          inputTokens: agentLoop.inputTokens || 0,
+          outputTokens: agentLoop.outputTokens || 0,
+          iterations: (agentLoop.iterations || []).map(it => ({
+            iteration: it.iteration,
+            phase: it.phase,
+            observation: it.observation,
+            filesChanged: it.filesChanged,
+            durationMs: it.durationMs,
+          })),
+        } : null,
         prNumber: agentLoop?.prNumber || null,
         prUrl: agentLoop?.prUrl || null,
         prMerged: story.status === 'done' || story.status === 'released',

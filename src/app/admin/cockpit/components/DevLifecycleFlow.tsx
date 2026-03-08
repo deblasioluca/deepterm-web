@@ -65,6 +65,22 @@ export interface StoryLifecycleData {
   deliberationSummary?: string | null;
   agentLoopStatus?: string | null;
   agentLoopId?: string | null;
+  agentLoopErrorLog?: string | null;
+  agentLoopProgress?: {
+    current: number;
+    max: number;
+    startedAt: string | null;
+    completedAt: string | null;
+    inputTokens: number;
+    outputTokens: number;
+    iterations: Array<{
+      iteration: number;
+      phase: string;
+      observation: string;
+      filesChanged: string;
+      durationMs: number;
+    }>;
+  } | null;
   prNumber?: number | null;
   prUrl?: string | null;
   prMerged?: boolean;
@@ -192,13 +208,21 @@ function ActivityLog({ events, stepId }: { events: LifecycleEventEntry[]; stepId
 
 // ── Agent Log Drill-down ──
 
-function AgentDrillDown({ loopId }: { loopId: string }) {
+function AgentDrillDown({ loopId, progress }: {
+  loopId: string;
+  progress?: StoryLifecycleData['agentLoopProgress'];
+}) {
   const [expanded, setExpanded] = useState(false);
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(false);
 
+  // Use inline progress data if available (from lifecycle polling), fall back to fetching
+  const iterations = progress?.iterations || data?.iterations || [];
+  const errorLog = data?.errorLog || null;
+  const loopStatus = data?.status || null;
+
   const fetchLogs = async () => {
-    if (data) { setExpanded(!expanded); return; }
+    if (data || progress) { setExpanded(!expanded); return; }
     setExpanded(true); setLoading(true);
     try {
       const res = await fetch(`/api/admin/cockpit/agent-loop/${loopId}`);
@@ -206,33 +230,95 @@ function AgentDrillDown({ loopId }: { loopId: string }) {
     } catch { /* ok */ } finally { setLoading(false); }
   };
 
+  const phaseColor = (phase: string) => {
+    switch (phase) {
+      case 'complete': return 'text-emerald-400 bg-emerald-500/15';
+      case 'error': return 'text-red-400 bg-red-500/15';
+      case 'thinking': return 'text-blue-400 bg-blue-500/15';
+      default: return 'text-zinc-400 bg-zinc-500/15';
+    }
+  };
+
+  const phaseIcon = (phase: string) => {
+    switch (phase) {
+      case 'complete': return '✓';
+      case 'error': return '✗';
+      case 'thinking': return '⟳';
+      default: return '·';
+    }
+  };
+
+  const errorCount = iterations.filter((it: any) => it.phase === 'error').length;
+  const completeCount = iterations.filter((it: any) => it.phase === 'complete').length;
+
   return (
     <div className="mt-2">
       <button onClick={fetchLogs} className="inline-flex items-center gap-1 text-[11px] text-cyan-400 hover:text-cyan-300 transition">
         <Terminal className="w-3 h-3" />
         {expanded ? 'Hide' : 'View'} Agent Logs
+        {iterations.length > 0 && !expanded && (
+          <span className="text-[10px] text-zinc-500 ml-1">
+            ({completeCount}✓ {errorCount > 0 ? `${errorCount}✗` : ''})
+          </span>
+        )}
         <ChevronDown className={`w-3 h-3 transition-transform ${expanded ? 'rotate-180' : ''}`} />
       </button>
       {expanded && (
-        <div className="mt-1.5 max-h-56 overflow-y-auto rounded-lg border border-zinc-700/50 bg-zinc-900/80 p-3 space-y-2">
+        <div className="mt-1.5 max-h-64 overflow-y-auto rounded-lg border border-zinc-700/50 bg-zinc-900/80 p-3 space-y-2">
           {loading ? (
             <div className="flex items-center gap-2 text-xs text-zinc-500"><Loader2 className="w-3 h-3 animate-spin" /> Loading...</div>
-          ) : !data ? (
+          ) : iterations.length === 0 && !data ? (
             <p className="text-xs text-zinc-500">Failed to load agent logs</p>
           ) : (
             <>
+              {/* Header stats */}
               <div className="flex items-center justify-between text-xs">
-                <span className="text-zinc-400">Status: <span className={data.status === 'completed' ? 'text-emerald-400' : data.status === 'failed' ? 'text-red-400' : 'text-blue-400'}>{data.status}</span></span>
-                <span className="text-zinc-500">{data.iterations?.length || 0} iterations</span>
+                <span className="text-zinc-400">
+                  {progress
+                    ? `${progress.current}/${progress.max} iterations`
+                    : `${iterations.length} iterations`}
+                  {progress?.inputTokens ? ` · ${((progress.inputTokens + progress.outputTokens) / 1000).toFixed(1)}k tokens` : ''}</span>
+                {loopStatus && (
+                  <span className={loopStatus === 'completed' ? 'text-emerald-400' : loopStatus === 'failed' ? 'text-red-400' : loopStatus === 'running' ? 'text-blue-400' : 'text-zinc-400'}>{loopStatus}</span>
+                )}
               </div>
-              {data.errorLog && <p className="text-xs text-red-400 bg-red-500/10 rounded px-2 py-1">{data.errorLog}</p>}
-              {(data.iterations || []).map((iter: any, i: number) => (
-                <div key={i} className="border-l-2 border-zinc-700 pl-3 py-1">
-                  <p className="text-[10px] text-zinc-500 font-mono">Iteration {iter.iteration}</p>
-                  <p className="text-xs text-zinc-300 mt-0.5 line-clamp-2">{iter.thinking?.slice(0, 200)}{iter.thinking?.length > 200 ? '...' : ''}</p>
-                  <p className="text-[10px] text-cyan-400/70 mt-0.5 font-mono truncate">{iter.action?.slice(0, 100)}</p>
+
+              {/* Error banner */}
+              {(errorLog || (progress && errorCount === iterations.length && errorCount > 0)) && (
+                <div className="text-xs text-red-400 bg-red-500/10 rounded px-2 py-1.5 border border-red-500/20">
+                  <span className="font-medium">Error:</span> {errorLog || iterations[0]?.observation || 'All iterations failed'}
                 </div>
-              ))}
+              )}
+
+              {/* Iteration timeline */}
+              <div className="space-y-1">
+                {iterations.map((iter: any, idx: number) => {
+                  const files = iter.filesChanged ? JSON.parse(iter.filesChanged || '[]') : [];
+                  return (
+                    <div key={idx} className="flex items-start gap-2 py-1 border-b border-zinc-800/50 last:border-0">
+                      {/* Phase badge */}
+                      <span className={`inline-flex items-center justify-center w-5 h-5 rounded text-[10px] font-mono font-bold shrink-0 ${phaseColor(iter.phase)}`}>
+                        {phaseIcon(iter.phase)}
+                      </span>
+                      {/* Content */}
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2">
+                          <span className="text-[10px] font-mono text-zinc-500">#{iter.iteration}</span>
+                          <span className="text-[10px] text-zinc-600">{iter.durationMs ? `${(iter.durationMs / 1000).toFixed(1)}s` : ''}</span>
+                          {files.length > 0 && (
+                            <span className="text-[10px] text-cyan-400/70">{files.length} file{files.length !== 1 ? 's' : ''}</span>
+                          )}
+                        </div>
+                        {iter.observation && (
+                          <p className={`text-[11px] mt-0.5 truncate ${iter.phase === 'error' ? 'text-red-400/80' : 'text-zinc-400'}`}>
+                            {iter.observation}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
             </>
           )}
         </div>
@@ -605,7 +691,7 @@ function DetailPanel({ step, allEvents, onGateAction, story }: {
       {!step.gate && <RecoveryActions step={{ ...step, status: effectiveStatus }} onAction={onGateAction} />}
 
       {/* Agent drill-down */}
-      {step.agentLoopId && <AgentDrillDown loopId={step.agentLoopId} />}
+      {step.agentLoopId && <AgentDrillDown loopId={step.agentLoopId} progress={story.agentLoopProgress} />}
 
       {/* Activity log */}
       <div className="rounded-lg border border-zinc-700/50 bg-zinc-900/50 p-3">
@@ -951,11 +1037,26 @@ function buildLifecycleSteps(story: StoryLifecycleData | null): LifecycleStep[] 
 
   // 4. Implementation
   const implStatus: StepStatus = s.prNumber ? 'passed' : s.agentLoopStatus === 'running' ? 'active' : s.agentLoopStatus === 'failed' ? 'failed' : (delibStatus === 'passed' && delibPhase === 'decided') ? 'waiting_approval' : 'pending';
+  const agentProgress = s.agentLoopProgress;
+  const implDetail = (() => {
+    if (s.prNumber) return `PR #${s.prNumber}`;
+    if (s.agentLoopStatus === 'running' && agentProgress) {
+      const errCount = agentProgress.iterations.filter(it => it.phase === 'error').length;
+      const okCount = agentProgress.iterations.filter(it => it.phase === 'complete').length;
+      return `Agent: ${agentProgress.current}/${agentProgress.max} iterations${errCount > 0 ? ` (${errCount} errors)` : okCount > 0 ? ` (${okCount} done)` : ''}`;
+    }
+    if (s.agentLoopStatus === 'running') return 'Agent coding...';
+    if (s.agentLoopStatus === 'failed') {
+      if (s.agentLoopErrorLog) return s.agentLoopErrorLog.slice(0, 100);
+      return 'Agent failed — fix & retry';
+    }
+    return undefined;
+  })();
   steps.push({
     id: 'implement', label: 'Implement', description: 'AI agent writes code and creates PR',
     agentLoopId: s.agentLoopId || null,
     icon: <GitPullRequest className="w-3.5 h-3.5" />, actor: 'ai', status: implStatus,
-    detail: s.prNumber ? `PR #${s.prNumber}` : s.agentLoopStatus === 'running' ? 'Agent coding...' : s.agentLoopStatus === 'failed' ? 'Agent failed — fix & retry' : undefined,
+    detail: implDetail,
     link: s.prUrl ? { url: s.prUrl, label: `PR #${s.prNumber}` } : undefined,
     timeout: timeouts.implement ?? 600, startedAt: implStatus === 'active' ? getStepStart('implement') : null, events,
     gate: implStatus === 'waiting_approval' ? { required: false, actions: [

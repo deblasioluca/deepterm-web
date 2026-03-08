@@ -150,6 +150,7 @@ async function commitAndOpenPRs(
 
 const ITERATION_DELAY_MS = 5_000; // Delay between iterations to avoid rate limits
 const MAX_CONTEXT_CHARS = 80_000; // Max chars for conversation context
+const MAX_CONSECUTIVE_ERRORS = 3; // Stop early after this many consecutive errors
 
 function delay(ms: number): Promise<void> {
   return new Promise(resolve => setTimeout(resolve, ms));
@@ -386,6 +387,8 @@ export async function runAgentLoop(loopId: string, feedbackContext?: string): Pr
     let totalCostCents = 0;
     let finalStatus: 'completed' | 'awaiting_review' | 'failed' = 'completed';
     let accumulatedFiles: AccumulatedFile[] = [];
+    let consecutiveErrors = 0;
+    let lastErrorMessage = '';
 
     for (let i = 1; i <= maxIter; i++) {
       // Check if cancelled
@@ -455,6 +458,10 @@ export async function runAgentLoop(loopId: string, feedbackContext?: string): Pr
         totalInputTokens += response.inputTokens;
         totalOutputTokens += response.outputTokens;
 
+        // Reset consecutive error counter on success
+        consecutiveErrors = 0;
+        lastErrorMessage = '';
+
         // Update loop progress
         await prisma.agentLoop.update({
           where: { id: loopId },
@@ -494,15 +501,49 @@ export async function runAgentLoop(loopId: string, feedbackContext?: string): Pr
         if (i < maxIter) await delay(ITERATION_DELAY_MS);
 
       } catch (iterError) {
-        console.error(`[AgentLoop] ${loopId} iteration ${i} failed:`, iterError);
+        const errorMsg = iterError instanceof Error ? iterError.message : 'Unknown error';
+        const errorCause = iterError instanceof Error && 'cause' in iterError
+          ? String((iterError as Error & { cause?: unknown }).cause)
+          : '';
+
+        // Classify the error
+        const isConnectionError = errorMsg.includes('Connection error') ||
+          errorMsg.includes('fetch failed') ||
+          errorCause.includes('ECONNREFUSED') ||
+          errorCause.includes('ETIMEDOUT') ||
+          errorCause.includes('ENOTFOUND');
+
+        const errorDetail = isConnectionError
+          ? `Connection error (${errorCause.includes('ECONNREFUSED') ? 'ECONNREFUSED' : errorCause.includes('ETIMEDOUT') ? 'ETIMEDOUT' : 'network'}): Cannot reach AI provider`
+          : errorMsg;
+
+        console.error(`[AgentLoop] ${loopId} iteration ${i} failed: ${errorDetail}`);
+
         await prisma.agentIteration.update({
           where: { id: iteration.id },
           data: {
             phase: 'error',
-            observation: iterError instanceof Error ? iterError.message : 'Unknown error',
+            observation: errorDetail,
             durationMs: Date.now() - iterStart,
           },
         });
+
+        // Track consecutive errors for early termination
+        consecutiveErrors++;
+        lastErrorMessage = errorDetail;
+
+        if (consecutiveErrors >= MAX_CONSECUTIVE_ERRORS) {
+          console.error(`[AgentLoop] ${loopId} aborting: ${consecutiveErrors} consecutive errors — ${lastErrorMessage}`);
+          finalStatus = 'failed';
+          await prisma.agentLoop.update({
+            where: { id: loopId },
+            data: {
+              errorLog: `Aborted after ${consecutiveErrors} consecutive errors: ${lastErrorMessage}`,
+              totalIterations: i,
+            },
+          });
+          break;
+        }
 
         // Continue to next iteration on non-fatal errors
         messages.push({

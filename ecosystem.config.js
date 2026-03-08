@@ -72,6 +72,7 @@ module.exports = {
       // Node.js arguments
       node_args: [
         '--max-old-space-size=512', // Limit heap size for Raspberry Pi
+        '--dns-result-order=ipv4first', // Prefer IPv4 to avoid IPv6 connectivity issues
       ],
     },
   ],
