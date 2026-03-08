@@ -2,10 +2,10 @@ export interface HealthData {
   addresses?: { nodeRed?: string; ciMac?: string; aiDevMac?: string; airflow?: string };
   pi: { status: string; uptimeSeconds: number; memoryMB: number; heapMB: number; osUptimeSeconds?: number; diskTotal?: string; diskUsed?: string; diskPercent?: string; tempC?: string | null };
   webApp: { status: string; uptimeSeconds: number; memoryMB: number; heapMB: number; nodeVersion?: string };
-  ciMac: { status: string; runnerName?: string };
-  nodeRed: { status: string };
+  ciMac: { status: string; runnerName?: string; testPassRate?: { rate: number; total: number; passed: number } };
+  nodeRed: { status: string; flowCount?: number | null; nodeCount?: number | null };
   github: { status: string; rateLimit?: number; rateRemaining?: number };
-  aiDevMac: { status: string; detail?: string };
+  aiDevMac: { status: string; detail?: string; agentStats?: { running: number; completed: number; failed: number } };
   airflow: { status: string; detail?: string };
 }
 
@@ -124,7 +124,10 @@ export interface Epic {
   activeDeliberationStatus?: string | null;
   hasReport?: boolean;
   aiCostCents?: number;
+  releaseType?: string;    // minor | major
+  targetVersion?: string; // Computed when deploy triggered
 }
+
 
 export interface Story {
   id: string;

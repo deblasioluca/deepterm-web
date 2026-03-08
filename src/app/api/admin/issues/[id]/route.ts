@@ -23,6 +23,9 @@ export async function GET(
       description: true,
       area: true,
       status: true,
+      priority: true,
+      assignedTo: true,
+      firstResponseAt: true,
       reporterFeedback: true,
       reporterFeedbackAt: true,
       createdAt: true,
@@ -46,6 +49,7 @@ export async function GET(
           authorEmail: true,
           message: true,
           status: true,
+          visibility: true,
           createdAt: true,
         },
         orderBy: { createdAt: 'asc' },
@@ -72,11 +76,12 @@ export async function POST(
   const body = await request.json().catch(() => ({}));
   const statusRaw = typeof body?.status === 'string' ? body.status : '';
   const message = typeof body?.message === 'string' ? body.message.trim() : '';
+  const visibility = body?.visibility === 'internal' ? 'internal' : 'public';
   const status = statusRaw ? normalizeIssueStatus(statusRaw) : null;
 
   const existing = await prisma.issue.findUnique({
     where: { id: params.id },
-    select: { status: true },
+    select: { status: true, firstResponseAt: true },
   });
 
   if (!existing) {
@@ -93,11 +98,14 @@ export async function POST(
     );
   }
 
+  const isFirstResponse = !existing.firstResponseAt;
+
   await prisma.issue.update({
     where: { id: params.id },
     data: {
       status: nextStatus,
       updatedAt: new Date(),
+      ...(isFirstResponse && visibility === 'public' ? { firstResponseAt: new Date() } : {}),
     },
   });
 
@@ -108,8 +116,47 @@ export async function POST(
       authorEmail: session.email,
       message: message || (statusChanged ? `Status changed to ${nextStatus}.` : 'Update posted.'),
       status: statusChanged ? nextStatus : null,
+      visibility,
     },
   });
 
   return NextResponse.json({ success: true, status: nextStatus });
+}
+
+export async function PATCH(
+  request: NextRequest,
+  { params }: { params: { id: string } }
+) {
+  const session = getAdminSession();
+  if (!session) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
+  const body = await request.json().catch(() => ({}));
+  const data: Record<string, string> = {};
+
+  if (typeof body?.priority === 'string' && ['low', 'medium', 'high', 'urgent'].includes(body.priority)) {
+    data.priority = body.priority;
+  }
+  if (typeof body?.assignedTo === 'string') {
+    data.assignedTo = body.assignedTo || '';
+  }
+  if (typeof body?.area === 'string') {
+    data.area = body.area;
+  }
+
+  if (Object.keys(data).length === 0) {
+    return NextResponse.json({ error: 'No valid fields to update' }, { status: 400 });
+  }
+
+  // Convert empty assignedTo to null
+  const updateData = { ...data, assignedTo: data.assignedTo === '' ? null : data.assignedTo };
+
+  const issue = await prisma.issue.update({
+    where: { id: params.id },
+    data: updateData,
+    select: { id: true, priority: true, assignedTo: true, area: true },
+  });
+
+  return NextResponse.json({ issue });
 }

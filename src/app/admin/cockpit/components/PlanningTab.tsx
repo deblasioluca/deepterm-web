@@ -1111,6 +1111,7 @@ function InlineForm({ type, initial, onSave, onCancel, saving }: InlineFormProps
   const [priority, setPriority] = useState(initial?.priority || 'medium');
   const [status, setStatus] = useState(initial?.status || 'backlog');
   const [scope, setScope] = useState(initial?.scope || 'app');
+  const [releaseType, setReleaseType] = useState((initial as { releaseType?: string })?.releaseType || 'minor');
   const [lifecycleTemplate, setLifecycleTemplate] = useState(initial?.lifecycleTemplate || 'full');
   const [githubIssueNumber, setGithubIssueNumber] = useState<string>(
     initial?.githubIssueNumber?.toString() || ''
@@ -1120,6 +1121,9 @@ function InlineForm({ type, initial, onSave, onCancel, saving }: InlineFormProps
     e.preventDefault();
     if (!title.trim()) return;
     const data: Record<string, unknown> = { title: title.trim(), description, priority, status };
+    if (type === 'epic') {
+      data.releaseType = releaseType;
+    }
     if (type === 'story') {
       data.githubIssueNumber = githubIssueNumber ? parseInt(githubIssueNumber, 10) : null;
       data.scope = scope;
@@ -1164,6 +1168,27 @@ function InlineForm({ type, initial, onSave, onCancel, saving }: InlineFormProps
             <option key={s} value={s}>{s.replace('_', ' ')}</option>
           ))}
         </select>
+        {type === 'epic' && (
+          <div className="flex items-center gap-1.5">
+            <span className="text-xs text-zinc-500 font-medium">Release:</span>
+            <button
+              type="button"
+              onClick={() => setReleaseType('minor')}
+              className={`px-2 py-0.5 rounded text-xs font-medium border transition ${releaseType === 'minor' ? 'bg-blue-500/20 text-blue-400 border-blue-500/40' : 'bg-zinc-800 text-zinc-500 border-zinc-700 hover:text-zinc-300'}`}
+              title="Minor release: 1.0.3 → 1.0.4"
+            >
+              Minor
+            </button>
+            <button
+              type="button"
+              onClick={() => setReleaseType('major')}
+              className={`px-2 py-0.5 rounded text-xs font-medium border transition ${releaseType === 'major' ? 'bg-violet-500/20 text-violet-400 border-violet-500/40' : 'bg-zinc-800 text-zinc-500 border-zinc-700 hover:text-zinc-300'}`}
+              title="Major release: 1.0.3 → 1.1.0"
+            >
+              Major
+            </button>
+          </div>
+        )}
         {type === 'story' && (
           <>
           <input

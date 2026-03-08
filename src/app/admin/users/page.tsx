@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
+import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Card, Button, Badge, Modal, Input } from '@/components/ui';
 import {
@@ -39,6 +40,7 @@ interface Pagination {
 }
 
 export default function AdminUsersPage() {
+  const router = useRouter();
   const [users, setUsers] = useState<User[]>([]);
   const [pagination, setPagination] = useState<Pagination>({
     page: 1,
@@ -321,7 +323,8 @@ export default function AdminUsersPage() {
                     {users.map((user) => (
                       <tr
                         key={user.id}
-                        className="border-b border-border/50 last:border-0 hover:bg-background-tertiary/50"
+                        className="border-b border-border/50 last:border-0 hover:bg-background-tertiary/50 cursor-pointer"
+                        onClick={() => router.push(`/admin/users/${user.id}`)}
                       >
                         <td className="py-3 px-4">
                           <div className="flex items-center gap-3">
@@ -369,14 +372,14 @@ export default function AdminUsersPage() {
                             <Button
                               variant="ghost"
                               size="sm"
-                              onClick={() => openEditModal(user)}
+                              onClick={(e) => { e.stopPropagation(); openEditModal(user); }}
                             >
                               <Edit className="w-4 h-4" />
                             </Button>
                             <Button
                               variant="ghost"
                               size="sm"
-                              onClick={() => openDeleteModal(user)}
+                              onClick={(e) => { e.stopPropagation(); openDeleteModal(user); }}
                               className="text-accent-danger hover:bg-accent-danger/10"
                             >
                               <Trash2 className="w-4 h-4" />

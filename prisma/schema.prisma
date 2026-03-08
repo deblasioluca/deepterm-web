@@ -333,6 +333,7 @@ model Release {
   sha256           String?
   minimumOSVersion String   @default("14.0")
   mandatory        Boolean  @default(false)
+  published        Boolean  @default(true)
   fileFilename     String
   filePath         String
   sizeBytes        Int?
@@ -471,6 +472,9 @@ model Issue {
   description        String
   area               String            @default("General")
   status             String            @default("open")
+  priority           String            @default("medium")
+  assignedTo         String?
+  firstResponseAt    DateTime?
   reporterFeedback   String?
   reporterFeedbackAt DateTime?
   createdAt          DateTime          @default(now())
@@ -482,6 +486,8 @@ model Issue {
   @@index([userId, createdAt])
   @@index([status, updatedAt])
   @@index([area, updatedAt])
+  @@index([priority, updatedAt])
+  @@index([assignedTo, status])
 }
 
 model IssueAttachment {
@@ -505,6 +511,7 @@ model IssueUpdate {
   authorEmail String?
   message     String
   status      String?
+  visibility  String   @default("public")
   createdAt   DateTime @default(now())
   issue       Issue    @relation(fields: [issueId], references: [id], onDelete: Cascade)
 
@@ -583,6 +590,8 @@ model Epic {
   status               String                @default("backlog")
   priority             String                @default("medium")
   sortOrder            Int                   @default(0)
+  releaseType          String                @default("minor")  // "minor" | "major"
+  targetVersion        String?               // Computed when deploy is triggered
   createdAt            DateTime              @default(now())
   updatedAt            DateTime              @updatedAt
   deliberations        Deliberation[]
@@ -623,6 +632,7 @@ model Story {
   lastLoopFrom         String?                     // Step that initiated last loop
   lastLoopTo           String?                     // Step that received the loop
   lifecycleTemplate    String    @default("full")  // full | quick_fix | hotfix | web_only
+  mergedAt             DateTime?             // When story review was approved & merged (before epic deploy)
 
   @@index([epicId])
   @@index([status])

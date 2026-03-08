@@ -5,12 +5,18 @@ import { Card, Button, Input } from '@/components/ui';
 import { Loader2, AlertCircle, Check, Save, Upload } from 'lucide-react';
 
 type Release = {
+  id: string;
   platform: string;
   version: string;
   publishedAt: string;
   filePath: string;
   createdBy: string | null;
   releaseNotes?: string;
+  published?: boolean;
+  sha256?: string | null;
+  minimumOSVersion?: string;
+  mandatory?: boolean;
+  sizeBytes?: number | null;
 };
 
 export default function ReleasesTab() {
@@ -28,6 +34,7 @@ export default function ReleasesTab() {
 
   const [success, setSuccess] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [togglingId, setTogglingId] = useState<string | null>(null);
 
   const fetchReleasesList = async () => {
     try {
@@ -89,6 +96,25 @@ export default function ReleasesTab() {
       setError(err instanceof Error ? err.message : 'Failed to update release notes');
     } finally {
       setIsSavingReleaseNotes(false);
+    }
+  };
+
+  const togglePublished = async (release: Release) => {
+    try {
+      setTogglingId(release.id);
+      const res = await fetch('/api/admin/releases', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: release.id, published: !release.published }),
+      });
+      if (!res.ok) throw new Error('Failed to update');
+      setSuccess(`v${release.version} ${release.published ? 'unpublished' : 'published'}`);
+      setTimeout(() => setSuccess(null), 5000);
+      await fetchReleasesList();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to toggle publish');
+    } finally {
+      setTogglingId(null);
     }
   };
 
@@ -171,14 +197,42 @@ export default function ReleasesTab() {
             <p className="text-sm text-text-tertiary">No releases yet.</p>
           ) : (
             releasesList.map((r) => (
-              <div key={`${r.platform}-${r.version}`} className="flex items-center justify-between bg-background-tertiary rounded-lg px-4 py-3">
-                <div>
-                  <p className="text-text-primary font-medium">{r.platform?.toUpperCase()} v{r.version}</p>
-                  <p className="text-xs text-text-tertiary">{new Date(r.publishedAt).toLocaleString()} {r.createdBy ? `\u2022 ${r.createdBy}` : ''}</p>
+              <div key={r.id || `${r.platform}-${r.version}`} className={`bg-background-tertiary rounded-lg px-4 py-3 ${r.published === false ? 'opacity-60 border border-amber-500/30' : ''}`}>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <p className="text-text-primary font-medium">{r.platform?.toUpperCase()} v{r.version}</p>
+                      {r.published === false && (
+                        <span className="text-xs px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-400">Draft</span>
+                      )}
+                      {r.mandatory && (
+                        <span className="text-xs px-1.5 py-0.5 rounded bg-red-500/20 text-red-400">Mandatory</span>
+                      )}
+                    </div>
+                    <p className="text-xs text-text-tertiary mt-1">
+                      {new Date(r.publishedAt).toLocaleString()}
+                      {r.createdBy ? ` \u2022 ${r.createdBy}` : ''}
+                      {r.sizeBytes ? ` \u2022 ${(r.sizeBytes / 1048576).toFixed(1)} MB` : ''}
+                      {r.minimumOSVersion ? ` \u2022 min OS ${r.minimumOSVersion}` : ''}
+                    </p>
+                    {r.sha256 && (
+                      <p className="text-xs text-text-tertiary font-mono mt-0.5 truncate max-w-md">SHA: {r.sha256.slice(0, 16)}…</p>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      onClick={() => togglePublished(r)}
+                      disabled={togglingId === r.id}
+                    >
+                      {togglingId === r.id ? <Loader2 className="w-3 h-3 animate-spin" /> : r.published !== false ? 'Unpublish' : 'Publish'}
+                    </Button>
+                    <a href={r.filePath} className="inline-flex" download>
+                      <Button variant="secondary" size="sm">Download</Button>
+                    </a>
+                  </div>
                 </div>
-                <a href={r.filePath} className="inline-flex" download>
-                  <Button variant="secondary">Download</Button>
-                </a>
               </div>
             ))
           )}

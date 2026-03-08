@@ -19,10 +19,20 @@ export async function GET(
         sessions: {
           select: { id: true, device: true, lastActive: true },
           orderBy: { lastActive: 'desc' },
-          take: 5,
+          take: 10,
+        },
+        ideas: {
+          select: { id: true, title: true, status: true, createdAt: true },
+          orderBy: { createdAt: 'desc' },
+          take: 10,
+        },
+        issues: {
+          select: { id: true, title: true, status: true, area: true, createdAt: true },
+          orderBy: { createdAt: 'desc' },
+          take: 10,
         },
         _count: {
-          select: { ideas: true, votes: true },
+          select: { ideas: true, votes: true, issues: true, passkeys: true, sessions: true },
         },
       },
     });
@@ -34,18 +44,40 @@ export async function GET(
       );
     }
 
+    // Look up linked ZKUser
+    const zkUser = await prisma.zKUser.findFirst({
+      where: { webUserId: id },
+      select: {
+        id: true,
+        email: true,
+        emailVerified: true,
+        createdAt: true,
+        _count: { select: { zkVaults: true, zkVaultItems: true, devices: true } },
+      },
+    });
+
     return NextResponse.json({
       id: user.id,
       name: user.name,
       email: user.email,
       role: user.role,
       avatarUrl: user.avatarUrl,
+      plan: (user as Record<string, unknown>).plan || 'free',
+      twoFactorEnabled: (user as Record<string, unknown>).twoFactorEnabled || false,
+      subscriptionSource: (user as Record<string, unknown>).subscriptionSource || null,
+      subscriptionExpiresAt: (user as Record<string, unknown>).subscriptionExpiresAt || null,
       team: user.team,
       sessions: user.sessions,
+      ideas: user.ideas,
+      issues: user.issues,
       stats: {
         ideas: user._count.ideas,
         votes: user._count.votes,
+        issues: user._count.issues,
+        passkeys: user._count.passkeys,
+        sessions: user._count.sessions,
       },
+      zkUser,
       createdAt: user.createdAt,
       updatedAt: user.updatedAt,
     });

@@ -125,7 +125,7 @@ async function getPiHardware() {
 
 export async function GET() {
   try {
-    const [nodeRed, ciMac, github, aiDevMac, airflow, piHw, builds] = await Promise.all([
+    const [nodeRed, ciMac, github, aiDevMac, airflow, piHw, builds, ciPassRate, nodeRedFlows, agentStats] = await Promise.all([
       checkNodeRed(),
       checkCiMac(),
       checkGitHub(),
@@ -133,6 +133,36 @@ export async function GET() {
       checkAirflow(),
       getPiHardware(),
       prisma.ciBuild.findMany({ orderBy: { createdAt: "desc" }, take: 10 }).catch(() => []),
+      // CI test pass rate (last 30 builds)
+      prisma.ciBuild.findMany({ select: { conclusion: true }, orderBy: { createdAt: "desc" }, take: 30 }).then((b) => {
+        const total = b.length;
+        const passed = b.filter((x) => x.conclusion === "success").length;
+        return total > 0 ? { rate: Math.round((passed / total) * 100), total, passed } : { rate: 0, total: 0, passed: 0 };
+      }).catch(() => ({ rate: 0, total: 0, passed: 0 })),
+      // Node-RED flow count
+      checkWithTimeout(async () => {
+        const url = process.env.NODE_RED_URL || "http://192.168.1.30:1880";
+        const ctrl = new AbortController();
+        const tid = setTimeout(() => ctrl.abort(), 3000);
+        const res = await fetch(`${url}/flows`, { signal: ctrl.signal });
+        clearTimeout(tid);
+        if (res.ok) {
+          const data = await res.json();
+          const tabs = Array.isArray(data) ? data.filter((n: { type?: string }) => n.type === "tab").length : 0;
+          const nodes = Array.isArray(data) ? data.length : 0;
+          return { flowCount: tabs, nodeCount: nodes };
+        }
+        return { flowCount: null, nodeCount: null };
+      }, 4000).catch(() => ({ flowCount: null, nodeCount: null })),
+      // Agent loop stats
+      prisma.agentLoop.groupBy({
+        by: ["status"],
+        _count: true,
+      }).then((groups) => {
+        const map: Record<string, number> = {};
+        for (const g of groups) map[g.status] = g._count;
+        return { running: map["running"] || 0, completed: map["completed"] || 0, failed: map["failed"] || 0 };
+      }).catch(() => ({ running: 0, completed: 0, failed: 0 })),
     ]);
 
     return NextResponse.json({
@@ -157,10 +187,10 @@ export async function GET() {
           heapMB: Math.round(process.memoryUsage().heapUsed / 1024 / 1024),
           nodeVersion: process.version,
         },
-        ciMac,
-        nodeRed,
+        ciMac: { ...ciMac, testPassRate: ciPassRate },
+        nodeRed: { ...nodeRed, ...nodeRedFlows },
         github,
-        aiDevMac,
+        aiDevMac: { ...aiDevMac, agentStats },
         airflow,
       },
       builds,

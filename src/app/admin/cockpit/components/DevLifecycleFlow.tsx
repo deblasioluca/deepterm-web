@@ -15,7 +15,7 @@ import DeliberationFlowDiagram from './DeliberationFlowDiagram';
 
 // ── Types ──
 
-type StepStatus = 'pending' | 'active' | 'passed' | 'failed' | 'skipped' | 'waiting_approval' | 'timeout';
+type StepStatus = 'pending' | 'active' | 'passed' | 'failed' | 'skipped' | 'waiting_approval' | 'waiting' | 'timeout';
 type Actor = 'human' | 'ai' | 'system';
 
 interface GateAction {
@@ -108,6 +108,11 @@ export interface StoryLifecycleData {
   lastLoopFrom?: string | null;
   lastLoopTo?: string | null;
   stepETAs?: Record<string, { p50: number; p90: number; count: number }>;
+  mergedAt?: string | null;           // Set when review done but waiting for epic siblings
+  waitingForSiblings?: boolean;       // True when this story is merged but others in epic aren't
+  pendingCount?: number;              // How many sibling stories are still pending
+  epicReleaseType?: string;           // 'minor' | 'major' from the epic
+  epicTargetVersion?: string | null;  // Computed version after deploy
   lifecycleTemplate?: string;
   lifecycleTemplateSteps?: string[];
 }
@@ -121,6 +126,7 @@ const STATUS_CONFIG: Record<StepStatus, { bg: string; border: string; text: stri
   failed:           { bg: 'bg-red-500/10', border: 'border-red-500/40', text: 'text-red-400', icon: <XCircle className="w-3.5 h-3.5 text-red-400" />, ring: 'ring-red-500/30', dot: 'bg-red-500' },
   skipped:          { bg: 'bg-zinc-800/30', border: 'border-zinc-700/50', text: 'text-zinc-600', icon: <SkipForward className="w-3.5 h-3.5 text-zinc-600" />, dot: 'bg-zinc-700' },
   waiting_approval: { bg: 'bg-amber-500/10', border: 'border-amber-500/40', text: 'text-amber-400', icon: <AlertTriangle className="w-3.5 h-3.5 text-amber-400" />, ring: 'ring-amber-500/30', dot: 'bg-amber-500' },
+  waiting:          { bg: 'bg-purple-500/10', border: 'border-purple-500/40', text: 'text-purple-400', icon: <Clock className="w-3.5 h-3.5 text-purple-400" />, ring: 'ring-purple-500/30', dot: 'bg-purple-500' },
   timeout:          { bg: 'bg-orange-500/10', border: 'border-orange-500/50', text: 'text-orange-400', icon: <Timer className="w-3.5 h-3.5 text-orange-400" />, ring: 'ring-orange-500/30', dot: 'bg-orange-500' },
 };
 
@@ -1218,11 +1224,17 @@ function buildLifecycleSteps(story: StoryLifecycleData | null): LifecycleStep[] 
   });
 
   // 7. Deploy
-  const deployStatus: StepStatus = s.deployed ? 'passed' : (reviewStatus === 'passed' && s.prMerged) ? 'waiting_approval' : 'pending';
+  // 'merged' step = this story is done but waiting for epic siblings
+  const isWaitingForSiblings = s.lifecycleStep === 'merged' || s.waitingForSiblings === true;
+  const deployStatus: StepStatus = s.deployed ? 'passed'
+    : isWaitingForSiblings ? 'waiting'
+    : s.lifecycleStep === 'deploy' ? 'active'
+    : (reviewStatus === 'passed' && s.prMerged) ? 'waiting_approval'
+    : 'pending';
   steps.push({
     id: 'deploy', label: 'Deploy', description: 'Build, sign, notarize, deploy',
     icon: <Rocket className="w-3.5 h-3.5" />, actor: 'system', status: deployStatus,
-    detail: s.deployed ? `v${s.version || '?'}` : undefined,
+    detail: s.deployed ? (s.epicTargetVersion ? `v${s.epicTargetVersion}` : `v${s.version || '?'}`) : isWaitingForSiblings ? `Merged — waiting for ${s.pendingCount ?? '?'} sibling stor${(s.pendingCount ?? 2) === 1 ? 'y' : 'ies'}` : undefined,
     timeout: timeouts.deploy ?? 600, startedAt: (deployStatus as string) === 'active' ? getStepStart('deploy') : null, events,
     gate: deployStatus === 'waiting_approval' ? { required: true, actions: [
       { label: 'Deploy Release', action: 'deploy-release', variant: 'approve' },
@@ -1231,7 +1243,7 @@ function buildLifecycleSteps(story: StoryLifecycleData | null): LifecycleStep[] 
   });
 
   // 8. Release
-  const releaseStatus: StepStatus = s.released ? 'passed' : s.deployed ? 'active' : 'pending';
+  const releaseStatus: StepStatus = s.released ? 'passed' : s.deployed ? 'active' : isWaitingForSiblings ? 'waiting' : 'pending';
   steps.push({
     id: 'release', label: 'Release', description: 'Release notes, email users, update docs',
     icon: <Mail className="w-3.5 h-3.5" />, actor: 'system', status: releaseStatus,

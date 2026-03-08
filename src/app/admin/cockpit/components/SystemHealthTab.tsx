@@ -64,12 +64,16 @@ export default function SystemHealthTab({ health, builds }: SystemHealthTabProps
           <Row label="Runner" value={health?.ciMac?.runnerName || "self-hosted-mac"} />
           <Row label="Last Build" value={builds.length > 0 ? formatTimeAgo(builds[0].createdAt) : "none"} />
           <Row label="Recent Builds" value={`${builds.length} shown`} />
+          {health?.ciMac?.testPassRate && (
+            <Row label="Pass Rate (30)" value={`${health.ciMac.testPassRate.rate}% (${health.ciMac.testPassRate.passed}/${health.ciMac.testPassRate.total})`} />
+          )}
         </SystemCard>
 
         {/* Node-RED */}
         <SystemCard icon={Radio} iconColor="text-amber-400" name="Node-RED" status={health?.nodeRed?.status || "unknown"}>
           <Row label="Address" value={health?.addresses?.nodeRed || "192.168.1.30:1880"} />
-          <Row label="Flows" value="WhatsApp + DeepTerm" />
+          <Row label="Flows" value={health?.nodeRed?.flowCount != null ? `${health.nodeRed.flowCount} tabs` : "—"} />
+          <Row label="Nodes" value={health?.nodeRed?.nodeCount != null ? `${health.nodeRed.nodeCount}` : "—"} />
         </SystemCard>
 
         {/* GitHub */}
@@ -82,6 +86,13 @@ export default function SystemHealthTab({ health, builds }: SystemHealthTabProps
         <SystemCard icon={Brain} iconColor="text-cyan-400" name="AI Dev Mac" status={health?.aiDevMac?.status || "unknown"}>
           <Row label="Address" value={health?.addresses?.aiDevMac || "unknown"} />
           <Row label="Detail" value={health?.aiDevMac?.detail || "—"} />
+          {health?.aiDevMac?.agentStats && (
+            <>
+              <Row label="Running Agents" value={health.aiDevMac.agentStats.running} />
+              <Row label="Completed" value={health.aiDevMac.agentStats.completed} />
+              <Row label="Failed" value={health.aiDevMac.agentStats.failed} />
+            </>
+          )}
         </SystemCard>
 
         {/* Airflow */}

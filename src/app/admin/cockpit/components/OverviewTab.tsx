@@ -14,6 +14,7 @@ import {
   Globe,
   GitBranch,
   Brain,
+  Bot,
   Workflow,
 } from 'lucide-react';
 import type { QuickStats, RevenueData, HealthData, CiBuild } from '../types';
@@ -114,6 +115,33 @@ export default function OverviewTab({ stats, revenue, health, builds }: Overview
           </div>
         )}
       </div>
+
+      {/* Active Agents */}
+      {health?.aiDevMac?.agentStats && (
+        <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-5">
+          <h2 className="text-sm font-semibold text-zinc-300 mb-4 flex items-center gap-2">
+            <Bot className="w-4 h-4 text-cyan-400" /> Agent Activity
+          </h2>
+          <div className="grid grid-cols-3 gap-4">
+            <div className="bg-zinc-800/50 rounded-lg p-3 border border-zinc-700/50">
+              <div className="text-xs text-zinc-500 mb-1">Running</div>
+              <div className={`text-xl font-bold ${health.aiDevMac.agentStats.running > 0 ? 'text-green-400' : 'text-zinc-500'}`}>
+                {health.aiDevMac.agentStats.running}
+              </div>
+            </div>
+            <div className="bg-zinc-800/50 rounded-lg p-3 border border-zinc-700/50">
+              <div className="text-xs text-zinc-500 mb-1">Completed</div>
+              <div className="text-xl font-bold text-zinc-300">{health.aiDevMac.agentStats.completed}</div>
+            </div>
+            <div className="bg-zinc-800/50 rounded-lg p-3 border border-zinc-700/50">
+              <div className="text-xs text-zinc-500 mb-1">Failed</div>
+              <div className={`text-xl font-bold ${health.aiDevMac.agentStats.failed > 0 ? 'text-red-400' : 'text-zinc-500'}`}>
+                {health.aiDevMac.agentStats.failed}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Compact System Health — All 7 Systems */}
       <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-5">

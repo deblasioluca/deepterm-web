@@ -162,6 +162,48 @@ async function getStepETAs(): Promise<Record<string, { p50: number; p90: number;
 }
 
 // GET /api/admin/cockpit/lifecycle?storyId=xxx or ?status=in_progress
+
+// ── Epic-level version bump via GitHub API ──
+async function bumpVersionInXcode(releaseType: 'minor' | 'major'): Promise<{ ok: boolean; newVersion?: string; error?: string }> {
+  const SWIFT_REPO = 'deblasioluca/deepterm';
+  const PBXPROJ_PATH = 'DeepTerm.xcodeproj/project.pbxproj';
+  const token = process.env.GITHUB_TOKEN;
+  if (!token) return { ok: false, error: 'GITHUB_TOKEN not set' };
+  try {
+    const getRes = await fetch(`https://api.github.com/repos/${SWIFT_REPO}/contents/${PBXPROJ_PATH}`, {
+      headers: { Authorization: `Bearer ${token}`, Accept: 'application/vnd.github+json' },
+      signal: AbortSignal.timeout(10000),
+    });
+    if (!getRes.ok) return { ok: false, error: `GitHub get failed: ${getRes.status}` };
+    const fileData = await getRes.json();
+    const content = Buffer.from(fileData.content, 'base64').toString('utf8');
+    const sha = fileData.sha;
+    const match = content.match(/MARKETING_VERSION = ([\d.]+);/);
+    if (!match) return { ok: false, error: 'MARKETING_VERSION not found in pbxproj' };
+    const parts = match[1].split('.').map(Number);
+    const [major, minor, patch] = [parts[0] || 0, parts[1] || 0, parts[2] || 0];
+    const newVersion = releaseType === 'major' ? `${major}.${minor + 1}.0` : `${major}.${minor}.${patch + 1}`;
+    const updated = content.replace(/MARKETING_VERSION = [\d.]+;/g, `MARKETING_VERSION = ${newVersion};`);
+    const putRes = await fetch(`https://api.github.com/repos/${SWIFT_REPO}/contents/${PBXPROJ_PATH}`, {
+      method: 'PUT',
+      headers: { Authorization: `Bearer ${token}`, Accept: 'application/vnd.github+json', 'Content-Type': 'application/json' },
+      signal: AbortSignal.timeout(15000),
+      body: JSON.stringify({
+        message: `chore: bump version to ${newVersion} (${releaseType} release)`,
+        content: Buffer.from(updated).toString('base64'),
+        sha,
+      }),
+    });
+    if (!putRes.ok) {
+      const err = await putRes.json().catch(() => ({}));
+      return { ok: false, error: `GitHub put failed: ${putRes.status} ${JSON.stringify(err)}` };
+    }
+    return { ok: true, newVersion };
+  } catch (e: unknown) {
+    return { ok: false, error: e instanceof Error ? e.message : String(e) };
+  }
+}
+
 export async function GET(req: NextRequest) {
   try {
     const { searchParams } = new URL(req.url);
@@ -222,7 +264,7 @@ export async function GET(req: NextRequest) {
       orderBy: { updatedAt: 'desc' },
       take: 20,
       include: {
-        epic: { select: { id: true, title: true, status: true } },
+        epic: { select: { id: true, title: true, status: true, releaseType: true, targetVersion: true } },
       },
     });
 
@@ -434,6 +476,12 @@ export async function GET(req: NextRequest) {
         maxLoops: story.maxLoops || 5,
         lastLoopFrom: story.lastLoopFrom || null,
         lastLoopTo: story.lastLoopTo || null,
+        mergedAt: story.mergedAt?.toISOString() || null,
+        waitingForSiblings: story.lifecycleStep === 'merged',
+        epicReleaseType: story.epic?.releaseType || 'minor',
+        epicTargetVersion: story.epic?.targetVersion || null,
+
+
         recentEvents: recentEvents.reverse().map(e => ({
           id: e.id,
           stepId: e.stepId,
@@ -541,12 +589,46 @@ export async function POST(req: NextRequest) {
         if (!mergeResult.merged) {
           return NextResponse.json({ error: `Merge failed: ${mergeResult.message}` }, { status: 400 });
         }
-        // GAP-13: Keep 'in_progress' until release — 'done' was premature
+        // ── Epic-level deploy gate: check if all sibling stories are merged ──
+        const thisStory = await prisma.story.findUnique({ where: { id: storyId }, select: { epicId: true } });
+        if (thisStory?.epicId) {
+          const siblingStories = await prisma.story.findMany({
+            where: { epicId: thisStory.epicId, id: { not: storyId } },
+            select: { id: true, status: true, lifecycleStep: true, mergedAt: true },
+          });
+          const allMerged = siblingStories.every(s =>
+            s.mergedAt != null || s.status === 'released' ||
+            s.lifecycleStep === 'deploy' || s.lifecycleStep === 'release' || s.lifecycleStep === 'merged'
+          );
+          if (!allMerged) {
+            const pendingCount = siblingStories.filter(s =>
+              s.mergedAt == null && s.status !== 'released' &&
+              s.lifecycleStep !== 'deploy' && s.lifecycleStep !== 'release' && s.lifecycleStep !== 'merged'
+            ).length;
+            updates.status = 'in_progress';
+            updates.lifecycleStep = 'merged';
+            updates.lifecycleStartedAt = null;
+            (updates as Record<string, unknown>).mergedAt = new Date();
+            await logEvent(storyId, 'review', 'progress', JSON.stringify({
+              message: `Merged — waiting for ${pendingCount} sibling stor${pendingCount === 1 ? 'y' : 'ies'} before epic deploy`,
+              waitingForSiblings: true,
+              pendingCount,
+            }), 'system');
+            break;
+          }
+          // All merged — promote any waiting siblings to deploy step
+          await prisma.story.updateMany({
+            where: { epicId: thisStory.epicId, id: { not: storyId }, lifecycleStep: 'merged' },
+            data: { lifecycleStep: 'deploy', lifecycleStartedAt: new Date() },
+          });
+        }
+        // Advance this (last) story to deploy
         updates.status = 'in_progress';
         updates.lifecycleStep = 'deploy';
         updates.lifecycleStartedAt = new Date();
+        (updates as Record<string, unknown>).mergedAt = new Date();
         await logEvent(storyId, 'review', 'completed', `PR #${prInfo.prNumber} merged`, 'human');
-        await logEvent(storyId, 'deploy', 'started', 'Deploy step started after PR merge', 'system');
+        await logEvent(storyId, 'deploy', 'started', 'Deploy step started — all epic stories merged', 'system');
         break;
       }
 
@@ -617,7 +699,7 @@ export async function POST(req: NextRequest) {
         break;
 
       case 'deploy-release':
-      case 'mark-deployed':
+      case 'mark-deployed': {
         // Record step duration for ETA
         {
           const durStory = await prisma.story.findUnique({ where: { id: storyId }, select: { lifecycleStartedAt: true } });
@@ -626,12 +708,35 @@ export async function POST(req: NextRequest) {
             await recordStepDuration(storyId, 'deploy', dur);
           }
         }
+        // ── Version bump via GitHub API (once per epic) ──
+        const deployStory = await prisma.story.findUnique({ where: { id: storyId }, select: { epicId: true } });
+        let bumpedVersion: string | undefined;
+        if (deployStory?.epicId) {
+          const epic = await prisma.epic.findUnique({ where: { id: deployStory.epicId }, select: { releaseType: true, targetVersion: true } });
+          if (epic && !epic.targetVersion) {
+            const releaseType = (epic.releaseType as 'minor' | 'major') || 'minor';
+            await logEvent(storyId, 'deploy', 'progress', JSON.stringify({ message: `Bumping version (${releaseType} release) in Xcode via GitHub API...` }), 'system');
+            const bumpResult = await bumpVersionInXcode(releaseType);
+            if (bumpResult.ok && bumpResult.newVersion) {
+              bumpedVersion = bumpResult.newVersion;
+              await prisma.epic.update({ where: { id: deployStory.epicId }, data: { targetVersion: bumpResult.newVersion } });
+              await logEvent(storyId, 'deploy', 'progress', JSON.stringify({ message: `Version bumped to ${bumpResult.newVersion} in Xcode (committed to main)` }), 'system');
+            } else {
+              await logEvent(storyId, 'deploy', 'progress', JSON.stringify({ message: `Version bump skipped: ${bumpResult.error}` }), 'system');
+            }
+          } else if (epic?.targetVersion) {
+            bumpedVersion = epic.targetVersion;
+          }
+        }
         updates.status = 'released';
         updates.lifecycleStep = 'release';
         updates.lifecycleStartedAt = new Date();
-        await logEvent(storyId, 'deploy', 'completed', action === 'deploy-release' ? 'Deploy release triggered by operator' : 'Manually marked as deployed', 'human');
-        await logEvent(storyId, 'release', 'started', 'Release step started after deploy', 'system');
+        await logEvent(storyId, 'deploy', 'completed', action === 'deploy-release'
+          ? `Deploy release triggered by operator${bumpedVersion ? ` (v${bumpedVersion})` : ''}`
+          : 'Manually marked as deployed', 'human');
+        await logEvent(storyId, 'release', 'started', `Release step started after deploy${bumpedVersion ? ` — v${bumpedVersion}` : ''}`, 'system');
         break;
+      }
 
       case 'mark-released':
         // Record step duration for ETA
