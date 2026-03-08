@@ -24,6 +24,8 @@ interface Announcement {
   content: string;
   type: 'info' | 'warning' | 'success' | 'danger';
   isActive: boolean;
+  deliveryChannel: string;
+  audience: string;
   startDate: string | null;
   endDate: string | null;
   createdAt: string;
@@ -47,6 +49,8 @@ export default function AdminAnnouncementsPage() {
     content: '',
     type: 'info' as 'info' | 'warning' | 'success' | 'danger',
     isActive: true,
+    deliveryChannel: 'in-app',
+    audience: 'all',
     startDate: '',
     endDate: '',
   });
@@ -107,6 +111,8 @@ export default function AdminAnnouncementsPage() {
         content: announcement.content,
         type: announcement.type,
         isActive: announcement.isActive,
+        deliveryChannel: announcement.deliveryChannel || 'in-app',
+        audience: announcement.audience || 'all',
         startDate: announcement.startDate || '',
         endDate: announcement.endDate || '',
       });
@@ -117,6 +123,8 @@ export default function AdminAnnouncementsPage() {
         content: '',
         type: 'info',
         isActive: true,
+        deliveryChannel: 'in-app',
+        audience: 'all',
         startDate: '',
         endDate: '',
       });
@@ -251,6 +259,14 @@ export default function AdminAnnouncementsPage() {
                                 <Calendar className="w-3 h-3" />
                                 Created {new Date(announcement.createdAt).toLocaleDateString()}
                               </span>
+                              <span className="px-1.5 py-0.5 bg-background-secondary rounded text-text-tertiary">
+                                {announcement.deliveryChannel === 'both' ? 'In-App + Email' : announcement.deliveryChannel === 'email' ? 'Email' : 'In-App'}
+                              </span>
+                              {announcement.audience !== 'all' && (
+                                <span className="px-1.5 py-0.5 bg-purple-500/10 rounded text-purple-400">
+                                  {announcement.audience} users
+                                </span>
+                              )}
                               {announcement.startDate && (
                                 <span>Start: {new Date(announcement.startDate).toLocaleDateString()}</span>
                               )}
@@ -411,6 +427,28 @@ export default function AdminAnnouncementsPage() {
                 className="w-full px-4 py-2.5 bg-background-tertiary border border-border rounded-lg text-text-primary focus:outline-none focus:border-accent-primary"
               />
             </div>
+          </div>
+
+          {/* Delivery Channel */}
+          <div>
+            <label className="block text-sm font-medium text-text-secondary mb-2">Delivery Channel</label>
+            <div className="grid grid-cols-3 gap-2">
+              {[{ value: 'in-app', label: 'In-App Banner' }, { value: 'email', label: 'Email' }, { value: 'both', label: 'Both' }].map(ch => (
+                <button key={ch.value} onClick={() => setFormData({ ...formData, deliveryChannel: ch.value })} className={`p-2.5 rounded-lg border text-center text-sm transition-all ${formData.deliveryChannel === ch.value ? 'border-accent-primary bg-accent-primary/10 text-text-primary' : 'border-border hover:border-accent-primary/50 text-text-secondary'}`}>{ch.label}</button>
+              ))}
+            </div>
+          </div>
+
+          {/* Target Audience */}
+          <div>
+            <label className="block text-sm font-medium text-text-secondary mb-2">Target Audience</label>
+            <select value={formData.audience} onChange={e => setFormData({ ...formData, audience: e.target.value })} className="w-full px-4 py-2.5 bg-background-tertiary border border-border rounded-lg text-text-primary focus:outline-none focus:border-accent-primary">
+              <option value="all">All Users</option>
+              <option value="pro">Pro Users</option>
+              <option value="starter">Starter Users</option>
+              <option value="team">Team Users</option>
+              <option value="enterprise">Enterprise Users</option>
+            </select>
           </div>
 
           <div className="flex items-center justify-between p-4 bg-background-tertiary rounded-lg">

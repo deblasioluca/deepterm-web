@@ -1,8 +1,9 @@
 'use client';
 
 import { useState } from 'react';
+import Link from 'next/link';
 import { Card, Button } from '@/components/ui';
-import { AlertCircle } from 'lucide-react';
+import { AlertCircle, Database } from 'lucide-react';
 
 const DANGER_ACTIONS = [
   {
@@ -96,6 +97,25 @@ export default function DangerZoneTab() {
             </div>
           ))}
         </div>
+      </Card>
+
+      {/* Database Explorer — moved from top-level sidebar for safety */}
+      <Card className="border-zinc-700/50">
+        <div className="flex items-center gap-3 mb-4">
+          <div className="p-2 bg-zinc-500/20 rounded-lg">
+            <Database className="w-5 h-5 text-zinc-400" />
+          </div>
+          <div>
+            <h2 className="text-lg font-semibold text-text-primary">Database Explorer</h2>
+            <p className="text-sm text-text-secondary">Read-only access to all database tables</p>
+          </div>
+        </div>
+        <Link
+          href="/admin/database"
+          className="inline-flex items-center gap-2 px-4 py-2 bg-zinc-700/50 border border-zinc-600 rounded-lg text-sm font-medium text-text-primary hover:bg-zinc-700 transition-colors"
+        >
+          <Database className="w-4 h-4" /> Open Database Explorer
+        </Link>
       </Card>
     </div>
   );

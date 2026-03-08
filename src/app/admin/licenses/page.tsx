@@ -19,6 +19,7 @@ import {
   Crown,
   Shield,
   Zap,
+  AlertTriangle,
 } from 'lucide-react';
 import { useAdminAI } from '@/components/admin/AdminAIContext';
 
@@ -284,6 +285,21 @@ export default function LicensesPage() {
     });
   };
 
+  const getExpiryInfo = (dateString: string | null): { color: string; label: string | null } => {
+    if (!dateString) return { color: 'text-text-secondary', label: null };
+    const days = Math.ceil((new Date(dateString).getTime() - Date.now()) / (1000 * 60 * 60 * 24));
+    if (days < 0) return { color: 'text-red-400', label: 'Expired' };
+    if (days <= 30) return { color: 'text-red-400', label: `${days}d left` };
+    if (days <= 90) return { color: 'text-amber-400', label: `${days}d left` };
+    return { color: 'text-green-400', label: null };
+  };
+
+  const expiringSoonCount = licenses.filter(l => {
+    if (!l.expiresAt) return false;
+    const days = Math.ceil((new Date(l.expiresAt).getTime() - Date.now()) / (1000 * 60 * 60 * 24));
+    return days >= 0 && days <= 90;
+  }).length;
+
   if (loading) {
     return (
       <div className="flex items-center justify-center py-12">
@@ -367,6 +383,19 @@ export default function LicensesPage() {
               </div>
             </div>
           </div>
+          {expiringSoonCount > 0 && (
+            <div className="bg-background-secondary border border-amber-500/30 rounded-lg p-4">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-amber-500/20 rounded-lg">
+                  <AlertTriangle className="w-5 h-5 text-amber-400" />
+                </div>
+                <div>
+                  <p className="text-2xl font-bold text-amber-400">{expiringSoonCount}</p>
+                  <p className="text-sm text-text-secondary">Expiring ≤90d</p>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Filters */}
@@ -483,8 +512,15 @@ export default function LicensesPage() {
                     <td className="px-4 py-3 text-text-secondary">
                       {license.memberCount} / {license.seats === -1 ? '∞' : license.seats}
                     </td>
-                    <td className="px-4 py-3 text-text-secondary text-sm">
-                      {formatDate(license.expiresAt)}
+                    <td className="px-4 py-3 text-sm">
+                      <span className={getExpiryInfo(license.expiresAt).color}>
+                        {formatDate(license.expiresAt)}
+                        {getExpiryInfo(license.expiresAt).label && (
+                          <span className="ml-1.5 text-[10px] font-medium">
+                            ({getExpiryInfo(license.expiresAt).label})
+                          </span>
+                        )}
+                      </span>
                     </td>
                     <td className="px-4 py-3">
                       <div className="flex items-center justify-end gap-2">

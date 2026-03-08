@@ -52,6 +52,7 @@ export async function GET(request: NextRequest) {
         authorName: idea.author.name,
         authorEmail: idea.author.email,
         voteCount: idea._count.votes,
+        githubIssueNumber: idea.githubIssueNumber,
         createdAt: idea.createdAt,
       })),
       pagination: {

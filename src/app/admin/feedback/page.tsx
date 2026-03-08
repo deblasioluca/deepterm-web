@@ -15,6 +15,8 @@ import {
   Rocket,
   Lightbulb,
   Wrench,
+  ArrowRight,
+  GitPullRequest,
 } from 'lucide-react';
 import { useAdminAI } from '@/components/admin/AdminAIContext';
 
@@ -27,6 +29,7 @@ interface Idea {
   authorName: string;
   authorEmail: string;
   voteCount: number;
+  githubIssueNumber: number | null;
   createdAt: string;
 }
 
@@ -139,6 +142,24 @@ export default function AdminFeedbackPage() {
     }
   };
 
+  const [promotingId, setPromotingId] = useState<string | null>(null);
+
+  const handlePromoteToTriage = async (idea: Idea) => {
+    setPromotingId(idea.id);
+    try {
+      const res = await fetch('/api/admin/cockpit/actions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'triage-idea', ideaId: idea.id, decision: 'approve' }),
+      });
+      if (res.ok) fetchIdeas();
+    } catch (err) {
+      console.error('Failed to promote idea:', err);
+    } finally {
+      setPromotingId(null);
+    }
+  };
+
   const getStatusBadge = (status: string) => {
     const option = statusOptions.find((o) => o.value === status);
     return <Badge variant={option?.color as any || 'secondary'}>{option?.label || status}</Badge>;
@@ -222,6 +243,29 @@ export default function AdminFeedbackPage() {
                         </p>
                       </div>
                       <div className="flex items-center gap-2">
+                        {idea.status === 'consideration' && (
+                          <Button
+                            variant="primary"
+                            size="sm"
+                            onClick={() => handlePromoteToTriage(idea)}
+                            disabled={promotingId === idea.id}
+                            className="flex items-center gap-1.5"
+                          >
+                            {promotingId === idea.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <ArrowRight className="w-3 h-3" />}
+                            Send to Triage
+                          </Button>
+                        )}
+                        {idea.githubIssueNumber && (
+                          <a
+                            href={`https://github.com/deblasioluca/deepterm/issues/${idea.githubIssueNumber}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-1 px-2 py-1 bg-green-500/10 text-green-400 rounded text-xs font-medium hover:bg-green-500/20 transition"
+                          >
+                            <GitPullRequest className="w-3 h-3" />
+                            #{idea.githubIssueNumber}
+                          </a>
+                        )}
                         <Button
                           variant="secondary"
                           size="sm"

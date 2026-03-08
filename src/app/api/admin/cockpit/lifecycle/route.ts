@@ -506,10 +506,38 @@ export async function POST(req: NextRequest) {
       case 'merge-pr': {
         const prInfo = await findStoryPR(storyId, prisma);
         if (!prInfo) {
-          return NextResponse.json({ error: 'No PR found for this story' }, { status: 400 });
+          // No PR found — advance lifecycle anyway (PR may have been merged externally)
+          updates.status = 'in_progress';
+          updates.lifecycleStep = 'deploy';
+          updates.lifecycleStartedAt = new Date();
+          await logEvent(storyId, 'review', 'completed', 'PR approved (no PR record — advanced manually)', 'human');
+          await logEvent(storyId, 'deploy', 'started', 'Deploy step started after review approval', 'system');
+          break;
         }
-        const { mergePR } = await import('@/lib/github-pulls');
-        const mergeResult = await mergePR(prInfo.repo, prInfo.prNumber);
+        const { mergePR: doMergePR } = await import('@/lib/github-pulls');
+        // Check PR state before attempting merge — handle already-closed PRs gracefully
+        try {
+          const prStateRes = await fetch(`https://api.github.com/repos/${prInfo.repo}/pulls/${prInfo.prNumber}`, {
+            headers: { Authorization: `Bearer ${process.env.GITHUB_TOKEN}`, Accept: 'application/vnd.github+json' },
+            signal: AbortSignal.timeout(8000),
+          });
+          if (prStateRes.ok) {
+            const prState = await prStateRes.json();
+            if (prState.state === 'closed') {
+              const alreadyMerged = prState.merged === true;
+              updates.status = 'in_progress';
+              updates.lifecycleStep = 'deploy';
+              updates.lifecycleStartedAt = new Date();
+              const msg = alreadyMerged
+                ? `PR #${prInfo.prNumber} was already merged — advancing lifecycle`
+                : `PR #${prInfo.prNumber} was closed (not merged) — advancing lifecycle`;
+              await logEvent(storyId, 'review', 'completed', msg, 'human');
+              await logEvent(storyId, 'deploy', 'started', 'Deploy step started after review approval', 'system');
+              break;
+            }
+          }
+        } catch { /* If check fails, continue to merge attempt */ }
+        const mergeResult = await doMergePR(prInfo.repo, prInfo.prNumber);
         if (!mergeResult.merged) {
           return NextResponse.json({ error: `Merge failed: ${mergeResult.message}` }, { status: 400 });
         }

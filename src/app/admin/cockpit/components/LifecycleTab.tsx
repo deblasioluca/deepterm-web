@@ -296,8 +296,9 @@ export default function LifecycleTab() {
         });
         if (!res.ok) {
           const errData = await res.json().catch(() => ({}));
-          setActionError(errData.error || `Action failed (HTTP ${res.status})`);
-          return;
+          const errMsg = errData.error || `Action failed (HTTP ${res.status})`;
+          setActionError(errMsg);
+          throw new Error(errMsg); // propagate so GateButtons shows inline error
         }
         setActionError(null);
       }

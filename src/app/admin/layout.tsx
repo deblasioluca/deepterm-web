@@ -39,7 +39,7 @@ import { AdminAIProvider, useAdminAI } from '@/components/admin/AdminAIContext';
 import AdminAIPanel from '@/components/admin/AdminAIPanel';
 
 const navItems = [
-  { label: 'Overview',     href: '/admin',              icon: LayoutDashboard },
+  { label: 'Command Center', href: '/admin',            icon: LayoutDashboard },
   { label: 'Cockpit',      href: '/admin/cockpit',      icon: Activity },
   { label: 'DevOps',       href: '/admin/devops',       icon: GitMerge },
   { label: 'GitHub',       href: '/admin/github',       icon: GithubIcon },
@@ -52,7 +52,6 @@ const navItems = [
   { label: 'Feedback',     href: '/admin/feedback',     icon: MessageSquare },
   { label: 'Issues',       href: '/admin/issues',       icon: HelpCircle },
   { label: 'Announcements',href: '/admin/announcements',icon: Bell },
-  { label: 'Database',     href: '/admin/database',     icon: Database },
   { label: 'Settings',     href: '/admin/settings',     icon: Settings },
 ];
 

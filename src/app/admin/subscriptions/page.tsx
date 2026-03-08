@@ -254,125 +254,24 @@ export default function AdminSubscriptionsPage() {
           </Button>
         </div>
 
-        {/* Offerings Draft + Deploy */}
+        {/* Offerings — moved to Settings → Billing */}
         <Card className="mb-6">
-          <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center justify-between">
             <div>
-              <h2 className="text-lg font-semibold text-text-primary">Offerings</h2>
+              <h2 className="text-lg font-semibold text-text-primary">Subscription Offerings</h2>
               <p className="text-sm text-text-secondary">
-                Edit draft offerings and deploy when ready (users only see live).
+                Manage pricing plans and deploy changes from Settings → Billing.
               </p>
             </div>
-            <div className="flex items-center gap-3">
-              <Button variant="secondary" onClick={addDraftOffering}>
-                Add Offering
-              </Button>
-              <Button variant="secondary" onClick={saveDraft} disabled={isSavingDraft}>
-                {isSavingDraft ? (
-                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                ) : (
-                  <Save className="w-4 h-4 mr-2" />
-                )}
-                Save Draft
-              </Button>
-              <Button variant="primary" onClick={deployDraft} disabled={isDeploying}>
-                {isDeploying ? (
-                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                ) : (
-                  <RefreshCw className="w-4 h-4 mr-2" />
-                )}
-                Deploy
-              </Button>
-            </div>
+            <a
+              href="/admin/settings?tab=billing"
+              className="inline-flex items-center gap-2 px-4 py-2 bg-accent-primary/10 text-accent-primary rounded-lg text-sm font-medium hover:bg-accent-primary/20 transition-colors"
+            >
+              <ExternalLink className="w-4 h-4" />
+              Manage Offerings
+            </a>
           </div>
-
-          {offeringsMessage && (
-            <div className="mb-4 p-3 bg-blue-500/10 border border-blue-500/30 rounded-lg text-blue-500 text-sm">
-              {offeringsMessage}
-            </div>
-          )}
-
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead>
-                <tr className="border-b border-border">
-                  <th className="text-left py-3 px-4 text-sm font-medium text-text-secondary">Key</th>
-                  <th className="text-left py-3 px-4 text-sm font-medium text-text-secondary">Interval</th>
-                  <th className="text-left py-3 px-4 text-sm font-medium text-text-secondary">Name</th>
-                  <th className="text-left py-3 px-4 text-sm font-medium text-text-secondary">Price (cents)</th>
-                  <th className="text-left py-3 px-4 text-sm font-medium text-text-secondary">Currency</th>
-                  <th className="text-left py-3 px-4 text-sm font-medium text-text-secondary">Active</th>
-                  <th className="text-right py-3 px-4 text-sm font-medium text-text-secondary">Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {draftOfferings.map((o, idx) => (
-                  <tr key={`${o.key}-${o.interval}-${idx}`} className="border-b border-border/50 last:border-0">
-                    <td className="py-3 px-4">
-                      <input
-                        value={o.key}
-                        onChange={(e) => updateDraftRow(idx, { key: e.target.value })}
-                        className="w-28 px-3 py-2 bg-background-tertiary border border-border rounded-lg text-text-primary focus:outline-none focus:border-accent-primary"
-                      />
-                    </td>
-                    <td className="py-3 px-4">
-                      <select
-                        value={o.interval}
-                        onChange={(e) => updateDraftRow(idx, { interval: e.target.value as Offering['interval'] })}
-                        className="px-3 py-2 bg-background-tertiary border border-border rounded-lg text-text-primary focus:outline-none focus:border-accent-primary"
-                      >
-                        <option value="monthly">monthly</option>
-                        <option value="yearly">yearly</option>
-                      </select>
-                    </td>
-                    <td className="py-3 px-4">
-                      <input
-                        value={o.name}
-                        onChange={(e) => updateDraftRow(idx, { name: e.target.value })}
-                        className="w-48 px-3 py-2 bg-background-tertiary border border-border rounded-lg text-text-primary focus:outline-none focus:border-accent-primary"
-                      />
-                    </td>
-                    <td className="py-3 px-4">
-                      <input
-                        type="number"
-                        value={o.priceCents}
-                        onChange={(e) => updateDraftRow(idx, { priceCents: parseInt(e.target.value || '0', 10) })}
-                        className="w-36 px-3 py-2 bg-background-tertiary border border-border rounded-lg text-text-primary focus:outline-none focus:border-accent-primary"
-                      />
-                    </td>
-                    <td className="py-3 px-4">
-                      <input
-                        value={o.currency}
-                        onChange={(e) => updateDraftRow(idx, { currency: e.target.value })}
-                        className="w-24 px-3 py-2 bg-background-tertiary border border-border rounded-lg text-text-primary focus:outline-none focus:border-accent-primary"
-                      />
-                    </td>
-                    <td className="py-3 px-4">
-                      <input
-                        type="checkbox"
-                        checked={o.isActive}
-                        onChange={(e) => updateDraftRow(idx, { isActive: e.target.checked })}
-                      />
-                    </td>
-                    <td className="py-3 px-4 text-right">
-                      <Button variant="ghost" onClick={() => removeDraftOffering(idx)}>
-                        Remove
-                      </Button>
-                    </td>
-                  </tr>
-                ))}
-                {draftOfferings.length === 0 && (
-                  <tr>
-                    <td colSpan={7} className="py-6 px-4 text-sm text-text-tertiary">
-                      No draft offerings.
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-
-          <div className="mt-4 text-sm text-text-tertiary">
+          <div className="mt-3 text-sm text-text-tertiary">
             Live offerings: {liveOfferings.filter((o) => o.isActive).length} active
           </div>
         </Card>
