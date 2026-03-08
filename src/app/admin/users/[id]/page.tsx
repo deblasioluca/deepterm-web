@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, use } from 'react';
+import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { Card, Badge, Button } from '@/components/ui';
 import {
@@ -60,8 +60,8 @@ function timeAgo(dateStr: string): string {
   return new Date(dateStr).toLocaleDateString();
 }
 
-export default function UserDetailPage({ params }: { params: Promise<{ id: string }> }) {
-  const { id } = use(params);
+export default function UserDetailPage({ params }: { params: { id: string } }) {
+  const { id } = params;
   const [user, setUser] = useState<UserDetail | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -135,10 +135,10 @@ export default function UserDetailPage({ params }: { params: Promise<{ id: strin
           </Link>
           <div className="flex items-center gap-4 flex-1">
             <div className="w-14 h-14 bg-accent-primary/20 rounded-full flex items-center justify-center">
-              <span className="text-xl font-bold text-accent-primary">{user.name.charAt(0)}</span>
+              <span className="text-xl font-bold text-accent-primary">{(user.name || user.email).charAt(0)}</span>
             </div>
             <div>
-              <h1 className="text-2xl font-bold text-text-primary">{user.name}</h1>
+              <h1 className="text-2xl font-bold text-text-primary">{user.name || user.email}</h1>
               <p className="text-text-secondary">{user.email}</p>
             </div>
           </div>

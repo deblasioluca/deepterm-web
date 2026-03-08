@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState, use } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Card, Button, Badge } from '@/components/ui';
 import { ThumbsDown, ThumbsUp, ArrowLeft, Eye, EyeOff } from 'lucide-react';
 import Link from 'next/link';
@@ -53,8 +53,8 @@ const PRIORITY_COLORS: Record<string, string> = {
   low: 'bg-white/10 text-text-tertiary',
 };
 
-export default function AdminIssueDetailPage({ params }: { params: Promise<{ id: string }> }) {
-  const { id } = use(params);
+export default function AdminIssueDetailPage({ params }: { params: { id: string } }) {
+  const { id } = params;
   const [issue, setIssue] = useState<IssueDetail | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
