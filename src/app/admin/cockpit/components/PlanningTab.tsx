@@ -16,14 +16,66 @@ import {
   Loader2,
   Brain,
   FileText,
+  GripVertical,
+  Search,
 } from 'lucide-react';
-import type { PlanningData, Epic, Story, GithubIssuesData, RunAction } from '../types';
+import {
+  DndContext,
+  DragOverlay,
+  closestCenter,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  type DragStartEvent,
+  type DragEndEvent,
+} from '@dnd-kit/core';
+import { useDraggable, useDroppable } from '@dnd-kit/core';
+import type { PlanningData, Epic, Story, GithubIssue, GithubIssuesData, RunAction } from '../types';
 import { formatTimeAgo } from '../utils';
 import { PriorityBadge, WorkflowStatusBadge } from './shared';
 import DeliberationPanel from './DeliberationPanel';
 import ImplementationReport from './ImplementationReport';
 
 const STATUSES = ['backlog', 'planned', 'in_progress', 'done', 'released'] as const;
+
+// ── Drag & Drop helpers ──
+
+function DraggableIssue({ id, children }: { id: string; children: React.ReactNode }) {
+  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({ id });
+  return (
+    <div
+      ref={setNodeRef}
+      {...attributes}
+      {...listeners}
+      style={{ opacity: isDragging ? 0.35 : 1 }}
+      className="cursor-grab active:cursor-grabbing"
+    >
+      {children}
+    </div>
+  );
+}
+
+function DroppableEpic({ id, children }: { id: string; children: React.ReactNode }) {
+  const { setNodeRef, isOver } = useDroppable({ id });
+  return (
+    <div
+      ref={setNodeRef}
+      className={`rounded-xl transition-all duration-150 ${isOver ? 'ring-2 ring-blue-500/60 bg-blue-900/10' : ''}`}
+    >
+      {children}
+    </div>
+  );
+}
+
+function IssueDragOverlay({ issue }: { issue: GithubIssue }) {
+  return (
+    <div className="flex items-center gap-2 px-3 py-2 bg-zinc-800 border border-blue-500/50 rounded-lg shadow-xl shadow-black/50 max-w-sm">
+      <GripVertical className="w-3.5 h-3.5 text-zinc-500 shrink-0" />
+      <span className="text-xs text-blue-400 font-mono shrink-0">#{issue.number}</span>
+      <span className="text-xs text-zinc-200 truncate">{issue.title}</span>
+    </div>
+  );
+}
 const LIFECYCLE_TEMPLATES: Record<string, string[]> = {
   full:      ['triage', 'plan', 'deliberation', 'implement', 'test', 'review', 'deploy', 'release'],
   quick_fix: ['triage', 'implement', 'test', 'review', 'deploy', 'release'],
@@ -85,6 +137,99 @@ export default function PlanningTab({ planning, githubIssues, runAction, actionL
   const [epics, setEpics] = useState<Epic[]>(planning.epics);
   const [unassignedStories, setUnassignedStories] = useState<Story[]>(planning.unassignedStories);
   const [statusFilter, setStatusFilter] = useState<string | null>(null);
+
+  // Drag & Drop state — drag GitHub issues into epics to create stories
+  const [activeIssue, setActiveIssue] = useState<GithubIssue | null>(null);
+  const [creatingFromDrop, setCreatingFromDrop] = useState<string | null>(null);
+  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }));
+
+  // Collect all issue numbers already linked to stories
+  const linkedIssueNumbers = new Set<number>();
+  for (const epic of epics) {
+    for (const s of epic.stories) {
+      if (s.githubIssueNumber) linkedIssueNumbers.add(s.githubIssueNumber);
+    }
+  }
+  for (const s of unassignedStories) {
+    if (s.githubIssueNumber) linkedIssueNumbers.add(s.githubIssueNumber);
+  }
+
+  const availableIssues = (githubIssues?.items || []).filter(
+    (i) => i.state === 'open' && !linkedIssueNumbers.has(i.number)
+  );
+
+  // Issue pool filters
+  const [issueSearch, setIssueSearch] = useState('');
+  const [issueLabelFilter, setIssueLabelFilter] = useState<string | null>(null);
+
+  const allIssueLabels = Array.from(new Set(availableIssues.flatMap(i => i.labels.map(l => l.name)))).sort();
+
+  const filteredIssues = availableIssues.filter((issue) => {
+    if (issueSearch && !issue.title.toLowerCase().includes(issueSearch.toLowerCase()) && !`#${issue.number}`.includes(issueSearch)) return false;
+    if (issueLabelFilter && !issue.labels.some(l => l.name === issueLabelFilter)) return false;
+    return true;
+  });
+
+  const handleDragStart = (event: DragStartEvent) => {
+    const id = event.active.id as string;
+    if (id.startsWith('issue:')) {
+      const num = parseInt(id.replace('issue:', ''), 10);
+      const issue = availableIssues.find(i => i.number === num);
+      setActiveIssue(issue || null);
+    }
+  };
+
+  const handleDragEnd = async (event: DragEndEvent) => {
+    const draggedIssue = activeIssue;
+    setActiveIssue(null);
+    const { active, over } = event;
+    if (!over || !draggedIssue) return;
+
+    const targetEpicId = over.id as string;
+    if (targetEpicId === 'unassigned') return; // Only drop into epics
+
+    // Determine priority from labels
+    const labelNames = draggedIssue.labels.map(l => l.name.toLowerCase());
+    let priority = 'medium';
+    if (labelNames.some(l => l.includes('critical'))) priority = 'critical';
+    else if (labelNames.some(l => l.includes('high'))) priority = 'high';
+    else if (labelNames.some(l => l.includes('low'))) priority = 'low';
+
+    // Auto-expand target epic
+    setExpandedEpics(prev => {
+      const next = new Set(prev);
+      next.add(targetEpicId);
+      return next;
+    });
+
+    // Create story from the GitHub issue
+    setCreatingFromDrop(targetEpicId);
+    try {
+      const res = await fetch('/api/admin/cockpit/planning/stories', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: draggedIssue.title,
+          description: `GitHub Issue #${draggedIssue.number}`,
+          priority,
+          status: 'backlog',
+          epicId: targetEpicId,
+          githubIssueNumber: draggedIssue.number,
+        }),
+      });
+      if (res.ok) {
+        const story = await res.json();
+        setEpics(prev => prev.map(e =>
+          e.id === targetEpicId ? { ...e, stories: [...e.stories, story] } : e
+        ));
+        onDataChange();
+      }
+    } catch (err) {
+      console.error('Failed to create story from issue:', err);
+    } finally {
+      setCreatingFromDrop(null);
+    }
+  };
 
   // AI Propose state
   const [isProposing, setIsProposing] = useState(false);
@@ -334,14 +479,22 @@ export default function PlanningTab({ planning, githubIssues, runAction, actionL
       if (res.ok) {
         const result = await res.json();
         setDeliberatingFor({ id: targetId, type: targetType, deliberationId: result.id });
+      } else {
+        const err = await res.json().catch(() => ({ error: res.statusText }));
+        console.error('[Deliberation] Failed to start:', err);
+        alert(`Failed to start deliberation: ${err.error || err.message || res.statusText}`);
       }
+    } catch (e) {
+      console.error('[Deliberation] Network error:', e);
+      alert('Failed to start deliberation: network error');
     } finally {
       setStartingDeliberation(null);
     }
   };
 
-  const openDeliberation = (targetId: string, targetType: 'story' | 'epic', activeDeliberationId?: string | null) => {
-    if (activeDeliberationId) {
+  const openDeliberation = (targetId: string, targetType: 'story' | 'epic', activeDeliberationId?: string | null, activeStatus?: string | null) => {
+    // For failed/decided deliberations, start a new one instead of showing the old panel
+    if (activeDeliberationId && activeStatus !== 'failed' && activeStatus !== 'decided') {
       setDeliberatingFor({ id: targetId, type: targetType, deliberationId: activeDeliberationId });
     } else {
       startDeliberation(targetId, targetType);
@@ -367,6 +520,7 @@ export default function PlanningTab({ planning, githubIssues, runAction, actionL
   };
 
   return (
+    <DndContext sensors={sensors} collisionDetection={closestCenter} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
     <div className="space-y-4">
       {/* Header */}
       <div className="flex items-center justify-between">
@@ -485,7 +639,8 @@ export default function PlanningTab({ planning, githubIssues, runAction, actionL
           : epic.stories;
 
         return (
-          <div key={epic.id} className="bg-zinc-900 border border-zinc-800 rounded-xl overflow-hidden">
+          <DroppableEpic key={epic.id} id={epic.id}>
+          <div className="bg-zinc-900 border border-zinc-800 rounded-xl overflow-hidden">
             {/* Epic header */}
             {editingEpic === epic.id ? (
               <InlineForm
@@ -507,8 +662,18 @@ export default function PlanningTab({ planning, githubIssues, runAction, actionL
                   {doneCount}/{epic.stories.length} stories
                 </span>
                 {(epic.deliberationCount ?? 0) > 0 && (
-                  <span className="px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-purple-500/20 text-purple-400 border border-purple-500/30">
-                    {epic.deliberationCount} delib
+                  <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-bold border ${
+                    epic.activeDeliberationStatus === 'failed' ? 'bg-red-500/20 text-red-400 border-red-500/30' :
+                    epic.activeDeliberationStatus === 'decided' ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30' :
+                    epic.activeDeliberationStatus ? 'bg-cyan-500/20 text-cyan-400 border-cyan-500/30 animate-pulse' :
+                    'bg-purple-500/20 text-purple-400 border-purple-500/30'
+                  }`}>
+                    {epic.activeDeliberationStatus === 'proposing' ? '⟳ proposing' :
+                     epic.activeDeliberationStatus === 'debating' ? '💬 debating' :
+                     epic.activeDeliberationStatus === 'voting' ? '🗳️ voting' :
+                     epic.activeDeliberationStatus === 'decided' ? '✓ decided' :
+                     epic.activeDeliberationStatus === 'failed' ? '✗ failed' :
+                     `${epic.deliberationCount} delib`}
                   </span>
                 )}
                 {epic.hasReport && (
@@ -523,7 +688,7 @@ export default function PlanningTab({ planning, githubIssues, runAction, actionL
                 )}
                 <div className="flex items-center gap-1">
                   <button
-                    onClick={() => openDeliberation(epic.id, 'epic', epic.activeDeliberationId)}
+                    onClick={() => openDeliberation(epic.id, 'epic', epic.activeDeliberationId, epic.activeDeliberationStatus)}
                     disabled={startingDeliberation === epic.id}
                     className="p-1 rounded text-purple-400 hover:bg-purple-500/10 transition disabled:opacity-50"
                     title="Deliberate"
@@ -606,7 +771,7 @@ export default function PlanningTab({ planning, githubIssues, runAction, actionL
                         onDelete={() => deleteStory(story.id)}
                         onReorder={(dir) => reorderStories(epic.id, filteredStories, storyIdx, dir)}
                         onRelease={() => runAction('release-story', { storyId: story.id })}
-                        onDeliberate={() => openDeliberation(story.id, 'story', story.activeDeliberationId)}
+                        onDeliberate={() => openDeliberation(story.id, 'story', story.activeDeliberationId, story.activeDeliberationStatus)}
                         onReport={() => setReportFor({ id: story.id, type: 'story' })}
                         isDeliberating={deliberatingFor?.id === story.id}
                         isStartingDeliberation={startingDeliberation === story.id}
@@ -640,6 +805,7 @@ export default function PlanningTab({ planning, githubIssues, runAction, actionL
               </div>
             )}
           </div>
+          </DroppableEpic>
         );
       })}
 
@@ -665,7 +831,7 @@ export default function PlanningTab({ planning, githubIssues, runAction, actionL
                 onDelete={() => deleteStory(story.id)}
                 onReorder={(dir) => reorderStories(null, filteredUnassigned, idx, dir)}
                 onRelease={() => runAction('release-story', { storyId: story.id })}
-                onDeliberate={() => openDeliberation(story.id, 'story', story.activeDeliberationId)}
+                onDeliberate={() => openDeliberation(story.id, 'story', story.activeDeliberationId, story.activeDeliberationStatus)}
                 onReport={() => setReportFor({ id: story.id, type: 'story' })}
                 isDeliberating={deliberatingFor?.id === story.id}
                 isStartingDeliberation={startingDeliberation === story.id}
@@ -709,6 +875,87 @@ export default function PlanningTab({ planning, githubIssues, runAction, actionL
         </div>
       )}
     </div>
+      {/* GitHub Issues Pool — drag into epics to create stories */}
+      {availableIssues.length > 0 && (
+        <div className="bg-zinc-900 border border-zinc-800 rounded-xl overflow-hidden">
+          <div className="p-3 border-b border-zinc-800 space-y-2">
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-medium text-zinc-500 uppercase tracking-wider">GitHub Issues</span>
+              <span className="text-[10px] text-zinc-600">Drag into an epic to create a story</span>
+              <span className="ml-auto text-[10px] text-zinc-600">{filteredIssues.length}/{availableIssues.length} available</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="relative flex-1">
+                <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-3 h-3 text-zinc-500" />
+                <input
+                  type="text"
+                  placeholder="Search issues..."
+                  value={issueSearch}
+                  onChange={(e) => setIssueSearch(e.target.value)}
+                  className="w-full pl-7 pr-2 py-1 bg-zinc-800 border border-zinc-700 rounded text-xs text-zinc-300 placeholder-zinc-600 focus:outline-none focus:border-zinc-600"
+                />
+              </div>
+              <select
+                value={issueLabelFilter || ''}
+                onChange={(e) => setIssueLabelFilter(e.target.value || null)}
+                className="px-2 py-1 bg-zinc-800 border border-zinc-700 rounded text-xs text-zinc-300 focus:outline-none focus:border-zinc-600"
+              >
+                <option value="">All labels</option>
+                {allIssueLabels.map((label) => (
+                  <option key={label} value={label}>{label}</option>
+                ))}
+              </select>
+              {(issueSearch || issueLabelFilter) && (
+                <button
+                  onClick={() => { setIssueSearch(''); setIssueLabelFilter(null); }}
+                  className="p-1 text-zinc-500 hover:text-zinc-300"
+                  title="Clear filters"
+                >
+                  <X className="w-3 h-3" />
+                </button>
+              )}
+            </div>
+          </div>
+          <div className="divide-y divide-zinc-800/50 max-h-64 overflow-y-auto">
+            {filteredIssues.length === 0 ? (
+              <div className="p-3 text-center text-xs text-zinc-600">No issues match filters</div>
+            ) : (
+              filteredIssues.map((issue) => (
+                <DraggableIssue key={issue.number} id={`issue:${issue.number}`}>
+                  <div className="flex items-center gap-2.5 px-3 py-2 hover:bg-zinc-800/40 transition">
+                    <GripVertical className="w-3.5 h-3.5 text-zinc-600 shrink-0" />
+                    <span className="text-xs text-blue-400 font-mono shrink-0">#{issue.number}</span>
+                    <span className="text-xs text-zinc-300 flex-1 truncate">{issue.title}</span>
+                    {issue.labels.slice(0, 3).map((label) => (
+                      <span
+                        key={label.name}
+                        className="px-1.5 py-0.5 rounded text-[9px] font-medium shrink-0"
+                        style={{ backgroundColor: `#${label.color}22`, color: `#${label.color}`, border: `1px solid #${label.color}44` }}
+                      >
+                        {label.name}
+                      </span>
+                    ))}
+                    <a
+                      href={issue.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="p-1 text-zinc-600 hover:text-zinc-400 shrink-0"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <ExternalLink className="w-3 h-3" />
+                    </a>
+                  </div>
+                </DraggableIssue>
+              ))
+            )}
+          </div>
+        </div>
+      )}
+
+    <DragOverlay dropAnimation={null}>
+      {activeIssue ? <IssueDragOverlay issue={activeIssue} /> : null}
+    </DragOverlay>
+    </DndContext>
   );
 }
 
@@ -772,8 +1019,18 @@ function StoryRow({ story, idx, totalStories, editing, saving, actionLoading, on
           </a>
         )}
         {(story.deliberationCount ?? 0) > 0 && (
-          <span className="px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-purple-500/20 text-purple-400 border border-purple-500/30">
-            {story.deliberationCount}
+          <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-bold border ${
+            story.activeDeliberationStatus === 'failed' ? 'bg-red-500/20 text-red-400 border-red-500/30' :
+            story.activeDeliberationStatus === 'decided' ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30' :
+            story.activeDeliberationStatus ? 'bg-cyan-500/20 text-cyan-400 border-cyan-500/30 animate-pulse' :
+            'bg-purple-500/20 text-purple-400 border-purple-500/30'
+          }`}>
+            {story.activeDeliberationStatus === 'proposing' ? '⟳' :
+             story.activeDeliberationStatus === 'debating' ? '💬' :
+             story.activeDeliberationStatus === 'voting' ? '🗳️' :
+             story.activeDeliberationStatus === 'decided' ? '✓' :
+             story.activeDeliberationStatus === 'failed' ? '✗' :
+             story.deliberationCount}
           </span>
         )}
         {story.hasReport && (

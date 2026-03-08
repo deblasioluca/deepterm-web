@@ -112,7 +112,7 @@ export default function DevOpsPage() {
     return () => clearInterval(interval);
   }, [fetchCore, autoRefresh]);
 
-  const backlog = useLazyTabData<any>('/api/admin/cockpit/tab/backlog', activeTab === 'backlog');
+  const backlog = useLazyTabData<any>('/api/admin/cockpit/tab/backlog', activeTab === 'backlog' || activeTab === 'planning');
   const triage = useLazyTabData<any>('/api/admin/cockpit/tab/triage', activeTab === 'triage');
   const healthTab = useLazyTabData<any>('/api/admin/cockpit/tab/health', activeTab === 'builds');
   const planningData = useLazyTabData<any>('/api/admin/cockpit/tab/planning', activeTab === 'planning');

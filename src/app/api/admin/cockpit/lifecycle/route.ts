@@ -162,10 +162,22 @@ export async function GET(req: NextRequest) {
       });
       const activityIds = storiesWithActivity.map(s => s.id);
 
+      // Also find epics with active deliberations, and include their stories
+      const epicsWithDeliberations = await prisma.deliberation.findMany({
+        where: { epicId: { not: null }, status: { notIn: ['decided', 'failed'] } },
+        select: { epicId: true },
+      });
+      const delibEpicIds = Array.from(new Set(epicsWithDeliberations.map(d => d.epicId!)));
+      const storiesInDelibEpics = delibEpicIds.length > 0
+        ? await prisma.story.findMany({ where: { epicId: { in: delibEpicIds } }, select: { id: true } })
+        : [];
+      const epicDelibStoryIds = storiesInDelibEpics.map(s => s.id);
+
       where.OR = [
         { status: { in: ['planned', 'in_progress', 'done'] } },
         ...(epicIds.length > 0 ? [{ epicId: { in: epicIds } }] : []),
         ...(activityIds.length > 0 ? [{ id: { in: activityIds } }] : []),
+        ...(epicDelibStoryIds.length > 0 ? [{ id: { in: epicDelibStoryIds } }] : []),
       ];
     }
 
@@ -181,11 +193,20 @@ export async function GET(req: NextRequest) {
     const stepETAs = await getStepETAs();
 
     const enriched = await Promise.all(stories.map(async (story) => {
-      const deliberation = await prisma.deliberation.findFirst({
+      // Check for deliberation linked directly to story OR via epic
+      let deliberation = await prisma.deliberation.findFirst({
         where: { storyId: story.id },
         orderBy: { createdAt: 'desc' },
         select: { id: true, status: true },
       }).catch(() => null);
+
+      if (!deliberation && story.epicId) {
+        deliberation = await prisma.deliberation.findFirst({
+          where: { epicId: story.epicId },
+          orderBy: { createdAt: 'desc' },
+          select: { id: true, status: true },
+        }).catch(() => null);
+      }
 
       const agentLoop = await prisma.agentLoop.findFirst({
         where: { storyId: story.id },

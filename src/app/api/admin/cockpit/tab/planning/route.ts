@@ -19,14 +19,17 @@ export async function GET() {
       prisma.aIUsageLog.groupBy({ by: ["epicId"], where: { epicId: { in: allIds } }, _sum: { costCents: true } }).catch(() => [] as any[]),
     ]);
 
-    const delibMap = new Map<string, { count: number; activeId: string | null }>();
+    const delibMap = new Map<string, { count: number; activeId: string | null; activeStatus: string | null }>();
     for (const d of deliberations) {
-      const targetId = d.storyId || d.epicId;
-      if (!targetId) continue;
-      const entry = delibMap.get(targetId) || { count: 0, activeId: null };
-      entry.count++;
-      if (!["decided", "failed"].includes(d.status)) entry.activeId = d.id;
-      delibMap.set(targetId, entry);
+      // Map to BOTH storyId and epicId so both targets get counts/status
+      const targetIds = [d.storyId, d.epicId].filter(Boolean) as string[];
+      for (const targetId of targetIds) {
+        const entry = delibMap.get(targetId) || { count: 0, activeId: null, activeStatus: null };
+        entry.count++;
+        if (!["decided", "failed"].includes(d.status)) { entry.activeId = d.id; entry.activeStatus = d.status; }
+        else if (!entry.activeId) { entry.activeStatus = d.status; }
+        delibMap.set(targetId, entry);
+      }
     }
     const reportIds = new Set([...reports.filter((r: any) => r.storyId).map((r: any) => r.storyId!), ...reports.filter((r: any) => r.epicId).map((r: any) => r.epicId!)]);
     const costMap = new Map<string, number>();
@@ -36,6 +39,7 @@ export async function GET() {
     const enrich = (item: any) => ({
       deliberationCount: delibMap.get(item.id)?.count || 0,
       activeDeliberationId: delibMap.get(item.id)?.activeId || null,
+      activeDeliberationStatus: delibMap.get(item.id)?.activeStatus || null,
       hasReport: reportIds.has(item.id),
       aiCostCents: costMap.get(item.id) || 0,
       lifecycleStep: item.lifecycleStep || null,

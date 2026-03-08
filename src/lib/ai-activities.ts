@@ -131,6 +131,15 @@ export const AI_ACTIVITIES: Record<string, AIActivityDef> = {
     defaultTemperature: 0.3,
     defaultMaxTokens: 2048,
   },
+  'ideas.evaluate': {
+    key: 'ideas.evaluate',
+    label: 'Evaluate Idea',
+    description: 'Evaluate an approved idea against repo context and produce a detailed GitHub issue spec',
+    category: 'issues',
+    defaultModel: 'claude-sonnet-4-6',
+    defaultTemperature: 0.5,
+    defaultMaxTokens: 4096,
+  },
 
   // CI / Code Review
   // Agent Loop

@@ -66,6 +66,16 @@ export async function POST(req: NextRequest) {
           decision,
           reason: reason || '',
         });
+
+        // When approved, trigger AI evaluation → GitHub issue (fire-and-forget)
+        if (decision === 'approve') {
+          import('@/lib/idea-evaluate').then(({ evaluateAndConvertIdea }) =>
+            evaluateAndConvertIdea(ideaId)
+              .then(r => console.log(`Idea ${ideaId} evaluate:`, r.ok ? `→ #${r.issueNumber}` : r.error))
+              .catch(err => console.error('Idea evaluate failed:', err))
+          );
+        }
+
         return NextResponse.json({ ok: true, idea });
       }
 

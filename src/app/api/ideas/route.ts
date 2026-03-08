@@ -29,6 +29,11 @@ export async function GET() {
       },
     });
 
+    // Collect issue numbers already linked to ideas
+    const linkedIssueNumbers = new Set(
+      ideas.filter(i => i.githubIssueNumber).map(i => i.githubIssueNumber!)
+    );
+
     // Transform to include vote count and hasVoted
     const transformedIdeas = ideas.map((idea) => ({
       id: idea.id,
@@ -37,13 +42,62 @@ export async function GET() {
       status: idea.status,
       votes: idea._count.votes,
       hasVoted: userId ? idea.votes.some((v) => v.userId === userId) : false,
-      commentCount: 0, // Placeholder - could add comments model later
+      commentCount: 0,
       author: idea.author.name,
       authorId: idea.author.id,
       createdAt: idea.createdAt.toISOString().split('T')[0],
     }));
 
-    return NextResponse.json(transformedIdeas);
+    // Find open GitHub issues not already linked to an Idea — show as backlog items
+    const ghIssues = await prisma.githubIssue.findMany({
+      where: {
+        state: 'open',
+        NOT: { number: { in: Array.from(linkedIssueNumbers) } },
+      },
+      orderBy: { githubCreatedAt: 'desc' },
+    });
+
+    // Map GitHub issue state to idea status — check if a Story references this issue
+    const storiesWithIssues = await prisma.story.findMany({
+      where: { githubIssueNumber: { in: ghIssues.map(i => i.number) } },
+      select: { githubIssueNumber: true, status: true },
+    });
+    const storyStatusByIssue = new Map(
+      storiesWithIssues.map(s => [s.githubIssueNumber!, s.status])
+    );
+
+    const storyStatusToIdeaStatus = (status: string): string => {
+      switch (status) {
+        case 'in_progress': return 'in-progress';
+        case 'done':
+        case 'released': return 'launched';
+        default: return 'planned';
+      }
+    };
+
+    // Create synthetic idea entries from GitHub issues
+    const syntheticIdeas = ghIssues.map((issue) => {
+      const rawDesc = issue.body || '';
+      const description = rawDesc.length > 200
+        ? rawDesc.slice(0, 200).replace(/\s+\S*$/, '') + '...'
+        : rawDesc;
+      const storyStatus = storyStatusByIssue.get(issue.number);
+
+      return {
+        id: `gh-${issue.number}`,
+        title: issue.title,
+        description,
+        status: storyStatus ? storyStatusToIdeaStatus(storyStatus) : 'planned',
+        votes: 0,
+        hasVoted: false,
+        commentCount: 0,
+        author: 'DeepTerm Team',
+        authorId: null,
+        createdAt: issue.githubCreatedAt.toISOString().split('T')[0],
+      };
+    });
+
+    return NextResponse.json([...transformedIdeas, ...syntheticIdeas]);
   } catch (error) {
     console.error('Failed to fetch ideas:', error);
     return NextResponse.json(

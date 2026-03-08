@@ -11,6 +11,7 @@ import {
 import LoopHistoryPanel from './LoopHistoryPanel';
 import FeedbackDialog, { type FeedbackTarget } from './FeedbackDialog';
 import TestProgressPanel from './TestProgressPanel';
+import DeliberationFlowDiagram from './DeliberationFlowDiagram';
 
 // ── Types ──
 
@@ -557,6 +558,11 @@ function DetailPanel({ step, allEvents, onGateAction, story }: {
             })}
           </div>
         </div>
+      )}
+
+      {/* Deliberation flow diagram */}
+      {step.id === 'deliberation' && story.deliberationId && step.status !== 'pending' && step.status !== 'waiting_approval' && (
+        <DeliberationFlowDiagram deliberationId={story.deliberationId} />
       )}
 
       {/* Test progress panel (replaces generic substeps for test step) */}

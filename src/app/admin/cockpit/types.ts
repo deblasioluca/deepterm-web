@@ -121,6 +121,7 @@ export interface Epic {
   updatedAt: string;
   deliberationCount?: number;
   activeDeliberationId?: string | null;
+  activeDeliberationStatus?: string | null;
   hasReport?: boolean;
   aiCostCents?: number;
 }
@@ -138,6 +139,7 @@ export interface Story {
   updatedAt: string;
   deliberationCount?: number;
   activeDeliberationId?: string | null;
+  activeDeliberationStatus?: string | null;
   hasReport?: boolean;
   aiCostCents?: number;
   lifecycleStep?: string | null;

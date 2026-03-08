@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { startDeliberation } from '@/lib/deliberation/engine';
+import { runFullDeliberation } from '@/lib/deliberation/engine';
 
 export const dynamic = 'force-dynamic';
 
@@ -18,30 +18,54 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'storyId or epicId required for implementation deliberation' }, { status: 400 });
     }
 
+    // Resolve storyId: if epic-level and epic has exactly one story, auto-link it
+    let resolvedStoryId = storyId || null;
+
     // Verify target exists
     if (storyId) {
       const story = await prisma.story.findUnique({ where: { id: storyId } });
       if (!story) return NextResponse.json({ error: 'Story not found' }, { status: 404 });
     }
     if (epicId) {
-      const epic = await prisma.epic.findUnique({ where: { id: epicId } });
+      const epic = await prisma.epic.findUnique({
+        where: { id: epicId },
+        include: { stories: { select: { id: true } } },
+      });
       if (!epic) return NextResponse.json({ error: 'Epic not found' }, { status: 404 });
+      // Auto-link the story if epic has exactly one
+      if (!resolvedStoryId && epic.stories.length === 1) {
+        resolvedStoryId = epic.stories[0].id;
+      }
     }
 
     const deliberation = await prisma.deliberation.create({
       data: {
         type,
         status: 'proposing',
-        storyId: storyId || null,
+        storyId: resolvedStoryId,
         epicId: epicId || null,
         title: title || '',
         instructions: instructions || '',
       },
     });
 
-    // Fire-and-forget: start the proposal phase in the background
-    startDeliberation(deliberation.id).catch(err => {
-      console.error(`[Deliberation] Background start failed for ${deliberation.id}:`, err);
+    // Move story/epic out of backlog when deliberation starts
+    if (resolvedStoryId) {
+      await prisma.story.updateMany({
+        where: { id: resolvedStoryId, status: 'backlog' },
+        data: { status: 'planned' },
+      });
+    }
+    if (epicId) {
+      await prisma.epic.updateMany({
+        where: { id: epicId, status: 'backlog' },
+        data: { status: 'planned' },
+      });
+    }
+
+    // Fire-and-forget: run full deliberation (proposing → debating → voting → decided)
+    runFullDeliberation(deliberation.id).catch(err => {
+      console.error(`[Deliberation] Background run failed for ${deliberation.id}:`, err);
     });
 
     return NextResponse.json({

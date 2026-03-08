@@ -246,6 +246,7 @@ export default function IdeasPage() {
                   </Badge>
                 </div>
 
+                <div className={statusIdeas.length > 4 ? 'max-h-[480px] overflow-y-auto pr-1 space-y-3 scrollbar-thin' : 'space-y-3'}>
                 <AnimatePresence>
                   {statusIdeas.map((idea) => (
                     <motion.div
@@ -257,6 +258,12 @@ export default function IdeasPage() {
                     >
                       <Card className="p-4">
                         <div className="flex gap-3">
+                          {idea.id.startsWith('gh-') ? (
+                            <div className="flex flex-col items-center gap-1 p-2 rounded-lg bg-accent-primary/10 text-accent-primary">
+                              <Rocket className="w-4 h-4" />
+                              <span className="text-[10px] font-medium">Dev</span>
+                            </div>
+                          ) : (
                           <button
                             onClick={() => handleVote(idea.id)}
                             className={`flex flex-col items-center gap-1 p-2 rounded-lg transition-colors ${
@@ -270,6 +277,7 @@ export default function IdeasPage() {
                               {idea.votes}
                             </span>
                           </button>
+                          )}
 
                           <div className="flex-1 min-w-0">
                             <h3 className="font-semibold text-text-primary mb-1 truncate">
@@ -293,6 +301,7 @@ export default function IdeasPage() {
                     </motion.div>
                   ))}
                 </AnimatePresence>
+                </div>
 
                 {statusIdeas.length === 0 && (
                   <Card className="p-6 text-center">

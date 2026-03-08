@@ -402,15 +402,16 @@ model SecurityAlert {
 }
 
 model Idea {
-  id          String   @id @default(cuid())
-  title       String
-  description String
-  category    String   @default("feature")
-  status      String   @default("consideration")
-  authorId    String
-  createdAt   DateTime @default(now())
-  author      User     @relation(fields: [authorId], references: [id])
-  votes       Vote[]
+  id                String   @id @default(cuid())
+  title             String
+  description       String
+  category          String   @default("feature")
+  status            String   @default("consideration")
+  authorId          String
+  githubIssueNumber Int?
+  createdAt         DateTime @default(now())
+  author            User     @relation(fields: [authorId], references: [id])
+  votes             Vote[]
 }
 
 model Vote {
