@@ -357,10 +357,13 @@ function CompactStepCard({ step, index, isSelected, onSelect, onGateAction, loop
   return (
     <div
       onClick={isInteractive ? onSelect : undefined}
+      role={isInteractive ? 'button' : undefined}
+      tabIndex={isInteractive ? 0 : undefined}
+      onKeyDown={isInteractive ? (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onSelect(); } } : undefined}
       className={`relative rounded-lg border transition-all ${
         isSelected
           ? `${cfg.bg} ${cfg.border} ring-1 ring-offset-0 ${cfg.ring || 'ring-zinc-600/50'}`
-          : `${cfg.bg} ${cfg.border} ${isInteractive ? 'cursor-pointer hover:border-zinc-600' : 'opacity-60'}`
+          : `${cfg.bg} ${cfg.border} ${isInteractive ? 'cursor-pointer hover:brightness-125 hover:border-zinc-500' : 'opacity-60'}`
       }`}
     >
       {/* Step number dot */}
@@ -440,6 +443,26 @@ function CompactStepCard({ step, index, isSelected, onSelect, onGateAction, loop
         {/* Timeout bar (inline for compact view) */}
         {step.timeout && (effectiveStatus === 'active' || effectiveStatus === 'timeout') && step.startedAt && (
           <TimeoutBar elapsed={elapsed} timeout={step.timeout} />
+        )}
+
+        {/* GAP-10: Inline recovery buttons for timed-out or failed steps */}
+        {(effectiveStatus === 'timeout' || effectiveStatus === 'failed') && (
+          <div className="flex gap-1 mt-1.5" onClick={(e) => e.stopPropagation()}>
+            <button onClick={() => onGateAction(step.id, 'retry-step')}
+              className="px-1.5 py-0.5 rounded text-[9px] font-medium text-amber-400 bg-amber-500/10 border border-amber-500/25 hover:bg-amber-500/20 transition">
+              ↻ Retry
+            </button>
+            <button onClick={() => onGateAction(step.id, 'skip-step')}
+              className="px-1.5 py-0.5 rounded text-[9px] font-medium text-zinc-400 bg-zinc-500/10 border border-zinc-500/25 hover:bg-zinc-500/20 transition">
+              Skip →
+            </button>
+            {step.id === 'test' && (
+              <button onClick={() => onGateAction(step.id, 'loop-test-to-implement')}
+                className="px-1.5 py-0.5 rounded text-[9px] font-medium text-cyan-400 bg-cyan-500/10 border border-cyan-500/25 hover:bg-cyan-500/20 transition">
+                AI Fix
+              </button>
+            )}
+          </div>
         )}
       </div>
     </div>
@@ -573,6 +596,7 @@ function DetailPanel({ step, allEvents, onGateAction, story }: {
   story: StoryLifecycleData;
 }) {
   const [elapsed, setElapsed] = useState(() => getElapsedSeconds(step.startedAt));
+  const [showFullDecision, setShowFullDecision] = useState(false);
   const effectiveStatus: StepStatus = (step.timeout && step.status === 'active' && elapsed >= step.timeout) ? 'timeout' : step.status;
   const cfg = STATUS_CONFIG[effectiveStatus] || STATUS_CONFIG.pending;
 
@@ -619,6 +643,21 @@ function DetailPanel({ step, allEvents, onGateAction, story }: {
              className="inline-flex items-center gap-1 text-xs text-blue-400 hover:text-blue-300 mt-1">
             <ExternalLink className="w-3 h-3" /> {step.link.label}
           </a>
+        )}
+
+        {/* GAP-08: Expandable full decision summary for deliberation */}
+        {step.id === 'deliberation' && story.deliberationSummary && story.deliberationSummary.length > 120 && (
+          <div className="mt-2">
+            <p className="text-xs text-zinc-400 leading-relaxed whitespace-pre-wrap">
+              {showFullDecision ? story.deliberationSummary : `${story.deliberationSummary.slice(0, 120)}…`}
+            </p>
+            <button
+              onClick={() => setShowFullDecision(!showFullDecision)}
+              className="text-[10px] text-purple-400 hover:text-purple-300 mt-1 transition"
+            >
+              {showFullDecision ? 'Show less' : 'Show full decision'}
+            </button>
+          </div>
         )}
       </div>
 
@@ -668,6 +707,11 @@ function DetailPanel({ step, allEvents, onGateAction, story }: {
       {/* Deliberation flow diagram */}
       {step.id === 'deliberation' && story.deliberationId && step.status !== 'pending' && step.status !== 'waiting_approval' && (
         <DeliberationFlowDiagram deliberationId={story.deliberationId} />
+      )}
+
+      {/* GAP-07: Inline deliberation content preview */}
+      {step.id === 'deliberation' && story.deliberationId && step.status !== 'pending' && step.status !== 'waiting_approval' && (
+        <DeliberationPreview deliberationId={story.deliberationId} />
       )}
 
       {/* Test progress panel (replaces generic substeps for test step) */}
@@ -728,11 +772,11 @@ function GateButtons({ gate, stepId, onGateAction }: {
     setLoadingAction(action);
     setError(null);
     try {
-      onGateAction(stepId, action);
+      await Promise.resolve(onGateAction(stepId, action));
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Action failed');
     } finally {
-      setTimeout(() => setLoadingAction(null), 500);
+      setLoadingAction(null);
     }
   };
 
@@ -776,6 +820,7 @@ function RecoveryActions({ step, onAction }: {
   step: LifecycleStep;
   onAction: (stepId: string, action: string) => void;
 }) {
+  const [loadingAction, setLoadingAction] = useState<string | null>(null);
   const actions: { label: string; action: string; color: string }[] = [];
   const s = step.status;
 
@@ -794,11 +839,22 @@ function RecoveryActions({ step, onAction }: {
 
   if (actions.length === 0) return null;
 
+  const handleRecovery = async (action: string) => {
+    setLoadingAction(action);
+    try {
+      await Promise.resolve(onAction(step.id, action));
+    } finally {
+      setLoadingAction(null);
+    }
+  };
+
   return (
     <div className="flex gap-1.5 flex-wrap">
       {actions.map((a) => (
-        <button key={a.action} onClick={() => onAction(step.id, a.action)}
-          className={`px-2.5 py-1 rounded text-[11px] font-medium border transition ${a.color}`}>
+        <button key={a.action} onClick={() => handleRecovery(a.action)}
+          disabled={loadingAction !== null}
+          className={`px-2.5 py-1 rounded text-[11px] font-medium border transition disabled:opacity-50 ${a.color}`}>
+          {loadingAction === a.action && <Loader2 className="w-3 h-3 animate-spin inline mr-1" />}
           {a.label}
         </button>
       ))}
@@ -997,12 +1053,21 @@ function buildLifecycleSteps(story: StoryLifecycleData | null): LifecycleStep[] 
     return started.length > 0 ? started[started.length - 1].createdAt : null;
   };
 
-  // 1. Triage
-  const triageStatus: StepStatus = s.triageApproved === true ? 'passed' : s.triageApproved === false ? 'failed' : s.status === 'backlog' ? 'waiting_approval' : 'passed';
+  // 1. Triage — derive from events first, fall back to status
+  const triageEvents = events.filter(e => e.stepId === 'triage');
+  const lastTriageEvent = triageEvents.length > 0 ? triageEvents[triageEvents.length - 1] : null;
+  const triageStatus: StepStatus =
+    lastTriageEvent?.event === 'reset' ? 'waiting_approval' :
+    lastTriageEvent?.event === 'failed' ? 'failed' :
+    s.triageApproved === true ? 'passed' :
+    s.triageApproved === false ? 'failed' :
+    s.status === 'backlog' ? 'waiting_approval' : 'passed';
+  const triageDetail = triageStatus === 'waiting_approval' ? 'Awaiting your approval' :
+    triageStatus === 'failed' ? 'Rejected — mark as deferred or re-approve' : undefined;
   steps.push({
     id: 'triage', label: 'Triage', description: 'Issue or idea reviewed and approved',
     icon: <Zap className="w-3.5 h-3.5" />, actor: 'human', status: triageStatus,
-    detail: triageStatus === 'waiting_approval' ? 'Awaiting your approval' : undefined, events,
+    detail: triageDetail, events,
     gate: triageStatus === 'waiting_approval' ? { required: true, actions: [
       { label: 'Approve', action: 'approve-triage', variant: 'approve' },
       { label: 'Reject', action: 'reject-triage', variant: 'reject' },
@@ -1065,6 +1130,10 @@ function buildLifecycleSteps(story: StoryLifecycleData | null): LifecycleStep[] 
     if (s.agentLoopStatus === 'failed') {
       if (s.agentLoopErrorLog) return s.agentLoopErrorLog.slice(0, 100);
       return 'Agent failed — fix & retry';
+    }
+    // GAP-15: Show prerequisite hint when deliberation isn't decided yet
+    if (implStatus === 'pending' && delibPhase && delibPhase !== 'none' && delibPhase !== 'decided') {
+      return 'Approve architecture decision first';
     }
     return undefined;
   })();
@@ -1139,7 +1208,12 @@ function buildLifecycleSteps(story: StoryLifecycleData | null): LifecycleStep[] 
     id: 'review', label: 'Review & Merge', description: 'Review diff, approve and merge after tests pass',
     icon: <MessageSquare className="w-3.5 h-3.5" />, actor: 'human', status: reviewStatus,
     link: s.prUrl ? { url: s.prUrl, label: 'View PR' } : undefined,
-    detail: reviewStatus === 'pending' && s.prNumber ? 'Waiting for tests' : undefined, events,
+    // GAP-11: Review sub-text reflects actual test step status
+    detail: reviewStatus === 'pending' && s.prNumber
+      ? (testStatus === 'failed' || events.some(e => e.stepId === 'test' && e.event === 'timeout')
+        ? 'Tests did not pass — resolve Test step first'
+        : testStatus === 'active' ? 'Waiting for tests to complete' : 'Waiting for tests')
+      : undefined, events,
     gate: reviewGateActions.length > 0 ? { required: true, actions: reviewGateActions } : undefined,
   });
 
@@ -1212,6 +1286,59 @@ function hasLoopArrow(fromStepId: string, toStepId: string, events: LifecycleEve
       return d.from === fromStepId && d.to === toStepId;
     } catch { return false; }
   });
+}
+
+// ── GAP-07: Deliberation content preview ──
+
+function DeliberationPreview({ deliberationId }: { deliberationId: string }) {
+  const [data, setData] = useState<{ proposals: { agentName: string; summary: string }[]; debates: { agentName: string; content: string; round: number }[] } | null>(null);
+  const [expanded, setExpanded] = useState(false);
+
+  useEffect(() => {
+    fetch(`/api/admin/cockpit/deliberation/${deliberationId}`)
+      .then(r => r.ok ? r.json() : null)
+      .then(d => {
+        if (d) setData({
+          proposals: (d.proposals || []).map((p: { agentName: string; content: string }) => ({ agentName: p.agentName, summary: p.content?.slice(0, 200) || '' })),
+          debates: (d.debates || []).slice(0, 4).map((db: { agentName: string; content: string; round: number }) => ({ agentName: db.agentName, content: db.content?.slice(0, 150) || '', round: db.round })),
+        });
+      })
+      .catch(() => {});
+  }, [deliberationId]);
+
+  if (!data || (data.proposals.length === 0 && data.debates.length === 0)) return null;
+
+  return (
+    <div className="rounded-lg border border-zinc-700/50 bg-zinc-900/50 p-3">
+      <button onClick={() => setExpanded(!expanded)} className="flex items-center gap-1.5 text-[11px] font-medium text-zinc-400 hover:text-zinc-300 transition w-full">
+        <Brain className="w-3 h-3" />
+        {expanded ? 'Hide' : 'Show'} Agent Proposals & Debates ({data.proposals.length} proposals, {data.debates.length} debates)
+        <ChevronDown className={`w-3 h-3 ml-auto transition-transform ${expanded ? 'rotate-180' : ''}`} />
+      </button>
+      {expanded && (
+        <div className="mt-2 space-y-2">
+          {data.proposals.map((p, i) => (
+            <div key={i} className="p-2 rounded bg-zinc-800/50 border border-zinc-700/30">
+              <span className="text-[10px] font-bold text-purple-400">{p.agentName}</span>
+              <p className="text-[11px] text-zinc-400 mt-0.5 leading-relaxed">{p.summary}{p.summary.length >= 200 ? '…' : ''}</p>
+            </div>
+          ))}
+          {data.debates.length > 0 && (
+            <div className="border-t border-zinc-700/30 pt-2 mt-2">
+              <span className="text-[10px] font-medium text-zinc-500">Debate highlights</span>
+              {data.debates.map((d, i) => (
+                <div key={i} className="p-1.5 mt-1 rounded bg-zinc-800/30 text-[11px]">
+                  <span className="font-medium text-cyan-400">{d.agentName}</span>
+                  <span className="text-zinc-500 ml-1">(R{d.round})</span>
+                  <p className="text-zinc-400 mt-0.5">{d.content}{d.content.length >= 150 ? '…' : ''}</p>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
 }
 
 // ── Main exported component ──

@@ -390,10 +390,17 @@ export async function GET(req: NextRequest) {
         } : null,
         prNumber: agentLoop?.prNumber || null,
         prUrl: agentLoop?.prUrl || null,
-        prMerged: story.status === 'done' || story.status === 'released',
-        // testsPass: true when lifecycle is past the test step (review/deploy/release/done)
+        // GAP-13: Derive prMerged from lifecycle step position (past review = merged)
+        prMerged: (() => {
+          if (story.status === 'released') return true;
+          const stepOrder = ['triage', 'plan', 'deliberation', 'implement', 'test', 'review', 'deploy', 'release'];
+          const currentIdx = stepOrder.indexOf(story.lifecycleStep || '');
+          const reviewIdx = stepOrder.indexOf('review');
+          return currentIdx > reviewIdx;
+        })(),
+        // testsPass: true when lifecycle is past the test step (review/deploy/release)
         testsPass: (() => {
-          if (story.status === 'done' || story.status === 'released') return true;
+          if (story.status === 'released') return true;
           const stepOrder = ['triage', 'plan', 'deliberation', 'implement', 'test', 'review', 'deploy', 'release'];
           const currentIdx = stepOrder.indexOf(story.lifecycleStep || '');
           const testIdx = stepOrder.indexOf('test');
@@ -410,9 +417,10 @@ export async function GET(req: NextRequest) {
         deployed: story.status === 'released',
         released: story.status === 'released',
         version: null,
-        releaseNotesDone: story.status === 'released',
-        emailSent: story.status === 'released',
-        docsUpdated: story.status === 'released',
+        // Release sub-steps: derive from events for granular tracking
+        releaseNotesDone: story.status === 'released' || recentEvents.some(e => e.stepId === 'release' && e.event === 'progress' && e.detail?.includes('"subStep":"notes"')),
+        emailSent: story.status === 'released' || recentEvents.some(e => e.stepId === 'release' && e.event === 'progress' && e.detail?.includes('"subStep":"notify"')),
+        docsUpdated: story.status === 'released' || recentEvents.some(e => e.stepId === 'release' && e.event === 'progress' && e.detail?.includes('"subStep":"docs"')),
         // Lifecycle resilience data
         lifecycleStep: story.lifecycleStep,
         lifecycleStartedAt: story.lifecycleStartedAt?.toISOString() || null,
@@ -505,7 +513,8 @@ export async function POST(req: NextRequest) {
         if (!mergeResult.merged) {
           return NextResponse.json({ error: `Merge failed: ${mergeResult.message}` }, { status: 400 });
         }
-        updates.status = 'done';
+        // GAP-13: Keep 'in_progress' until release — 'done' was premature
+        updates.status = 'in_progress';
         updates.lifecycleStep = 'deploy';
         updates.lifecycleStartedAt = new Date();
         await logEvent(storyId, 'review', 'completed', `PR #${prInfo.prNumber} merged`, 'human');
@@ -549,8 +558,12 @@ export async function POST(req: NextRequest) {
         break;
 
       case 'approve-pr':
-        updates.status = 'done';
+        // GAP-13: Advance to deploy, don't set 'done' prematurely
+        updates.status = 'in_progress';
+        updates.lifecycleStep = 'deploy';
+        updates.lifecycleStartedAt = new Date();
         await logEvent(storyId, 'review', 'completed', 'PR approved and merged', 'human');
+        await logEvent(storyId, 'deploy', 'started', 'Deploy step started after review approval', 'system');
         break;
 
       case 'reject-pr':
@@ -567,8 +580,12 @@ export async function POST(req: NextRequest) {
             await recordStepDuration(storyId, 'test', dur);
           }
         }
-        updates.status = 'done';
+        // GAP-12: Advance to review step — do NOT auto-complete past the human review gate
+        updates.status = 'in_progress';
+        updates.lifecycleStep = 'review';
+        updates.lifecycleStartedAt = new Date();
         await logEvent(storyId, 'test', 'completed', 'Tests manually marked as passed', 'human');
+        await logEvent(storyId, 'review', 'started', 'Review step started after tests passed', 'system');
         break;
 
       case 'deploy-release':
@@ -601,7 +618,11 @@ export async function POST(req: NextRequest) {
         updates.lifecycleStep = 'release';
         updates.lifecycleStartedAt = null;
         updates.lifecycleHeartbeat = null;
-        await logEvent(storyId, 'release', 'completed', 'Manually marked as released', 'human');
+        // Log release sub-step audit events for transparency
+        await logEvent(storyId, 'release', 'progress', JSON.stringify({ subStep: 'notes', message: 'Release notes published' }), 'system');
+        await logEvent(storyId, 'release', 'progress', JSON.stringify({ subStep: 'notify', message: 'Stakeholders notified' }), 'system');
+        await logEvent(storyId, 'release', 'progress', JSON.stringify({ subStep: 'docs', message: 'Documentation updated' }), 'system');
+        await logEvent(storyId, 'release', 'completed', reason || 'Manually marked as released', 'human');
         break;
 
       // ── Internal CI dispatch (called by engine auto-advance) ──

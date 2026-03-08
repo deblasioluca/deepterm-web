@@ -62,6 +62,8 @@ export default function LifecycleTab() {
   const [actionError, setActionError] = useState<string | null>(null);
   const [pollFast, setPollFast] = useState(false);
   const [ciRunner, setCiRunner] = useState<{ status: string; name: string; busy: boolean; checkedAt: string } | null>(null);
+  const [consecutiveErrors, setConsecutiveErrors] = useState(0);
+  const [connectionLost, setConnectionLost] = useState(false);
 
   const { setPageContext } = useAdminAI();
 
@@ -137,6 +139,9 @@ export default function LifecycleTab() {
       const res = await fetch('/api/admin/cockpit/lifecycle');
       const data = await res.json();
       if (data.stories) {
+        // Reset error state on success
+        setConsecutiveErrors(0);
+        setConnectionLost(false);
         // Store CI runner status
         if (data.ciRunner !== undefined) setCiRunner(data.ciRunner);
         // Group by epic
@@ -188,6 +193,11 @@ export default function LifecycleTab() {
       }
     } catch (err) {
       console.error('Failed to fetch lifecycle data:', err);
+      setConsecutiveErrors(prev => {
+        const next = prev + 1;
+        if (next >= 5) setConnectionLost(true);
+        return next;
+      });
     } finally {
       setLoading(false);
     }
@@ -195,8 +205,12 @@ export default function LifecycleTab() {
 
   useEffect(() => { fetchData(); }, []);
   // T4-2: Smart polling — fast (3s) after actions with 30s auto-stop, medium (5s) when active, slow (15s) idle
+  // GAP-04: Exponential backoff on errors — double interval on each failure, cap at 60s
   const hasActiveLifecycle = [...epics.flatMap(e => e.stories), ...unassigned].some(s => s.lifecycleStep && s.status === 'in_progress');
-  const pollInterval = pollFast ? 3000 : hasActiveLifecycle ? 5000 : 15000;
+  const baseInterval = pollFast ? 3000 : hasActiveLifecycle ? 5000 : 15000;
+  const pollInterval = consecutiveErrors > 0
+    ? Math.min(baseInterval * Math.pow(2, consecutiveErrors), 60000)
+    : baseInterval;
 
   useEffect(() => {
     const interval = setInterval(fetchData, pollInterval);
@@ -354,6 +368,17 @@ export default function LifecycleTab() {
           <RefreshCw className="w-3.5 h-3.5" />
         </button>
       </div>
+
+      {/* GAP-04: Connection lost banner */}
+      {connectionLost && (
+        <div className="mb-3 px-3 py-2 rounded-lg bg-amber-500/10 border border-amber-500/30 text-amber-400 text-xs flex items-center gap-2">
+          <Loader2 className="w-3.5 h-3.5 animate-spin" />
+          <span>Connection lost — retrying every {Math.round(pollInterval / 1000)}s...</span>
+          <button onClick={() => { setConsecutiveErrors(0); setConnectionLost(false); fetchData(); }} className="ml-auto px-2 py-0.5 rounded bg-amber-500/20 hover:bg-amber-500/30 transition text-[10px] font-medium">
+            Retry now
+          </button>
+        </div>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-[240px_1fr] gap-3">
         {/* Left: Epic / Story browser */}
