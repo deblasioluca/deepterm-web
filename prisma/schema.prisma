@@ -403,16 +403,31 @@ model SecurityAlert {
 }
 
 model Idea {
-  id                String   @id @default(cuid())
+  id                String         @id @default(cuid())
   title             String
   description       String
-  category          String   @default("feature")
-  status            String   @default("consideration")
+  category          String         @default("feature")
+  status            String         @default("consideration")
   authorId          String
   githubIssueNumber Int?
-  createdAt         DateTime @default(now())
-  author            User     @relation(fields: [authorId], references: [id])
+  createdAt         DateTime       @default(now())
+  author            User           @relation(fields: [authorId], references: [id])
   votes             Vote[]
+  comments          IdeaComment[]
+}
+
+model IdeaComment {
+  id          String   @id @default(cuid())
+  ideaId      String
+  authorType  String   // "user" | "admin" | "ai"
+  authorName  String?
+  authorEmail String?
+  message     String
+  visibility  String   @default("public") // "public" | "internal"
+  createdAt   DateTime @default(now())
+  idea        Idea     @relation(fields: [ideaId], references: [id], onDelete: Cascade)
+
+  @@index([ideaId, createdAt])
 }
 
 model Vote {

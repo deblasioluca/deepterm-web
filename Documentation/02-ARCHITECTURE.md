@@ -234,7 +234,11 @@ Request
 | **AdminUser** | Admin accounts | Separate from User, with own 2FA and passkeys |
 | **SubscriptionOffering** | Plan pricing | Admin-managed pricing (draft/live stages) with Stripe price IDs |
 | **Release** | App versions | Platform-specific release metadata, checksums, download paths |
-| **Issue** | Bug reports | In-app submitted issues with attachments and status tracking |
+| **Issue** | Bug reports | In-app submitted issues with attachments, conversation timeline (IssueUpdate), and email reply notifications |
+| **IssueUpdate** | Issue timeline | Conversation entries on issues — authorType (user/admin/ai), visibility (public/internal), status changes |
+| **Idea** | Feature ideas | User-submitted feature requests with voting, comments, and GitHub issue linking |
+| **IdeaComment** | Idea discussion | Threaded comments on ideas — authorType (user/admin/ai), visibility (public/internal) |
+| **Vote** | Idea votes | User votes on ideas (unique per user+idea) |
 | **Epic** | Planning initiatives | Large bodies of work (e.g., "Auth v2"), status/priority/sort order |
 | **Story** | Planning deliverables | Smaller units within an Epic, linked to GitHub issue numbers |
 
@@ -399,6 +403,7 @@ The server stores only `encryptedData` — no `type` or `name` columns exist on 
 │
 ├── ideas/                  GET, POST      Feature ideas
 │   └── [id]/               GET, PATCH, DELETE, POST (vote)
+│       └── comment/        POST           Add comment to idea
 │
 ├── internal/
 │   ├── ai-dev/
@@ -410,7 +415,9 @@ The server stores only `encryptedData` — no `type` or `name` columns exist on 
 │   └── security-event/     POST           Security event logging
 │
 ├── issues/                 GET, POST      Support issues
-│   └── [id]/               GET, PATCH     Issue details & updates
+│   └── [id]/               GET            Issue details (visibility-filtered)
+│       ├── comment/        POST           User adds comment (triggers AI triage continuation)
+│       └── feedback/       POST           User feedback (thumbs up/down)
 │
 ├── register/               POST           Web registration
 │
@@ -470,7 +477,7 @@ The admin cockpit (`/admin/cockpit`) is a real-time operations dashboard, struct
 |-----|---------|-------------|
 | **Overview** | Quick stats (issues, ideas, releases, users), revenue metrics, compact health summary | DB aggregates + Stripe data |
 | **Backlog** | GitHub Issues with state (open/closed/all) and label filtering | GitHub API (live) |
-| **Triage** | Pending bug reports and feature ideas with approve/defer/reject actions | `Issue` + `Idea` models |
+| **Triage** | Pending bug reports and feature ideas with approve/defer/reject actions. AI auto-triage reviews new submissions and asks clarifying questions (`src/lib/ai-triage.ts`) | `Issue` + `Idea` models |
 | **Planning** | Epic/Story management — bundling, prioritization, status workflow, release | `Epic` + `Story` models |
 | **System Health** | Raspberry Pi, CI Mac runner, Node-RED status with uptime/memory details | Process stats + HTTP probes |
 | **Builds** | Recent CI build history with conclusions and durations | `CiBuild` model |

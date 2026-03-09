@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { notifyNewIdea } from '@/lib/node-red';
+import { triageIdea } from '@/lib/ai-triage';
 
 // GET all ideas
 export async function GET() {
@@ -21,6 +22,7 @@ export async function GET() {
         _count: {
           select: {
             votes: true,
+            comments: { where: { visibility: 'public' } },
           },
         },
       },
@@ -42,7 +44,7 @@ export async function GET() {
       status: idea.status,
       votes: idea._count.votes,
       hasVoted: userId ? idea.votes.some((v) => v.userId === userId) : false,
-      commentCount: 0,
+      commentCount: idea._count.comments,
       author: idea.author.name,
       authorId: idea.author.id,
       createdAt: idea.createdAt.toISOString().split('T')[0],
@@ -156,6 +158,9 @@ export async function POST(request: NextRequest) {
       description: idea.description,
       authorEmail: session.user.email || undefined,
     });
+
+    // Fire-and-forget AI triage
+    triageIdea(idea.id).catch((err) => console.error('[AI Triage] Fire-and-forget error:', err));
 
     return NextResponse.json({
       id: idea.id,

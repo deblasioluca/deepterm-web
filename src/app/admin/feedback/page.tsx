@@ -266,6 +266,12 @@ export default function AdminFeedbackPage() {
                             #{idea.githubIssueNumber}
                           </a>
                         )}
+                        <a href={`/admin/feedback/${idea.id}`}>
+                          <Button variant="secondary" size="sm">
+                            <MessageSquare className="w-3 h-3 mr-1" />
+                            View
+                          </Button>
+                        </a>
                         <Button
                           variant="secondary"
                           size="sm"

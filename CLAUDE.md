@@ -311,6 +311,7 @@ className="bg-[#0A0A0F] text-[#F0F0F5]"
 | **Rate limiting** | `src/lib/zk/rate-limit.ts` | Create new rate limiters |
 | **Audit logging** | `src/lib/zk/audit.ts` | Create separate audit systems |
 | **Intrusion detection** | `src/lib/intrusion.ts` | Create separate security event systems |
+| **AI triage** | `src/lib/ai-triage.ts` | Create separate triage/review logic |
 
 ---
 
@@ -571,6 +572,13 @@ const platforms = [
 | **Admin AI system prompt** | `src/lib/admin-ai/context.ts` |
 | **Admin AI chat API** | `src/app/api/admin/ai/chat/route.ts` |
 | **Admin AI config (DB)** | `AdminAIConfig` model — singleton, id `"singleton"` |
+| **AI triage** | `src/lib/ai-triage.ts` |
+| **AI activities registry** | `src/lib/ai-activities.ts` |
+| **Idea detail page (user)** | `src/app/dashboard/ideas/[id]/page.tsx` |
+| **Admin feedback detail** | `src/app/admin/feedback/[id]/page.tsx` |
+| **Ideas API** | `src/app/api/ideas/` |
+| **Issues API (web)** | `src/app/api/issues/` |
+| **Admin feedback API** | `src/app/api/admin/feedback/` |
 
 ### Internal API — AI Dev Mac
 

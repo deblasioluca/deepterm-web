@@ -41,6 +41,7 @@ export async function GET(
         orderBy: { createdAt: 'asc' },
       },
       updates: {
+        where: { visibility: 'public' },
         select: {
           id: true,
           authorType: true,

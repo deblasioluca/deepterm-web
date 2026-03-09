@@ -380,3 +380,116 @@ export async function sendIntrusionAlertEmail(payload: IntrusionAlertPayload): P
     return false;
   }
 }
+
+// ── Issue Reply Notification ───────────────────────────────
+
+export async function sendIssueReplyEmail(params: {
+  userName: string;
+  userEmail: string;
+  issueTitle: string;
+  issueId: string;
+  replyMessage: string;
+  newStatus?: string;
+}): Promise<boolean> {
+  try {
+    const safeName = params.userName?.trim() || 'there';
+    const statusLine = params.newStatus
+      ? `<p style="margin: 15px 0; padding: 10px 15px; background: #0d0e10; border-left: 3px solid #00ffc6; border-radius: 4px; color: #00ffc6; font-size: 14px;">Status updated to: <strong>${params.newStatus}</strong></p>`
+      : '';
+
+    const mailOptions = {
+      from: FROM_EMAIL,
+      to: params.userEmail,
+      subject: `[DeepTerm] New reply on your issue: ${params.issueTitle}`,
+      html: `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+          <div style="background: linear-gradient(135deg, #00ffc6 0%, #7b61ff 100%); padding: 20px; text-align: center;">
+            <h1 style="color: #0a0b0d; margin: 0;">DeepTerm</h1>
+          </div>
+          <div style="background: #1a1b1e; padding: 30px; color: #ffffff;">
+            <h2 style="color: #00ffc6; margin-top: 0;">New Reply on Your Issue</h2>
+            <p>Hi ${safeName},</p>
+            <p>There's a new response on your issue <strong>"${params.issueTitle}"</strong>:</p>
+            ${statusLine}
+            <div style="background: #0d0e10; padding: 20px; border-radius: 8px; margin: 20px 0;">
+              <pre style="color: #ccc; margin: 0; white-space: pre-wrap; word-wrap: break-word; font-family: Arial, sans-serif; font-size: 14px; line-height: 1.6;">${params.replyMessage.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')}</pre>
+            </div>
+            <div style="text-align: center; margin: 30px 0;">
+              <a href="https://deepterm.net/dashboard/issues/${params.issueId}" style="background: linear-gradient(135deg, #00ffc6 0%, #7b61ff 100%); color: #0a0b0d; padding: 15px 40px; text-decoration: none; border-radius: 8px; font-weight: bold;">
+                View Issue
+              </a>
+            </div>
+            <p style="color: #888; font-size: 14px;">
+              You can reply directly from your <a href="https://deepterm.net/dashboard/issues/${params.issueId}" style="color: #00ffc6;">issue page</a>.
+            </p>
+          </div>
+          <div style="background: #0a0b0d; padding: 15px; text-align: center; color: #666; font-size: 12px;">
+            DeepTerm - Secure SSH Client
+          </div>
+        </div>
+      `,
+      text: `Hi ${safeName},\n\nThere's a new response on your issue "${params.issueTitle}":\n\n${params.replyMessage}${params.newStatus ? `\n\nStatus updated to: ${params.newStatus}` : ''}\n\nView issue: https://deepterm.net/dashboard/issues/${params.issueId}`,
+    };
+
+    await transporter.sendMail(mailOptions);
+    console.log(`[Email] Issue reply notification sent to ${params.userEmail} for issue ${params.issueId}`);
+    return true;
+  } catch (error) {
+    console.error('[Email] Failed to send issue reply notification:', error);
+    return false;
+  }
+}
+
+// ── Idea Reply Notification ────────────────────────────────
+
+export async function sendIdeaReplyEmail(params: {
+  userName: string;
+  userEmail: string;
+  ideaTitle: string;
+  ideaId: string;
+  replyMessage: string;
+}): Promise<boolean> {
+  try {
+    const safeName = params.userName?.trim() || 'there';
+
+    const mailOptions = {
+      from: FROM_EMAIL,
+      to: params.userEmail,
+      subject: `[DeepTerm] New comment on your idea: ${params.ideaTitle}`,
+      html: `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+          <div style="background: linear-gradient(135deg, #00ffc6 0%, #7b61ff 100%); padding: 20px; text-align: center;">
+            <h1 style="color: #0a0b0d; margin: 0;">DeepTerm</h1>
+          </div>
+          <div style="background: #1a1b1e; padding: 30px; color: #ffffff;">
+            <h2 style="color: #00ffc6; margin-top: 0;">New Comment on Your Idea</h2>
+            <p>Hi ${safeName},</p>
+            <p>There's a new comment on your idea <strong>"${params.ideaTitle}"</strong>:</p>
+            <div style="background: #0d0e10; padding: 20px; border-radius: 8px; margin: 20px 0;">
+              <pre style="color: #ccc; margin: 0; white-space: pre-wrap; word-wrap: break-word; font-family: Arial, sans-serif; font-size: 14px; line-height: 1.6;">${params.replyMessage.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')}</pre>
+            </div>
+            <div style="text-align: center; margin: 30px 0;">
+              <a href="https://deepterm.net/dashboard/ideas/${params.ideaId}" style="background: linear-gradient(135deg, #00ffc6 0%, #7b61ff 100%); color: #0a0b0d; padding: 15px 40px; text-decoration: none; border-radius: 8px; font-weight: bold;">
+                View Idea
+              </a>
+            </div>
+            <p style="color: #888; font-size: 14px;">
+              You can reply directly from your <a href="https://deepterm.net/dashboard/ideas/${params.ideaId}" style="color: #00ffc6;">idea page</a>.
+            </p>
+          </div>
+          <div style="background: #0a0b0d; padding: 15px; text-align: center; color: #666; font-size: 12px;">
+            DeepTerm - Secure SSH Client
+          </div>
+        </div>
+      `,
+      text: `Hi ${safeName},\n\nThere's a new comment on your idea "${params.ideaTitle}":\n\n${params.replyMessage}\n\nView idea: https://deepterm.net/dashboard/ideas/${params.ideaId}`,
+    };
+
+    await transporter.sendMail(mailOptions);
+    console.log(`[Email] Idea reply notification sent to ${params.userEmail} for idea ${params.ideaId}`);
+    return true;
+  } catch (error) {
+    console.error('[Email] Failed to send idea reply notification:', error);
+    return false;
+  }
+}

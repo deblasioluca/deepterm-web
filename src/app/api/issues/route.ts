@@ -5,6 +5,7 @@ import { promises as fs } from 'fs';
 import path from 'path';
 import crypto from 'crypto';
 import { getIssuesStorageDir, normalizeIssueArea } from '@/lib/issues';
+import { triageIssue } from '@/lib/ai-triage';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -166,6 +167,9 @@ export async function POST(request: NextRequest) {
       status: 'open',
     },
   });
+
+  // Fire-and-forget AI triage
+  triageIssue(issue.id).catch((err) => console.error('[AI Triage] Fire-and-forget error:', err));
 
   return NextResponse.json({ success: true, id: issue.id });
 }

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getAdminSession } from '@/lib/admin-session';
 import { normalizeIssueStatus } from '@/lib/issues';
+import { sendIssueReplyEmail } from '@/lib/email';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -81,7 +82,7 @@ export async function POST(
 
   const existing = await prisma.issue.findUnique({
     where: { id: params.id },
-    select: { status: true, firstResponseAt: true },
+    select: { status: true, firstResponseAt: true, title: true, user: { select: { name: true, email: true } } },
   });
 
   if (!existing) {
@@ -109,16 +110,30 @@ export async function POST(
     },
   });
 
+  const actualMessage = message || (statusChanged ? `Status changed to ${nextStatus}.` : 'Update posted.');
+
   await prisma.issueUpdate.create({
     data: {
       issueId: params.id,
       authorType: 'admin',
       authorEmail: session.email,
-      message: message || (statusChanged ? `Status changed to ${nextStatus}.` : 'Update posted.'),
+      message: actualMessage,
       status: statusChanged ? nextStatus : null,
       visibility,
     },
   });
+
+  // Send email notification to the issue reporter for public replies
+  if (visibility === 'public' && existing.user?.email) {
+    sendIssueReplyEmail({
+      userName: existing.user.name || 'there',
+      userEmail: existing.user.email,
+      issueTitle: existing.title,
+      issueId: params.id,
+      replyMessage: actualMessage,
+      newStatus: statusChanged ? nextStatus : undefined,
+    }).catch((err) => console.error('[Email] Failed to send issue reply notification:', err));
+  }
 
   return NextResponse.json({ success: true, status: nextStatus });
 }

@@ -174,6 +174,17 @@ export const AI_ACTIVITIES: Record<string, AIActivityDef> = {
     defaultTemperature: 0.7,
     defaultMaxTokens: 8000,
   },
+
+  // Auto-Triage
+  'triage.review': {
+    key: 'triage.review',
+    label: 'Auto-Triage Review',
+    description: 'AI reviews incoming issues/ideas, asks clarifying questions, and summarizes when satisfied',
+    category: 'issues',
+    defaultModel: 'claude-sonnet-4-6',
+    defaultTemperature: 0.4,
+    defaultMaxTokens: 2048,
+  },
 };
 
 export type AIActivityKey = keyof typeof AI_ACTIVITIES;

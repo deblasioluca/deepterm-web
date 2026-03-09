@@ -1286,6 +1286,173 @@ Get current download page info and latest version.
 
 ---
 
+## 13. Feature Ideas (Web)
+
+### `GET /api/ideas`
+
+List all feature ideas with vote counts and GitHub issue backlog.
+
+**Auth:** NextAuth session (optional — affects `hasVoted` field)
+
+**Response (200):** Array of idea objects with `id`, `title`, `description`, `status`, `votes`, `hasVoted`, `commentCount`, `author`, `createdAt`. Includes synthetic entries from GitHub issues not yet linked to an Idea.
+
+### `POST /api/ideas`
+
+Submit a new feature idea. Auto-votes for the author. Triggers AI auto-triage (fire-and-forget).
+
+**Auth:** NextAuth session (required)
+
+**Body:**
+```json
+{ "title": "SSH key agent forwarding", "description": "Support ssh-agent forwarding for remote..." }
+```
+
+### `GET /api/ideas/[id]`
+
+Get a single idea with full details and public comments.
+
+**Auth:** NextAuth session (optional)
+
+**Response (200):**
+```json
+{
+  "idea": {
+    "id": "clxyz...",
+    "title": "...",
+    "description": "...",
+    "category": "feature",
+    "status": "consideration",
+    "votes": 12,
+    "hasVoted": true,
+    "author": "Jane",
+    "authorId": "usr_...",
+    "githubIssueNumber": null,
+    "createdAt": "2026-03-01T...",
+    "comments": [
+      { "id": "...", "authorType": "ai", "authorName": "DeepTerm AI", "message": "...", "createdAt": "..." }
+    ]
+  }
+}
+```
+
+### `POST /api/ideas/[id]/vote`
+
+Toggle vote on an idea. Returns updated vote count.
+
+**Auth:** NextAuth session (required)
+
+### `POST /api/ideas/[id]/comment`
+
+Add a comment to an idea. Triggers AI triage continuation if an AI conversation is active.
+
+**Auth:** NextAuth session (required)
+
+**Body:**
+```json
+{ "message": "I'd also like this to support ed25519 keys..." }
+```
+
+---
+
+## 14. Support Issues (Web)
+
+### `GET /api/issues`
+
+List the authenticated user's issues.
+
+**Auth:** NextAuth session (required)
+
+### `POST /api/issues`
+
+Submit a new bug report with optional file attachments (screenshots, logs). Triggers AI auto-triage (fire-and-forget).
+
+**Auth:** NextAuth session (required)
+
+**Body:** `multipart/form-data` with `title`, `description`, `area`, optional `screenshots[]` (max 5, images only), optional `log` file. Max 25MB total.
+
+### `GET /api/issues/[id]`
+
+Get a single issue with attachments and public updates. Internal admin notes (`visibility: 'internal'`) are filtered out.
+
+**Auth:** NextAuth session (required, must own the issue)
+
+### `POST /api/issues/[id]/comment`
+
+Add a comment to an issue. Triggers AI triage continuation if an AI conversation is active.
+
+**Auth:** NextAuth session (required, must own the issue)
+
+**Body:**
+```json
+{ "message": "I can reproduce this on macOS 14.3 with DeepTerm 1.2.0..." }
+```
+
+### `POST /api/issues/[id]/feedback`
+
+Set reporter feedback (thumbs up/down) on an issue.
+
+**Auth:** NextAuth session (required, must own the issue)
+
+**Body:**
+```json
+{ "feedback": "up" }
+```
+
+---
+
+## 15. Admin Feedback API
+
+### `GET /api/admin/feedback`
+
+List all user-submitted ideas with pagination, search, and status filtering.
+
+**Auth:** Admin session (intranet only)
+
+### `GET /api/admin/feedback/[id]`
+
+Get a single idea with all comments (including internal notes).
+
+**Auth:** Admin session (intranet only)
+
+### `POST /api/admin/feedback/[id]`
+
+Admin replies to an idea. Sends email notification for public replies.
+
+**Auth:** Admin session (intranet only)
+
+**Body:**
+```json
+{ "message": "Thanks for the suggestion! We're planning this for Q2.", "visibility": "public" }
+```
+
+### `PATCH /api/admin/feedback/[id]`
+
+Update idea status.
+
+**Auth:** Admin session (intranet only)
+
+### `DELETE /api/admin/feedback/[id]`
+
+Delete an idea.
+
+**Auth:** Admin session (intranet only)
+
+---
+
+## 16. AI Auto-Triage
+
+AI triage is triggered automatically (fire-and-forget) when:
+- A new issue is submitted (`POST /api/issues`) → `triageIssue()`
+- A new idea is submitted (`POST /api/ideas`) → `triageIdea()`
+- User replies to an issue with active AI triage → `continueIssueTriage()`
+- User replies to an idea with active AI triage → `continueIdeaTriage()`
+
+The AI reviews submissions, asks clarifying questions (up to 3-4 per round), and posts a `[TRIAGE_COMPLETE]` summary with structured metadata when satisfied. Triage comments appear as `authorType: 'ai'` in the conversation timeline.
+
+Configuration: `triage.review` activity in `src/lib/ai-activities.ts`. Model assignment configurable via Admin AI settings.
+
+---
+
 ## Error Format
 
 ### ZK API errors (`/api/zk/*`)

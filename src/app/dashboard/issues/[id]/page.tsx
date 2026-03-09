@@ -209,10 +209,16 @@ export default function DashboardIssueDetailPage({ params }: { params: { id: str
         ) : (
           <div className="space-y-3">
             {issue.updates.map((u) => (
-              <div key={u.id} className="p-4 bg-background-tertiary rounded-lg border border-border">
+              <div key={u.id} className={`p-4 rounded-lg border ${
+                u.authorType === 'ai'
+                  ? 'bg-blue-500/5 border-blue-500/20'
+                  : u.authorType === 'admin'
+                  ? 'bg-accent-primary/5 border-accent-primary/20'
+                  : 'bg-background-tertiary border-border'
+              }`}>
                 <div className="flex items-center justify-between gap-3">
                   <div className="text-xs text-text-tertiary">
-                    {u.authorType === 'admin' ? 'Admin' : 'You'} • {new Date(u.createdAt).toLocaleString()}
+                    {u.authorType === 'ai' ? 'DeepTerm AI' : u.authorType === 'admin' ? 'DeepTerm Team' : 'You'} • {new Date(u.createdAt).toLocaleString()}
                   </div>
                   {u.status ? (
                     <Badge variant="secondary" className="text-xs">{u.status}</Badge>

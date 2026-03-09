@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
-import { continueIssueTriage } from '@/lib/ai-triage';
+import { continueIdeaTriage } from '@/lib/ai-triage';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -26,31 +26,27 @@ export async function POST(
     return NextResponse.json({ error: 'Message too long (max 5000 chars)' }, { status: 400 });
   }
 
-  const issue = await prisma.issue.findUnique({
+  const idea = await prisma.idea.findUnique({
     where: { id: params.id },
-    select: { userId: true },
+    select: { id: true },
   });
 
-  if (!issue || issue.userId !== session.user.id) {
+  if (!idea) {
     return NextResponse.json({ error: 'Not Found' }, { status: 404 });
   }
 
-  await prisma.issueUpdate.create({
+  await prisma.ideaComment.create({
     data: {
-      issueId: params.id,
+      ideaId: params.id,
       authorType: 'user',
+      authorName: session.user.name || session.user.email || 'User',
       authorEmail: session.user.email || undefined,
       message,
     },
   });
 
-  await prisma.issue.update({
-    where: { id: params.id },
-    data: { updatedAt: new Date() },
-  });
-
   // Continue AI triage conversation if active (fire-and-forget)
-  continueIssueTriage(params.id).catch((err) => console.error('[AI Triage] Continue error:', err));
+  continueIdeaTriage(params.id).catch((err) => console.error('[AI Triage] Continue error:', err));
 
   return NextResponse.json({ success: true });
 }

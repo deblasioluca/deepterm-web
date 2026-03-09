@@ -280,9 +280,11 @@ export default function IdeasPage() {
                           )}
 
                           <div className="flex-1 min-w-0">
-                            <h3 className="font-semibold text-text-primary mb-1 truncate">
-                              {idea.title}
-                            </h3>
+                            <a href={`/dashboard/ideas/${idea.id}`}>
+                              <h3 className="font-semibold text-text-primary mb-1 truncate hover:text-accent-primary transition-colors">
+                                {idea.title}
+                              </h3>
+                            </a>
                             <p className="text-sm text-text-secondary line-clamp-2 mb-3">
                               {idea.description}
                             </p>
@@ -290,10 +292,10 @@ export default function IdeasPage() {
                               <span className="text-xs text-text-tertiary">
                                 by {idea.author}
                               </span>
-                              <div className="flex items-center gap-1 text-text-tertiary">
+                              <a href={`/dashboard/ideas/${idea.id}`} className="flex items-center gap-1 text-text-tertiary hover:text-accent-primary transition-colors">
                                 <MessageSquare className="w-3 h-3" />
                                 <span className="text-xs">{idea.commentCount}</span>
-                              </div>
+                              </a>
                             </div>
                           </div>
                         </div>
