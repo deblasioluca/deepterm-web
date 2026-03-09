@@ -43,7 +43,7 @@ async function getCIRunnerStatus() {
 }
 
 // Helper: dispatch pr-check.yml on the CI Mac with story context
-async function dispatchCIWorkflow(storyId: string) {
+async function dispatchCIWorkflow(storyId: string, branch: string = 'main') {
   if (!GITHUB_TOKEN) {
     console.error('GITHUB_TOKEN not configured — cannot dispatch CI workflow');
     return { ok: false, error: 'GITHUB_TOKEN not configured' };
@@ -59,7 +59,7 @@ async function dispatchCIWorkflow(storyId: string) {
           'X-GitHub-Api-Version': '2022-11-28',
         },
         body: JSON.stringify({
-          ref: 'main',
+          ref: branch,
           inputs: { story_id: storyId },
         }),
         signal: AbortSignal.timeout(10000),
@@ -763,7 +763,8 @@ export async function POST(req: NextRequest) {
         if (!stepId || stepId !== 'test') {
           return NextResponse.json({ error: 'dispatch-ci only supports stepId=test' }, { status: 400 });
         }
-        const ciResult = await dispatchCIWorkflow(storyId);
+        const _lb1 = await prisma.agentLoop.findFirst({ where: { storyId }, select: { branchName: true }, orderBy: { createdAt: 'desc' } });
+        const ciResult = await dispatchCIWorkflow(storyId, _lb1?.branchName ?? "main");
         await logEvent(storyId, 'test', 'progress', JSON.stringify({
           message: ciResult.ok ? 'CI workflow dispatched on CI Mac (pr-check.yml)' : `CI dispatch failed: ${ciResult.error}`,
           ciDispatched: ciResult.ok,
@@ -782,7 +783,8 @@ export async function POST(req: NextRequest) {
         await logEvent(storyId, stepId, 'started', JSON.stringify({ message: `Step restarted (retry)` }), 'system');
         // Trigger CI workflow on the CI Mac when test step starts
         if (stepId === 'test') {
-          const ciResult = await dispatchCIWorkflow(storyId);
+          const _lb2 = await prisma.agentLoop.findFirst({ where: { storyId }, select: { branchName: true }, orderBy: { createdAt: 'desc' } });
+          const ciResult = await dispatchCIWorkflow(storyId, _lb2?.branchName ?? "main");
           await logEvent(storyId, 'test', 'progress', JSON.stringify({
             message: ciResult.ok ? 'CI workflow dispatched on CI Mac (pr-check.yml)' : `CI dispatch failed: ${ciResult.error}`,
             ciDispatched: ciResult.ok,
@@ -802,7 +804,8 @@ export async function POST(req: NextRequest) {
         if (nextStep) await logEvent(storyId, nextStep, 'started', `Started after ${stepId} was skipped`, 'system');
         // Trigger CI workflow when advancing to test step
         if (nextStep === 'test') {
-          const ciResult = await dispatchCIWorkflow(storyId);
+          const _lb3 = await prisma.agentLoop.findFirst({ where: { storyId }, select: { branchName: true }, orderBy: { createdAt: 'desc' } });
+          const ciResult = await dispatchCIWorkflow(storyId, _lb3?.branchName ?? 'main');
           await logEvent(storyId, 'test', 'progress', JSON.stringify({
             message: ciResult.ok ? 'CI workflow dispatched on CI Mac (pr-check.yml)' : `CI dispatch failed: ${ciResult.error}`,
             ciDispatched: ciResult.ok,
