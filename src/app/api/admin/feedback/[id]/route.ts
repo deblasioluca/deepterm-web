@@ -72,7 +72,7 @@ export async function POST(
 
   const idea = await prisma.idea.findUnique({
     where: { id: params.id },
-    include: { author: { select: { name: true, email: true } } },
+    include: { author: { select: { id: true, name: true, email: true } } },
   });
 
   if (!idea) {
@@ -99,6 +99,19 @@ export async function POST(
       ideaId: idea.id,
       replyMessage: message,
     }).catch((err) => console.error('[Email] Failed to send idea reply notification:', err));
+
+    // In-app notification
+    prisma.userNotification.create({
+      data: {
+        userId: idea.author.id,
+        type: 'admin_reply',
+        title: `New reply on: ${idea.title}`,
+        message: message.substring(0, 500),
+        linkUrl: `/dashboard/ideas/${idea.id}`,
+        sourceType: 'idea',
+        sourceId: idea.id,
+      },
+    }).catch((err) => console.error('[Notification] Failed:', err));
   }
 
   return NextResponse.json({ success: true });

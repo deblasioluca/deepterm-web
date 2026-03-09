@@ -25,6 +25,12 @@ export async function GET() {
             comments: { where: { visibility: 'public' } },
           },
         },
+        comments: {
+          where: { visibility: 'public' },
+          select: { authorType: true, message: true },
+          orderBy: { createdAt: 'desc' },
+          take: 1,
+        },
       },
       orderBy: {
         createdAt: 'desc',
@@ -37,18 +43,25 @@ export async function GET() {
     );
 
     // Transform to include vote count and hasVoted
-    const transformedIdeas = ideas.map((idea) => ({
-      id: idea.id,
-      title: idea.title,
-      description: idea.description,
-      status: idea.status,
-      votes: idea._count.votes,
-      hasVoted: userId ? idea.votes.some((v) => v.userId === userId) : false,
-      commentCount: idea._count.comments,
-      author: idea.author.name,
-      authorId: idea.author.id,
-      createdAt: idea.createdAt.toISOString().split('T')[0],
-    }));
+    const transformedIdeas = ideas.map((idea) => {
+      // Check if the last public comment is from AI and not a triage completion
+      const lastComment = idea.comments[0];
+      const needsReply = lastComment?.authorType === 'ai' && !lastComment.message.startsWith('[TRIAGE_COMPLETE]');
+
+      return {
+        id: idea.id,
+        title: idea.title,
+        description: idea.description,
+        status: idea.status,
+        votes: idea._count.votes,
+        hasVoted: userId ? idea.votes.some((v) => v.userId === userId) : false,
+        commentCount: idea._count.comments,
+        needsReply: userId === idea.author.id ? needsReply : false,
+        author: idea.author.name,
+        authorId: idea.author.id,
+        createdAt: idea.createdAt.toISOString().split('T')[0],
+      };
+    });
 
     // Find open GitHub issues not already linked to an Idea — show as backlog items
     const ghIssues = await prisma.githubIssue.findMany({

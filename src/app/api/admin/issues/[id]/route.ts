@@ -82,7 +82,7 @@ export async function POST(
 
   const existing = await prisma.issue.findUnique({
     where: { id: params.id },
-    select: { status: true, firstResponseAt: true, title: true, user: { select: { name: true, email: true } } },
+    select: { status: true, firstResponseAt: true, title: true, userId: true, user: { select: { name: true, email: true } } },
   });
 
   if (!existing) {
@@ -133,6 +133,21 @@ export async function POST(
       replyMessage: actualMessage,
       newStatus: statusChanged ? nextStatus : undefined,
     }).catch((err) => console.error('[Email] Failed to send issue reply notification:', err));
+
+    // In-app notification
+    prisma.userNotification.create({
+      data: {
+        userId: existing.userId,
+        type: statusChanged ? 'status_change' : 'admin_reply',
+        title: statusChanged
+          ? `Status updated on: ${existing.title}`
+          : `New reply on: ${existing.title}`,
+        message: actualMessage.substring(0, 500),
+        linkUrl: `/dashboard/issues/${params.id}`,
+        sourceType: 'issue',
+        sourceId: params.id,
+      },
+    }).catch((err) => console.error('[Notification] Failed:', err));
   }
 
   return NextResponse.json({ success: true, status: nextStatus });

@@ -192,6 +192,7 @@ model User {
   sessions                      Session[]
   team                          Team?     @relation(fields: [teamId], references: [id])
   votes                         Vote[]
+  notifications                 UserNotification[]
   zkUser                        ZKUser?
 }
 
@@ -462,6 +463,23 @@ model Announcement {
   endDate         DateTime?
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
+}
+
+model UserNotification {
+  id          String    @id @default(cuid())
+  userId      String
+  type        String    // "ai_triage" | "admin_reply" | "status_change" | "announcement"
+  title       String
+  message     String
+  linkUrl     String?   // e.g. /dashboard/ideas/xxx or /dashboard/issues/xxx
+  sourceType  String?   // "issue" | "idea" | "announcement"
+  sourceId    String?   // ID of the source item
+  isRead      Boolean   @default(false)
+  createdAt   DateTime  @default(now())
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, isRead, createdAt])
+  @@index([userId, createdAt])
 }
 
 model TeamInvitation {

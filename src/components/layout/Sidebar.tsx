@@ -22,8 +22,9 @@ import {
   ChevronRight,
   Smartphone,
   Fingerprint,
+  Bell,
 } from 'lucide-react';
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useLocale } from '@/components/i18n/LocaleProvider';
 import { LanguageSelector } from '@/components/i18n/LanguageSelector';
 
@@ -31,6 +32,25 @@ export function Sidebar() {
   const { messages } = useLocale();
   const pathname = usePathname();
   const [isCollapsed, setIsCollapsed] = useState(false);
+  const [unreadCount, setUnreadCount] = useState(0);
+
+  const fetchUnread = useCallback(async () => {
+    try {
+      const res = await fetch('/api/messages/count');
+      if (res.ok) {
+        const data = await res.json();
+        setUnreadCount(data.count || 0);
+      }
+    } catch {
+      // silent
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchUnread();
+    const interval = setInterval(fetchUnread, 60000); // poll every 60s
+    return () => clearInterval(interval);
+  }, [fetchUnread]);
 
   const sidebarLinks = [
     { label: messages.sidebar.account, href: '/dashboard', icon: User },
@@ -44,6 +64,7 @@ export function Sidebar() {
 
   const secondaryLinks = [
     { label: messages.sidebar.forStudents, href: '/dashboard/students', icon: GraduationCap },
+    { label: messages.sidebar.messages || 'Messages', href: '/dashboard/messages', icon: Bell, badge: unreadCount },
     { label: messages.sidebar.ideas, href: '/dashboard/ideas', icon: Lightbulb },
     { label: messages.sidebar.getTheApp, href: '/dashboard/get-the-app', icon: Download },
     { label: messages.sidebar.issues, href: '/dashboard/issues', icon: MessageSquare },
@@ -123,6 +144,7 @@ export function Sidebar() {
             {secondaryLinks.map((link) => {
               const isActive = pathname === link.href;
               const Icon = link.icon;
+              const badgeCount = 'badge' in link ? (link as { badge?: number }).badge : 0;
 
               return (
                 <li key={link.href}>
@@ -135,8 +157,24 @@ export function Sidebar() {
                         : 'text-text-secondary hover:text-text-primary hover:bg-background-tertiary'
                     )}
                   >
-                    <Icon className="w-5 h-5 flex-shrink-0" />
-                    {!isCollapsed && <span className="text-sm font-medium">{link.label}</span>}
+                    <div className="relative flex-shrink-0">
+                      <Icon className="w-5 h-5" />
+                      {badgeCount != null && badgeCount > 0 && isCollapsed && (
+                        <span className="absolute -top-1.5 -right-1.5 w-4 h-4 text-[9px] font-bold bg-accent-primary text-white rounded-full flex items-center justify-center">
+                          {badgeCount > 9 ? '9+' : badgeCount}
+                        </span>
+                      )}
+                    </div>
+                    {!isCollapsed && (
+                      <>
+                        <span className="text-sm font-medium flex-1">{link.label}</span>
+                        {badgeCount != null && badgeCount > 0 && (
+                          <span className="ml-auto px-1.5 py-0.5 text-[10px] font-bold bg-accent-primary text-white rounded-full min-w-[18px] text-center">
+                            {badgeCount > 99 ? '99+' : badgeCount}
+                          </span>
+                        )}
+                      </>
+                    )}
                   </Link>
                 </li>
               );

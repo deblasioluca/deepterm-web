@@ -11,6 +11,7 @@
 
 import { prisma } from '@/lib/prisma';
 import { callAI } from '@/lib/ai-client';
+import { sendIssueReplyEmail, sendIdeaReplyEmail } from '@/lib/email';
 
 const SYSTEM_PROMPT_ISSUE = `You are an AI triage assistant for DeepTerm, a professional SSH client platform.
 
@@ -81,6 +82,8 @@ export async function triageIssue(issueId: string): Promise<void> {
         title: true,
         description: true,
         area: true,
+        userId: true,
+        user: { select: { name: true, email: true } },
         attachments: { select: { originalFilename: true, kind: true } },
       },
     });
@@ -107,6 +110,28 @@ export async function triageIssue(issueId: string): Promise<void> {
       data: { updatedAt: new Date() },
     });
 
+    // Send email + in-app notification if AI asked questions
+    if (!response.content.startsWith('[TRIAGE_COMPLETE]')) {
+      await notifyUser({
+        userId: issue.userId,
+        userName: issue.user.name || issue.user.email,
+        userEmail: issue.user.email,
+        type: 'ai_triage',
+        title: `Follow-up on your issue: ${issue.title}`,
+        message: response.content,
+        sourceType: 'issue',
+        sourceId: issue.id,
+        linkUrl: `/dashboard/issues/${issue.id}`,
+      });
+      sendIssueReplyEmail({
+        userName: issue.user.name || issue.user.email,
+        userEmail: issue.user.email,
+        issueTitle: issue.title,
+        issueId: issue.id,
+        replyMessage: response.content,
+      }).catch(() => {});
+    }
+
     console.log(`[AI Triage] Issue ${issueId} reviewed — ${response.content.startsWith('[TRIAGE_COMPLETE]') ? 'complete' : 'questions asked'}`);
   } catch (error) {
     console.error(`[AI Triage] Failed to triage issue ${issueId}:`, error);
@@ -120,7 +145,14 @@ export async function triageIdea(ideaId: string): Promise<void> {
   try {
     const idea = await prisma.idea.findUnique({
       where: { id: ideaId },
-      select: { id: true, title: true, description: true, category: true },
+      select: {
+        id: true,
+        title: true,
+        description: true,
+        category: true,
+        authorId: true,
+        author: { select: { name: true, email: true } },
+      },
     });
 
     if (!idea) return;
@@ -141,6 +173,28 @@ export async function triageIdea(ideaId: string): Promise<void> {
       },
     });
 
+    // Send email + in-app notification if AI asked questions
+    if (!response.content.startsWith('[TRIAGE_COMPLETE]')) {
+      await notifyUser({
+        userId: idea.authorId,
+        userName: idea.author.name || idea.author.email,
+        userEmail: idea.author.email,
+        type: 'ai_triage',
+        title: `Follow-up on your idea: ${idea.title}`,
+        message: response.content,
+        sourceType: 'idea',
+        sourceId: idea.id,
+        linkUrl: `/dashboard/ideas/${idea.id}`,
+      });
+      sendIdeaReplyEmail({
+        userName: idea.author.name || idea.author.email,
+        userEmail: idea.author.email,
+        ideaTitle: idea.title,
+        ideaId: idea.id,
+        replyMessage: response.content,
+      }).catch(() => {});
+    }
+
     console.log(`[AI Triage] Idea ${ideaId} reviewed — ${response.content.startsWith('[TRIAGE_COMPLETE]') ? 'complete' : 'questions asked'}`);
   } catch (error) {
     console.error(`[AI Triage] Failed to triage idea ${ideaId}:`, error);
@@ -160,6 +214,8 @@ export async function continueIssueTriage(issueId: string): Promise<void> {
         title: true,
         description: true,
         area: true,
+        userId: true,
+        user: { select: { name: true, email: true } },
         attachments: { select: { originalFilename: true, kind: true } },
         updates: {
           where: { visibility: 'public' },
@@ -202,6 +258,28 @@ export async function continueIssueTriage(issueId: string): Promise<void> {
       data: { updatedAt: new Date() },
     });
 
+    // Notify user of AI follow-up
+    if (!response.content.startsWith('[TRIAGE_COMPLETE]')) {
+      await notifyUser({
+        userId: issue.userId,
+        userName: issue.user.name || issue.user.email,
+        userEmail: issue.user.email,
+        type: 'ai_triage',
+        title: `Follow-up on your issue: ${issue.title}`,
+        message: response.content,
+        sourceType: 'issue',
+        sourceId: issue.id,
+        linkUrl: `/dashboard/issues/${issue.id}`,
+      });
+      sendIssueReplyEmail({
+        userName: issue.user.name || issue.user.email,
+        userEmail: issue.user.email,
+        issueTitle: issue.title,
+        issueId: issue.id,
+        replyMessage: response.content,
+      }).catch(() => {});
+    }
+
     console.log(`[AI Triage] Issue ${issueId} follow-up — ${response.content.startsWith('[TRIAGE_COMPLETE]') ? 'complete' : 'more questions'}`);
   } catch (error) {
     console.error(`[AI Triage] Failed to continue issue triage ${issueId}:`, error);
@@ -220,6 +298,8 @@ export async function continueIdeaTriage(ideaId: string): Promise<void> {
         title: true,
         description: true,
         category: true,
+        authorId: true,
+        author: { select: { name: true, email: true } },
         comments: {
           where: { visibility: 'public' },
           select: { authorType: true, message: true },
@@ -264,6 +344,28 @@ export async function continueIdeaTriage(ideaId: string): Promise<void> {
         visibility: 'public',
       },
     });
+
+    // Notify user of AI follow-up
+    if (!response.content.startsWith('[TRIAGE_COMPLETE]')) {
+      await notifyUser({
+        userId: idea.authorId,
+        userName: idea.author.name || idea.author.email,
+        userEmail: idea.author.email,
+        type: 'ai_triage',
+        title: `Follow-up on your idea: ${idea.title}`,
+        message: response.content,
+        sourceType: 'idea',
+        sourceId: idea.id,
+        linkUrl: `/dashboard/ideas/${idea.id}`,
+      });
+      sendIdeaReplyEmail({
+        userName: idea.author.name || idea.author.email,
+        userEmail: idea.author.email,
+        ideaTitle: idea.title,
+        ideaId: idea.id,
+        replyMessage: response.content,
+      }).catch(() => {});
+    }
 
     console.log(`[AI Triage] Idea ${ideaId} follow-up — ${response.content.startsWith('[TRIAGE_COMPLETE]') ? 'complete' : 'more questions'}`);
   } catch (error) {
@@ -318,4 +420,35 @@ function buildConversationHistory(issue: {
   }
 
   return messages;
+}
+
+/**
+ * Create an in-app notification for a user.
+ */
+async function notifyUser(params: {
+  userId: string;
+  userName: string;
+  userEmail: string;
+  type: string;
+  title: string;
+  message: string;
+  sourceType: string;
+  sourceId: string;
+  linkUrl: string;
+}): Promise<void> {
+  try {
+    await prisma.userNotification.create({
+      data: {
+        userId: params.userId,
+        type: params.type,
+        title: params.title,
+        message: params.message.substring(0, 500),
+        linkUrl: params.linkUrl,
+        sourceType: params.sourceType,
+        sourceId: params.sourceId,
+      },
+    });
+  } catch (error) {
+    console.error('[Notification] Failed to create notification:', error);
+  }
 }

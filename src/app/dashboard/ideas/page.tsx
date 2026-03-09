@@ -25,6 +25,7 @@ interface Idea {
   votes: number;
   hasVoted: boolean;
   commentCount: number;
+  needsReply?: boolean;
   author: string;
   createdAt: string;
 }
@@ -285,6 +286,15 @@ export default function IdeasPage() {
                                 {idea.title}
                               </h3>
                             </a>
+                            {idea.needsReply && (
+                              <a
+                                href={`/dashboard/ideas/${idea.id}`}
+                                className="inline-flex items-center gap-1 px-2 py-0.5 mb-2 text-[10px] font-semibold bg-blue-500/15 text-blue-400 border border-blue-500/30 rounded-full hover:bg-blue-500/25 transition-colors"
+                              >
+                                <MessageSquare className="w-3 h-3" />
+                                Reply needed
+                              </a>
+                            )}
                             <p className="text-sm text-text-secondary line-clamp-2 mb-3">
                               {idea.description}
                             </p>
