@@ -151,9 +151,93 @@ async function commitAndOpenPRs(
 const ITERATION_DELAY_MS = 5_000; // Delay between iterations to avoid rate limits
 const MAX_CONTEXT_CHARS = 80_000; // Max chars for conversation context
 const MAX_CONSECUTIVE_ERRORS = 3; // Stop early after this many consecutive errors
+const BUILD_GATE_TIMEOUT_MS = 10 * 60 * 1000; // 10 min max wait for build gate
+const BUILD_GATE_POLL_MS = 15_000;             // Poll every 15s
+const MAX_BUILD_GATE_ATTEMPTS = 3;             // Max fix-and-retry cycles before giving up
+// Local logEvent helper (mirrors lifecycle/route.ts)
+async function logEvent(storyId: string, stepId: string, event: string, detail?: string, actor?: string) {
+  try {
+    await prisma.lifecycleEvent.create({ data: { storyId, stepId, event, detail, actor: actor || 'system' } });
+  } catch { /* non-fatal */ }
+}
 
 function delay(ms: number): Promise<void> {
   return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+
+// ── Build Gate ────────────────────────────────────────────────────────────────
+// Verifies agent code compiles and new tests pass on CI Mac BEFORE opening a PR.
+
+function extractNewTestTargets(files: AccumulatedFile[]): string[] {
+  const targets: string[] = [];
+  for (const f of files) {
+    if (f.action === 'delete') continue;
+    const u = f.path.match(/DeepTermTests\/(?:.+\/)?([A-Za-z0-9_]+Tests)\.swift$/);
+    if (u) targets.push(`DeepTermTests/${u[1]}`);
+    const ui = f.path.match(/DeepTermUITests\/(?:.+\/)?([A-Za-z0-9_]+)\.swift$/);
+    if (ui) targets.push(`DeepTermUITests/${ui[1]}`);
+  }
+  return Array.from(new Set(targets));
+}
+
+async function runBuildGate(params: {
+  loopId: string; storyId: string; branch: string; testTargets: string[];
+  baseUrl: string; apiKey: string; githubToken: string; repo: string;
+}): Promise<{ passed: boolean; detail: string }> {
+  const { loopId, storyId, branch, testTargets, baseUrl, apiKey, githubToken, repo } = params;
+  const dispatchRes = await fetch(
+    `https://api.github.com/repos/${repo}/actions/workflows/build-gate.yml/dispatches`,
+    {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${githubToken}`, 'Content-Type': 'application/json', Accept: 'application/vnd.github+json' },
+      body: JSON.stringify({ ref: branch, inputs: { story_id: storyId, loop_id: loopId, test_targets: testTargets.join(' ') } }),
+      signal: AbortSignal.timeout(15000),
+    }
+  );
+  if (!dispatchRes.ok) {
+    const txt = await dispatchRes.text();
+    return { passed: false, detail: `Build gate dispatch failed (${dispatchRes.status}): ${txt.slice(0, 200)}` };
+  }
+  console.log(`[BuildGate] ${loopId} dispatched on ${branch}, polling...`);
+  const dispatchedAt = new Date().toISOString();
+  const deadline = Date.now() + BUILD_GATE_TIMEOUT_MS;
+  while (Date.now() < deadline) {
+    await delay(BUILD_GATE_POLL_MS);
+    try {
+      const res = await fetch(
+        `${baseUrl}/api/admin/cockpit/lifecycle/events?storyId=${storyId}&stepId=implement&limit=30`,
+        { headers: { 'x-api-key': apiKey }, signal: AbortSignal.timeout(10000) }
+      );
+      if (!res.ok) continue;
+      const data = await res.json() as { events: Array<{ event: string; detail: string | null; createdAt: string }> };
+      const hits = (data.events || []).filter(
+        e => (e.event === 'build-gate-pass' || e.event === 'build-gate-fail') && e.createdAt >= dispatchedAt
+      );
+      if (hits.length > 0) {
+        const latest = hits[hits.length - 1];
+        return { passed: latest.event === 'build-gate-pass', detail: latest.detail || '{}' };
+      }
+    } catch { /* continue polling */ }
+  }
+  return { passed: false, detail: JSON.stringify({ message: 'Build gate timed out after 10 minutes' }) };
+}
+
+function formatBuildGateFailure(detail: string): string {
+  try {
+    const d = JSON.parse(detail) as { buildResult?: string; buildErrors?: string[]; testResult?: string; failedTests?: string[]; message?: string };
+    const lines: string[] = ['## Build Gate Failed — fix the following issues:\n'];
+    if (d.buildResult === 'failed') {
+      lines.push('### Compiler Errors');
+      (d.buildErrors || ['Build failed']).forEach(e => lines.push(`- ${e}`));
+    }
+    if (d.testResult === 'failed') {
+      lines.push('\n### Failed Tests');
+      (d.failedTests || ['Tests failed']).forEach(t => lines.push(`- ${t}`));
+    }
+    if (d.message && !d.buildResult) lines.push(d.message);
+    return lines.join('\n');
+  } catch { return `Build gate failed: ${detail}`; }
 }
 
 // ── Context Building ─────────────────────────────
@@ -554,10 +638,102 @@ export async function runAgentLoop(loopId: string, feedbackContext?: string): Pr
     }
 
 
-    // Commit to GitHub and open PRs if we have file changes
+    // ── Build Gate → Commit to GitHub → Open PR ────────────────────────────────
+    // Before creating a PR: push to a temp verify branch, run build-gate.yml on
+    // CI Mac, wait for result. If pass: commit to agent branch + PR.
+    // If fail: inject compiler errors back into agent loop, fix up to 3 times.
     if (accumulatedFiles.length > 0 && (finalStatus === 'awaiting_review' || finalStatus === 'completed')) {
       const targetRepo = config.targetRepo || 'deblasioluca/deepterm';
       const baseBranch = config.targetBranch || 'main';
+      const baseUrl = process.env.NEXTAUTH_URL || 'http://localhost:3000';
+      const apiKey = process.env.AI_DEV_API_KEY || process.env.NODE_RED_API_KEY || '';
+      const githubToken = process.env.GITHUB_TOKEN || '';
+      const hasSwiftChanges = accumulatedFiles.some(
+        f => f.path.endsWith('.swift') || f.path.includes('.xcodeproj') || f.path.endsWith('.plist')
+      );
+      const newTestTargets = extractNewTestTargets(accumulatedFiles);
+      let buildGatePassed = true; // assume OK for non-Swift or no token
+
+      if (hasSwiftChanges && githubToken && loop.storyId) {
+        const verifyBranch = `build-gate/${loopId.slice(0, 8)}`;
+        let verifyPushed = false;
+        try {
+          await commitFiles(targetRepo, verifyBranch, baseBranch, accumulatedFiles,
+            `build-gate: verify implementation (loop ${loopId})`);
+          verifyPushed = true;
+        } catch (err) {
+          console.warn(`[AgentLoop] ${loopId} verify branch push failed — skipping build gate:`, err);
+        }
+
+        if (verifyPushed) {
+          buildGatePassed = false;
+          let gateAttempt = 0;
+          while (gateAttempt < MAX_BUILD_GATE_ATTEMPTS) {
+            gateAttempt++;
+            await logEvent(loop.storyId, 'implement', 'progress',
+              JSON.stringify({ message: `Build gate (attempt ${gateAttempt}/${MAX_BUILD_GATE_ATTEMPTS})…`, loopId }), 'system');
+
+            const gate = await runBuildGate({
+              loopId, storyId: loop.storyId, branch: verifyBranch,
+              testTargets: newTestTargets, baseUrl, apiKey, githubToken, repo: targetRepo,
+            });
+
+            if (gate.passed) {
+              buildGatePassed = true;
+              await logEvent(loop.storyId, 'implement', 'build-gate-pass',
+                JSON.stringify({ message: `Build gate passed (attempt ${gateAttempt})`, loopId }), 'system');
+              break;
+            }
+
+            // Failed
+            if (gateAttempt >= MAX_BUILD_GATE_ATTEMPTS) {
+              finalStatus = 'failed';
+              await prisma.agentLoop.update({ where: { id: loopId },
+                data: { errorLog: `Build gate failed after ${MAX_BUILD_GATE_ATTEMPTS} attempts. Last detail: ${gate.detail}` } });
+              await logEvent(loop.storyId, 'implement', 'build-gate-fail',
+                JSON.stringify({ message: `Build gate gave up after ${MAX_BUILD_GATE_ATTEMPTS} attempts`, loopId }), 'system');
+              break;
+            }
+
+            // Inject errors → agent fixes → re-push
+            const errMsg = formatBuildGateFailure(gate.detail);
+            messages.push({ role: 'user', content: `${errMsg}\n\nFix all issues above. Set status to DONE when resolved.` });
+            for (let fi = 1; fi <= 5; fi++) {
+              const fr = await callAI(
+                'agent-loop.implement',
+                getSystemPrompt({ requireTests: config.requireTests ?? true, requireBuild: config.requireBuild ?? true }),
+                messages,
+                { maxTokens: 8192 }
+              );
+              const fixedFiles = parseFileChanges(fr.content);
+              const fpStatus = parseIterationResponse(fr.content).status;
+              if (fixedFiles.length > 0) accumulatedFiles = mergeFileChanges(accumulatedFiles, fixedFiles);
+              messages.push({ role: 'assistant', content: fr.content });
+              if (fpStatus === 'done') break;
+              if (fpStatus === 'blocked') { finalStatus = 'failed'; break; }
+              messages.push({ role: 'user', content: `Fix iteration ${fi} recorded. Continue.` });
+              await delay(ITERATION_DELAY_MS);
+            }
+            if (finalStatus === 'failed') break;
+            try {
+              await commitFiles(targetRepo, verifyBranch, baseBranch, accumulatedFiles,
+                `build-gate: fix ${gateAttempt} (loop ${loopId})`);
+            } catch (err) {
+              console.warn(`[AgentLoop] ${loopId} re-push failed:`, err);
+              finalStatus = 'failed'; break;
+            }
+          }
+          // Clean up verify branch
+          fetch(`https://api.github.com/repos/${targetRepo}/git/refs/heads/${verifyBranch}`, {
+            method: 'DELETE', headers: { Authorization: `Bearer ${githubToken}`, Accept: 'application/vnd.github+json' },
+          }).catch(() => {/* best effort */});
+        }
+      }
+
+      if (!buildGatePassed) {
+        console.log(`[AgentLoop] ${loopId} skipping PR — build gate failed`);
+      } else {
+
 
       // Build title from story or loop ID
       let prTitle = 'Agent implementation';
@@ -619,6 +795,7 @@ export async function runAgentLoop(loopId: string, feedbackContext?: string): Pr
           data: { errorLog: (loop.errorLog || '') + `\nPR creation failed: ${err instanceof Error ? err.message : 'Unknown'}` },
         });
       }
+      } // end else (buildGatePassed)
     }
 
     // Finalize loop

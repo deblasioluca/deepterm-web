@@ -522,8 +522,37 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'storyId and action required' }, { status: 400 });
     }
 
-    const story = await prisma.story.findUnique({ where: { id: storyId } });
+    const story = await prisma.story.findUnique({
+      where: { id: storyId },
+      include: { epic: { include: { stories: { orderBy: { createdAt: 'asc' }, select: { id: true, status: true } } } } },
+    });
     if (!story) return NextResponse.json({ error: 'Story not found' }, { status: 404 });
+
+    // ── Sequential Protection Guards ──
+    if (action === 'approve-triage' && story.epicId) {
+      if (story.epic) {
+        const DONE_STATUSES = ['reviewed', 'deployed', 'released', 'cancelled'];
+        const siblings = story.epic.stories;
+        const storyIdx = siblings.findIndex((s: { id: string }) => s.id === storyId);
+        if (storyIdx > 0 && !DONE_STATUSES.includes(siblings[storyIdx - 1].status)) {
+          return NextResponse.json({
+            error: `Previous story must pass review first (status: ${siblings[storyIdx - 1].status})`,
+            code: 'PREV_STORY_NOT_COMPLETE',
+          }, { status: 409 });
+        }
+      }
+      const activeEpics = await prisma.epic.findMany({
+        where: { id: { not: story.epicId }, status: 'in_progress' },
+        select: { title: true },
+      });
+      if (activeEpics.length > 0) {
+        return NextResponse.json({
+          error: `Another epic is in progress: "${activeEpics[0].title}". Complete it first.`,
+          code: 'ANOTHER_EPIC_IN_PROGRESS',
+        }, { status: 409 });
+      }
+    }
+    // ─────────────────────────────────────────────
 
     const updates: Record<string, unknown> = {};
 

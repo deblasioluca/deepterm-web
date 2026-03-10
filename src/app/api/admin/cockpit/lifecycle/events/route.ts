@@ -79,7 +79,7 @@ export async function POST(req: NextRequest) {
 
     // Validate event type
     const validEvents = [
-      'started', 'progress', 'heartbeat', 'completed', 'failed',
+      'started', 'progress', 'heartbeat', 'completed', 'failed', 'build-gate-started', 'build-gate-pass', 'build-gate-fail',
       'timeout', 'cancelled', 'skipped', 'retried', 'reset', 'loop-back'
     ];
     if (!validEvents.includes(event)) {
