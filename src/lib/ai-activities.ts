@@ -143,6 +143,17 @@ export const AI_ACTIVITIES: Record<string, AIActivityDef> = {
 
   // CI / Code Review
   // Agent Loop
+  'agent-loop.implement': {
+    key: 'agent-loop.implement',
+    label: 'Agent Loop Build Fix',
+    description: 'AI coding fixes during build gate verification',
+    category: 'agent',
+    defaultModel: 'claude-sonnet-4-6',
+    defaultTemperature: 0.3,
+    defaultMaxTokens: 8192,
+  },
+
+  // Agent Loop Iteration
   'agent-loop.iterate': {
     key: 'agent-loop.iterate',
     label: 'Agent Loop Iteration',
