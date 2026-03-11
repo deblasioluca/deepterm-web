@@ -151,7 +151,7 @@ async function commitAndOpenPRs(
 const ITERATION_DELAY_MS = 5_000; // Delay between iterations to avoid rate limits
 const MAX_CONTEXT_CHARS = 80_000; // Max chars for conversation context
 const MAX_CONSECUTIVE_ERRORS = 3; // Stop early after this many consecutive errors
-const BUILD_GATE_TIMEOUT_MS = 10 * 60 * 1000; // 10 min max wait for build gate
+const BUILD_GATE_TIMEOUT_MS = 25 * 60 * 1000; // 10 min max wait for build gate
 const BUILD_GATE_POLL_MS = 15_000;             // Poll every 15s
 const MAX_BUILD_GATE_ATTEMPTS = 3;             // Max fix-and-retry cycles before giving up
 // Local logEvent helper (mirrors lifecycle/route.ts)
