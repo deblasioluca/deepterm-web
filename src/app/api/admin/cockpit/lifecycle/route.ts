@@ -117,6 +117,14 @@ const STEP_TIMEOUTS: Record<string, number | null> = {
   release: 120,
 };
 
+// Per-suite timeouts for the Test step (seconds)
+const SUITE_TIMEOUTS = {
+  build: 300,   // 5 min — xcodebuild
+  unit:  300,   // 5 min — XCTest unit suite
+  ui:    600,   // 10 min — XCUITest (simulator startup + interactions)
+  e2e:   300,   // 5 min — Playwright web tests
+};
+
 
 // Lifecycle template step definitions
 const LIFECYCLE_TEMPLATES: Record<string, string[]> = {
@@ -484,6 +492,7 @@ export async function GET(req: NextRequest) {
         lifecycleStartedAt: story.lifecycleStartedAt?.toISOString() || null,
         lifecycleHeartbeat: story.lifecycleHeartbeat?.toISOString() || null,
         stepTimeouts: STEP_TIMEOUTS,
+        suiteTimeouts: SUITE_TIMEOUTS,
         scope: story.scope || 'app',
         lifecycleTemplate: story.lifecycleTemplate || 'full',
         lifecycleTemplateSteps: LIFECYCLE_TEMPLATES[story.lifecycleTemplate || 'full'] || LIFECYCLE_TEMPLATES.full,
