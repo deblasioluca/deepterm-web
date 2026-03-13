@@ -202,7 +202,7 @@ export default function AdminDashboard() {
 
   const openIssues = (cockpit?.stats?.issues?.open ?? 0) + (cockpit?.githubIssues?.open ?? 0);
   const ciStatus = cockpit?.health?.ciMac?.status ?? 'unknown';
-  const todayCost = aiUsage?.totals?.costDollars ?? 0;
+  const todayCost = Number(aiUsage?.totals?.costDollars) || 0;
   const todayCalls = aiUsage?.totals?.calls ?? 0;
   const recentBuilds = (cockpit?.builds || []).slice(0, 6);
 

@@ -264,7 +264,7 @@ export async function GET(req: NextRequest) {
       orderBy: { updatedAt: 'desc' },
       take: 20,
       include: {
-        epic: { select: { id: true, title: true, status: true, releaseType: true, targetVersion: true } },
+        epic: { select: { id: true, title: true, status: true, releaseType: true, targetVersion: true, epicLifecycleStep: true, epicDeployStarted: true, epicReleasedAt: true } },
       },
     });
 
@@ -408,6 +408,7 @@ export async function GET(req: NextRequest) {
         epicId: story.epicId,
         epicTitle: story.epic?.title,
         epicStatus: story.epic?.status || null,
+        epicLifecycleStep: story.epic?.epicLifecycleStep || null,
         triageApproved: story.status !== 'backlog' ? true : null,
         deliberationStatus: deliberation?.status || null,
         deliberationId: deliberation?.id || null,

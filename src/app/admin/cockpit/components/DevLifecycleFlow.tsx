@@ -59,6 +59,8 @@ export interface StoryLifecycleData {
   status: string;
   epicId?: string | null;
   epicTitle?: string;
+  epicStatus?: string | null;
+  epicLifecycleStep?: string | null;
   triageApproved?: boolean | null;
   deliberationStatus?: string | null;
   deliberationId?: string | null;
@@ -1362,6 +1364,75 @@ interface DevLifecycleFlowProps {
   onSelectStory?: (storyId: string) => void;
 }
 
+// ── Epic Deploy Band ──────────────────────────────────────────────
+function EpicDeployBand({
+  epicId, epicTitle, step, onAction
+}: {
+  epicId: string;
+  epicTitle?: string;
+  step: string;
+  onAction?: (stepId: string, action: string, storyId?: string) => void;
+}) {
+  const [loading, setLoading] = useState(false);
+  const [err, setErr] = useState<string|null>(null);
+
+  const call = async (action: string) => {
+    setLoading(true); setErr(null);
+    try {
+      const res = await fetch('/api/admin/cockpit/lifecycle', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action, epicId }),
+      });
+      if (!res.ok) { const d = await res.json().catch(()=>({})); setErr(d.error || 'Request failed'); }
+    } catch(e) { setErr('Network error'); }
+    finally { setLoading(false); }
+  };
+
+  const isDeploy = step === 'deploy';
+  const isRelease = step === 'release';
+  const isReleased = step === 'released';
+
+  return (
+    <div className={`rounded-lg border p-3 flex items-center gap-3 ${
+      isReleased ? 'border-emerald-500/30 bg-emerald-500/5'
+      : isDeploy ? 'border-blue-500/30 bg-blue-500/5'
+      : 'border-amber-500/30 bg-amber-500/5'
+    }`}>
+      <div className="flex-1 min-w-0">
+        <p className="text-xs font-semibold text-zinc-300">
+          {isReleased ? '🎉 Epic Released' : isDeploy ? '🚀 Ready to Deploy' : '📋 Ready to Release'}
+        </p>
+        {epicTitle && <p className="text-[10px] text-zinc-500 mt-0.5 truncate">{epicTitle}</p>}
+        {err && <p className="text-[10px] text-red-400 mt-1">{err}</p>}
+      </div>
+      {isDeploy && (
+        <button
+          onClick={() => call('epic-deploy')}
+          disabled={loading}
+          className="px-3 py-1.5 rounded-md text-xs font-medium bg-blue-500/20 border border-blue-500/40 text-blue-300 hover:bg-blue-500/30 disabled:opacity-50 transition-colors whitespace-nowrap"
+        >
+          {loading ? 'Deploying...' : 'Mark Deployed →'}
+        </button>
+      )}
+      {isRelease && (
+        <button
+          onClick={() => call('epic-release')}
+          disabled={loading}
+          className="px-3 py-1.5 rounded-md text-xs font-medium bg-amber-500/20 border border-amber-500/40 text-amber-300 hover:bg-amber-500/30 disabled:opacity-50 transition-colors whitespace-nowrap"
+        >
+          {loading ? 'Releasing...' : 'Mark Released ✓'}
+        </button>
+      )}
+      {isReleased && (
+        <span className="px-3 py-1.5 rounded-md text-xs font-medium bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 whitespace-nowrap">
+          Released ✓
+        </span>
+      )}
+    </div>
+  );
+}
+
 export default function DevLifecycleFlow({ story, stories, onGateAction, onSelectStory }: DevLifecycleFlowProps) {
   const [selectedStoryId, setSelectedStoryId] = useState<string | null>(story?.id || null);
   const [selectedStepIdx, setSelectedStepIdx] = useState<number | null>(null);
@@ -1504,6 +1575,7 @@ export default function DevLifecycleFlow({ story, stories, onGateAction, onSelec
 
       {/* Two-column layout */}
       {activeStory ? (
+        <>
         <div className="grid grid-cols-1 xl:grid-cols-[42%_58%] gap-4">
           {/* Left column: Steps */}
           <div>
@@ -1562,6 +1634,17 @@ export default function DevLifecycleFlow({ story, stories, onGateAction, onSelec
             )}
           </div>
         </div>
+
+      {/* Epic Deploy Band */}
+      {activeStory.epicId && activeStory.epicLifecycleStep && activeStory.epicLifecycleStep !== 'done' && (
+        <EpicDeployBand
+          epicId={activeStory.epicId}
+          epicTitle={activeStory.epicTitle}
+          step={activeStory.epicLifecycleStep}
+          onAction={onGateAction}
+        />
+      )}
+        </>
       ) : (
         /* Empty state */
         <div className="text-center py-8 text-zinc-600 text-sm">
