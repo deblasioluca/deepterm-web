@@ -89,6 +89,13 @@ export async function createTokenPair(
   const expiresAt = new Date();
   expiresAt.setDate(expiresAt.getDate() + REFRESH_TOKEN_EXPIRY_DAYS);
 
+  // Revoke existing tokens for this device before issuing new ones (prevents token accumulation)
+  if (deviceId) {
+    await prisma.refreshToken.deleteMany({
+      where: { userId, deviceId, isRevoked: false },
+    });
+  }
+
   // Store refresh token in database
   await prisma.refreshToken.create({
     data: {

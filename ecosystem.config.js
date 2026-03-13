@@ -75,6 +75,21 @@ module.exports = {
         '--dns-result-order=ipv4first', // Prefer IPv4 to avoid IPv6 connectivity issues
       ],
     },
+    {
+      // Daily cleanup job: deletes expired refresh tokens + old rate limit entries
+      name: 'deepterm-cleanup',
+      script: 'scripts/cleanup.js',
+      cwd: '/home/macan/deepterm',
+      cron_restart: '0 3 * * *', // Run daily at 3am
+      autorestart: false,
+      watch: false,
+      env: {
+        NODE_ENV: 'production',
+      },
+      log_file: '/home/macan/deepterm/logs/cleanup.log',
+      out_file: '/home/macan/deepterm/logs/cleanup-out.log',
+      error_file: '/home/macan/deepterm/logs/cleanup-error.log',
+    },
   ],
 
   // Deployment configuration
