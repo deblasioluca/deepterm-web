@@ -1159,10 +1159,24 @@ function buildLifecycleSteps(story: StoryLifecycleData | null): LifecycleStep[] 
     gate: implStatus === 'waiting_approval' ? { required: false, actions: [
       { label: 'Start Agent', action: 'start-agent', variant: 'approve' },
       { label: 'Manual PR', action: 'manual-pr', variant: 'skip' },
-    ]} : implStatus === 'failed' ? { required: false, actions: [
-      { label: 'Retry Agent', action: 'retry-agent', variant: 'approve' },
-      { label: 'Manual Fix', action: 'manual-fix', variant: 'skip' },
-    ]} : undefined,
+    ]} : implStatus === 'failed' ? (() => {
+      // Context-aware recovery: different actions depending on failure type
+      const errLog = (s.agentLoopErrorLog || '').toLowerCase();
+      const isContextOverflow = errLog.includes('context') || errLog.includes('consecutive errors');
+      if (isContextOverflow) {
+        return { required: false, actions: [
+          { label: '↩ Resume Checkpoint', action: 'resume-from-checkpoint', variant: 'approve' as const },
+          { label: '✂ Reduce Scope', action: 'reduce-scope', variant: 'loop' as const },
+          { label: '÷ Split Task', action: 'split-task', variant: 'skip' as const },
+          { label: 'Manual Fix', action: 'manual-fix', variant: 'reject' as const },
+        ]};
+      }
+      return { required: false, actions: [
+        { label: 'Retry Agent', action: 'retry-agent', variant: 'approve' as const },
+        { label: '↩ Resume Checkpoint', action: 'resume-from-checkpoint', variant: 'loop' as const },
+        { label: 'Manual Fix', action: 'manual-fix', variant: 'skip' as const },
+      ]};
+    })() : undefined,
   });
 
   // 5. Test

@@ -146,6 +146,38 @@ async function recordStepDuration(storyId: string, stepId: string, durationSecon
 }
 
 // Helper: get ETA estimates from historical durations
+
+// Helper: after a story is marked 'merged' — check siblings and open epic deploy gate if all merged
+async function doPostMergeEpicCheck(storyId: string) {
+  const s = await prisma.story.findUnique({ where: { id: storyId }, select: { epicId: true } });
+  if (!s?.epicId) return;
+  const siblings = await prisma.story.findMany({
+    where: { epicId: s.epicId, id: { not: storyId } },
+    select: { id: true, lifecycleStep: true, mergedAt: true, status: true },
+  });
+  const pendingCount = siblings.filter(sib =>
+    sib.mergedAt == null &&
+    sib.status !== 'released' &&
+    !['merged', 'deploy', 'release'].includes(sib.lifecycleStep ?? '')
+  ).length;
+  if (pendingCount > 0) {
+    const word = pendingCount === 1 ? 'story' : 'stories';
+    await logEvent(storyId, 'review', 'progress', JSON.stringify({
+      message: `Story merged — waiting for ${pendingCount} sibling ${word} before epic deploy`,
+      waitingForSiblings: true, pendingCount,
+    }), 'system');
+  } else {
+    await prisma.epic.update({
+      where: { id: s.epicId },
+      data: { epicLifecycleStep: 'deploy', epicDeployStarted: new Date() },
+    });
+    await logEvent(storyId, 'review', 'progress', JSON.stringify({
+      message: 'All epic stories merged — epic deploy gate opened',
+      epicDeployOpened: true,
+    }), 'system');
+  }
+}
+
 async function getStepETAs(): Promise<Record<string, { p50: number; p90: number; count: number }>> {
   const histories = await prisma.stepDurationHistory.findMany({
     orderBy: { createdAt: 'desc' },
@@ -608,12 +640,13 @@ export async function POST(req: NextRequest) {
       case 'merge-pr': {
         const prInfo = await findStoryPR(storyId, prisma);
         if (!prInfo) {
-          // No PR found — advance lifecycle anyway (PR may have been merged externally)
+          // No PR found — mark as merged (PR may have been merged externally)
           updates.status = 'in_progress';
-          updates.lifecycleStep = 'deploy';
-          updates.lifecycleStartedAt = new Date();
-          await logEvent(storyId, 'review', 'completed', 'PR approved (no PR record — advanced manually)', 'human');
-          await logEvent(storyId, 'deploy', 'started', 'Deploy step started after review approval', 'system');
+          updates.lifecycleStep = 'merged';
+          updates.lifecycleStartedAt = null;
+          (updates as Record<string, unknown>).mergedAt = new Date();
+          await logEvent(storyId, 'review', 'completed', 'PR approved (no PR record — marked merged)', 'human');
+          await doPostMergeEpicCheck(storyId);
           break;
         }
         const { mergePR: doMergePR } = await import('@/lib/github-pulls');
@@ -628,13 +661,14 @@ export async function POST(req: NextRequest) {
             if (prState.state === 'closed') {
               const alreadyMerged = prState.merged === true;
               updates.status = 'in_progress';
-              updates.lifecycleStep = 'deploy';
-              updates.lifecycleStartedAt = new Date();
+              updates.lifecycleStep = 'merged';
+              updates.lifecycleStartedAt = null;
+              (updates as Record<string, unknown>).mergedAt = new Date();
               const msg = alreadyMerged
-                ? `PR #${prInfo.prNumber} was already merged — advancing lifecycle`
-                : `PR #${prInfo.prNumber} was closed (not merged) — advancing lifecycle`;
+                ? `PR #${prInfo.prNumber} was already merged — marked merged`
+                : `PR #${prInfo.prNumber} was closed — marked merged`;
               await logEvent(storyId, 'review', 'completed', msg, 'human');
-              await logEvent(storyId, 'deploy', 'started', 'Deploy step started after review approval', 'system');
+              await doPostMergeEpicCheck(storyId);
               break;
             }
           }
@@ -721,14 +755,16 @@ export async function POST(req: NextRequest) {
         await logEvent(storyId, 'implement', 'progress', `Manual ${action === 'manual-pr' ? 'PR' : 'fix'} by operator`, 'human');
         break;
 
-      case 'approve-pr':
-        // GAP-13: Advance to deploy, don't set 'done' prematurely
+      case 'approve-pr': {
+        // Mark as merged and trigger epic gate check
         updates.status = 'in_progress';
-        updates.lifecycleStep = 'deploy';
-        updates.lifecycleStartedAt = new Date();
+        updates.lifecycleStep = 'merged';
+        updates.lifecycleStartedAt = null;
+        (updates as Record<string, unknown>).mergedAt = new Date();
         await logEvent(storyId, 'review', 'completed', 'PR approved and merged', 'human');
-        await logEvent(storyId, 'deploy', 'started', 'Deploy step started after review approval', 'system');
+        await doPostMergeEpicCheck(storyId);
         break;
+      }
 
       case 'reject-pr':
         updates.status = 'in_progress';
@@ -1127,6 +1163,72 @@ export async function POST(req: NextRequest) {
         // Notify Node-RED
         const storyAbandon = await prisma.story.findUnique({ where: { id: storyId }, select: { title: true } });
         await notifyLoopBack(storyId, storyAbandon?.title || '', 'review', 'plan', reason || 'Implementation abandoned', 0, 5);
+        break;
+      }
+
+
+      // ── Agent context/checkpoint recovery actions ──
+
+      case 'resume-from-checkpoint': {
+        // Resume an implement step from the last saved checkpoint
+        const lastCheckpoint = await prisma.agentIteration.findFirst({
+          where: { loop: { storyId }, isCheckpoint: true },
+          orderBy: { createdAt: 'desc' },
+          select: { id: true, iteration: true, filesSnapshot: true, contextSummary: true, loopId: true },
+        });
+        if (!lastCheckpoint) {
+          return NextResponse.json({ error: 'No checkpoint found — cannot resume. Use Retry instead.' }, { status: 400 });
+        }
+        // Cancel any running loops
+        await prisma.agentLoop.updateMany({
+          where: { storyId, status: { in: ['queued', 'running'] } },
+          data: { status: 'cancelled' },
+        });
+        // Reset implement step as active, inject checkpoint context into resume
+        updates.lifecycleStep = 'implement';
+        updates.lifecycleStartedAt = new Date();
+        updates.lifecycleHeartbeat = new Date();
+        const checkpointSummary = lastCheckpoint.contextSummary || `Checkpoint at iteration ${lastCheckpoint.iteration}`;
+        const filesCount = lastCheckpoint.filesSnapshot ? JSON.parse(lastCheckpoint.filesSnapshot).length : 0;
+        await logEvent(storyId, 'implement', 'retried', JSON.stringify({
+          message: `Resuming from checkpoint (iter ${lastCheckpoint.iteration}, ${filesCount} files accumulated)`,
+          checkpointId: lastCheckpoint.id,
+          checkpointIteration: lastCheckpoint.iteration,
+          checkpointSummary,
+        }), 'human');
+        break;
+      }
+
+      case 'split-task': {
+        // Mark current implement as deferred, reset to plan for scope reduction
+        await prisma.agentLoop.updateMany({
+          where: { storyId, status: { in: ['queued', 'running'] } },
+          data: { status: 'cancelled' },
+        });
+        updates.lifecycleStep = 'plan';
+        updates.lifecycleStartedAt = null;
+        updates.lifecycleHeartbeat = null;
+        await logEvent(storyId, 'implement', 'cancelled', JSON.stringify({
+          message: 'Task split requested — story sent back to Planning for scope reduction',
+          reason: reason || 'Context overflow — task too large for single agent loop',
+        }), 'human');
+        await logEvent(storyId, 'plan', 'started', 'Split-task recovery: story returned to Planning', 'system');
+        break;
+      }
+
+      case 'reduce-scope': {
+        // Cancel running loops, restart implement from scratch with reduced scope note
+        await prisma.agentLoop.updateMany({
+          where: { storyId, status: { in: ['queued', 'running'] } },
+          data: { status: 'cancelled' },
+        });
+        updates.lifecycleStep = 'implement';
+        updates.lifecycleStartedAt = new Date();
+        updates.lifecycleHeartbeat = new Date();
+        await logEvent(storyId, 'implement', 'retried', JSON.stringify({
+          message: 'Scope reduced — restarting implement with focused task',
+          reducedScope: reason || 'Operator requested scope reduction due to context overflow',
+        }), 'human');
         break;
       }
 

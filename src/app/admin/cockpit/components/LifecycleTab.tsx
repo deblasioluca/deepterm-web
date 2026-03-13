@@ -503,6 +503,10 @@ export default function LifecycleTab() {
         'loop-review-to-implement': { url: '/api/admin/cockpit/lifecycle', method: 'POST', body: { action: 'loop-review-to-implement', storyId, reason: reason || 'Changes requested' } },
         'loop-review-to-deliberation': { url: '/api/admin/cockpit/lifecycle', method: 'POST', body: { action: 'loop-review-to-deliberation', storyId, reason: reason || 'Re-architect needed' } },
         'abandon-implementation': { url: '/api/admin/cockpit/lifecycle', method: 'POST', body: { action: 'abandon-implementation', storyId, reason: reason || 'Implementation abandoned' } },
+        // Agent context/checkpoint recovery actions
+        'resume-from-checkpoint': { url: '/api/admin/cockpit/lifecycle', method: 'POST', body: { action: 'resume-from-checkpoint', storyId } },
+        'split-task': { url: '/api/admin/cockpit/lifecycle', method: 'POST', body: { action: 'split-task', storyId, reason: reason || 'Context overflow — task too large' } },
+        'reduce-scope': { url: '/api/admin/cockpit/lifecycle', method: 'POST', body: { action: 'reduce-scope', storyId, reason: reason || 'Reduced scope for agent context limit' } },
       };
       const mapped = actionMap[action];
       if (mapped) {

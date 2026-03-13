@@ -548,6 +548,10 @@ export async function runAgentLoop(loopId: string, feedbackContext?: string): Pr
             outputTokens: response.outputTokens,
             costCents: 0, // Cost is computed by ai-usage
             durationMs: Date.now() - iterStart,
+            // ── Checkpoint: snapshot of accumulated files + context summary after each iteration ──
+            filesSnapshot: JSON.stringify(accumulatedFiles),
+            contextSummary: `Iter ${i}/${maxIter}: ${accumulatedFiles.length} files accumulated. ${(parsed.observation || '').slice(0, 200)}`,
+            isCheckpoint: true,
           },
         });
 
