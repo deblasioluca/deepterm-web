@@ -93,6 +93,10 @@ export interface StoryLifecycleData {
   unitPass?: StepStatus;
   uiPass?: StepStatus;
   testDetail?: string | null;
+  unitPassed?: number;
+  unitTotal?: number;
+  uiPassedCount?: number;
+  uiTotalCount?: number;
   deployed?: boolean;
   released?: boolean;
   version?: string | null;
@@ -1216,12 +1220,25 @@ function buildLifecycleSteps(story: StoryLifecycleData | null): LifecycleStep[] 
     id: 'review', label: 'Review & Merge', description: 'Review diff, approve and merge after tests pass',
     icon: <MessageSquare className="w-3.5 h-3.5" />, actor: 'human', status: reviewStatus,
     link: s.prUrl ? { url: s.prUrl, label: 'View PR' } : undefined,
-    // GAP-11: Review sub-text reflects actual test step status
-    detail: reviewStatus === 'pending' && s.prNumber
-      ? (testStatus === 'failed' || events.some(e => e.stepId === 'test' && e.event === 'timeout')
-        ? 'Tests did not pass — resolve Test step first'
-        : testStatus === 'active' ? 'Waiting for tests to complete' : 'Waiting for tests')
-      : undefined, events,
+    // GAP-11: Review sub-text reflects test status + counts
+    detail: (() => {
+      if (reviewStatus === 'waiting_approval' || s.testsPass === true) {
+        const parts: string[] = [];
+        if (s.unitPassed != null && s.unitTotal != null)
+          parts.push(`${s.unitPassed}/${s.unitTotal} unit ✓`);
+        else if (s.unitPass === 'passed') parts.push('unit ✓');
+        if (s.uiPassedCount != null && s.uiTotalCount != null && s.uiTotalCount > 0)
+          parts.push(`${s.uiPassedCount}/${s.uiTotalCount} UI ✓`);
+        else if (s.uiPass === 'passed') parts.push('UI ✓');
+        return parts.length > 0 ? `Tests passed — ${parts.join(' / ')}` : 'Tests passed';
+      }
+      if (reviewStatus === 'pending' && s.prNumber) {
+        if (testStatus === 'failed' || events.some(e => e.stepId === 'test' && e.event === 'timeout'))
+          return 'Tests did not pass — resolve Test step first';
+        return testStatus === 'active' ? 'Waiting for tests to complete' : 'Waiting for tests';
+      }
+      return undefined;
+    })(), events,
     gate: reviewGateActions.length > 0 ? { required: true, actions: reviewGateActions } : undefined,
   });
 

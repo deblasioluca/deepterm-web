@@ -318,6 +318,8 @@ export async function GET(req: NextRequest) {
       let uiPass: 'pending' | 'active' | 'passed' | 'failed' = 'pending';
       let e2ePass: 'pending' | 'active' | 'passed' | 'failed' = 'pending';
       let testDetail: string | null = null;
+      let unitPassed = 0, unitTotal = 0;
+      let uiPassed = 0, uiTotal = 0;
 
       if (story.lifecycleStep === 'test' || story.status === 'done' || story.status === 'released') {
         // Walk events oldest-first to build up test state
@@ -355,6 +357,15 @@ export async function GET(req: NextRequest) {
               else if (suite === 'unit') unitPass = status;
               else if (suite === 'ui') uiPass = status;
               else if (suite === 'e2e') e2ePass = status;
+            }
+            // GAP-11: Capture test counts from CI events
+            if (suite === 'unit' && typeof detail.passed === 'number') {
+              unitPassed = detail.passed as number;
+              unitTotal = (detail.total as number) || unitPassed;
+            }
+            if (suite === 'ui' && typeof detail.passed === 'number') {
+              uiPassed = detail.passed as number;
+              uiTotal = (detail.total as number) || uiPassed;
             }
           }
 
@@ -456,6 +467,10 @@ export async function GET(req: NextRequest) {
         e2ePass: e2ePass !== 'pending' ? e2ePass : undefined,
         unitPass: unitPass !== 'pending' ? unitPass : undefined,
         uiPass: uiPass !== 'pending' ? uiPass : undefined,
+        unitPassed: unitPassed > 0 ? unitPassed : undefined,
+        unitTotal: unitTotal > 0 ? unitTotal : undefined,
+        uiPassedCount: uiPassed > 0 ? uiPassed : undefined,
+        uiTotalCount: uiTotal > 0 ? uiTotal : undefined,
         testDetail,
         deployed: story.status === 'released',
         released: story.status === 'released',
