@@ -120,10 +120,10 @@ const STEP_TIMEOUTS: Record<string, number | null> = {
 
 // Lifecycle template step definitions
 const LIFECYCLE_TEMPLATES: Record<string, string[]> = {
-  full:      ['triage', 'plan', 'deliberation', 'implement', 'test', 'review', 'deploy', 'release'],
-  quick_fix: ['triage', 'implement', 'test', 'review', 'deploy', 'release'],
-  hotfix:    ['implement', 'test', 'deploy'],
-  web_only:  ['triage', 'plan', 'implement', 'test', 'review', 'deploy'],
+  full:      ['triage', 'plan', 'deliberation', 'implement', 'test', 'review'],
+  quick_fix: ['triage', 'implement', 'test', 'review'],
+  hotfix:    ['implement', 'test', 'review'],
+  web_only:  ['triage', 'plan', 'implement', 'test', 'review'],
 };
 
 // Helper: record step duration for ETA estimates
@@ -618,46 +618,46 @@ export async function POST(req: NextRequest) {
         if (!mergeResult.merged) {
           return NextResponse.json({ error: `Merge failed: ${mergeResult.message}` }, { status: 400 });
         }
-        // ── Epic-level deploy gate: check if all sibling stories are merged ──
+        // ── Story lands on 'merged'. Epic deploy gate opens when all siblings are merged. ──
+        const mergedPRNum = prInfo?.prNumber;
         const thisStory = await prisma.story.findUnique({ where: { id: storyId }, select: { epicId: true } });
+
+        updates.status = 'in_progress';
+        updates.lifecycleStep = 'merged';
+        updates.lifecycleStartedAt = null;
+        (updates as Record<string, unknown>).mergedAt = new Date();
+        await logEvent(storyId, 'review', 'completed',
+          mergedPRNum ? `PR #${mergedPRNum} merged` : 'PR merged', 'human');
+
         if (thisStory?.epicId) {
           const siblingStories = await prisma.story.findMany({
             where: { epicId: thisStory.epicId, id: { not: storyId } },
-            select: { id: true, status: true, lifecycleStep: true, mergedAt: true },
+            select: { id: true, lifecycleStep: true, mergedAt: true, status: true },
           });
-          const allMerged = siblingStories.every(s =>
-            s.mergedAt != null || s.status === 'released' ||
-            s.lifecycleStep === 'deploy' || s.lifecycleStep === 'release' || s.lifecycleStep === 'merged'
-          );
-          if (!allMerged) {
-            const pendingCount = siblingStories.filter(s =>
-              s.mergedAt == null && s.status !== 'released' &&
-              s.lifecycleStep !== 'deploy' && s.lifecycleStep !== 'release' && s.lifecycleStep !== 'merged'
-            ).length;
-            updates.status = 'in_progress';
-            updates.lifecycleStep = 'merged';
-            updates.lifecycleStartedAt = null;
-            (updates as Record<string, unknown>).mergedAt = new Date();
+          const pendingCount = siblingStories.filter(s =>
+            s.mergedAt == null &&
+            s.status !== 'released' &&
+            !['merged','deploy','release'].includes(s.lifecycleStep ?? '')
+          ).length;
+
+          if (pendingCount > 0) {
+            const word = pendingCount === 1 ? 'story' : 'stories';
             await logEvent(storyId, 'review', 'progress', JSON.stringify({
-              message: `Merged — waiting for ${pendingCount} sibling stor${pendingCount === 1 ? 'y' : 'ies'} before epic deploy`,
-              waitingForSiblings: true,
-              pendingCount,
+              message: `Story merged — waiting for ${pendingCount} sibling ${word} before epic deploy`,
+              waitingForSiblings: true, pendingCount,
             }), 'system');
-            break;
+          } else {
+            // All stories merged → open epic deploy gate
+            await prisma.epic.update({
+              where: { id: thisStory.epicId },
+              data: { epicLifecycleStep: 'deploy', epicDeployStarted: new Date() },
+            });
+            await logEvent(storyId, 'review', 'progress', JSON.stringify({
+              message: 'All epic stories merged — epic deploy gate opened',
+              epicDeployOpened: true,
+            }), 'system');
           }
-          // All merged — promote any waiting siblings to deploy step
-          await prisma.story.updateMany({
-            where: { epicId: thisStory.epicId, id: { not: storyId }, lifecycleStep: 'merged' },
-            data: { lifecycleStep: 'deploy', lifecycleStartedAt: new Date() },
-          });
         }
-        // Advance this (last) story to deploy
-        updates.status = 'in_progress';
-        updates.lifecycleStep = 'deploy';
-        updates.lifecycleStartedAt = new Date();
-        (updates as Record<string, unknown>).mergedAt = new Date();
-        await logEvent(storyId, 'review', 'completed', `PR #${prInfo.prNumber} merged`, 'human');
-        await logEvent(storyId, 'deploy', 'started', 'Deploy step started — all epic stories merged', 'system');
         break;
       }
 
@@ -786,6 +786,57 @@ export async function POST(req: NextRequest) {
         await logEvent(storyId, 'release', 'progress', JSON.stringify({ subStep: 'docs', message: 'Documentation updated' }), 'system');
         await logEvent(storyId, 'release', 'completed', reason || 'Manually marked as released', 'human');
         break;
+
+      // ── Epic lifecycle actions ──
+      case 'epic-deploy': {
+        // Mark epic deploy as done, advance to release, mark all stories released
+        const epDeployStory = await prisma.story.findUnique({ where: { id: storyId }, select: { epicId: true } });
+        if (!epDeployStory?.epicId) { return NextResponse.json({ error: 'Story has no epic' }, { status: 400 }); }
+        const epId = epDeployStory.epicId;
+        // Version bump (once per epic, if not done)
+        let deployVersion: string | undefined;
+        const epForDeploy = await prisma.epic.findUnique({ where: { id: epId }, select: { releaseType: true, targetVersion: true } });
+        if (epForDeploy && !epForDeploy.targetVersion) {
+          const bumpResult = await bumpVersionInXcode((epForDeploy.releaseType as 'minor' | 'major') || 'minor');
+          if (bumpResult.ok && bumpResult.newVersion) {
+            deployVersion = bumpResult.newVersion;
+            await prisma.epic.update({ where: { id: epId }, data: { targetVersion: bumpResult.newVersion } });
+          }
+        } else if (epForDeploy?.targetVersion) {
+          deployVersion = epForDeploy.targetVersion;
+        }
+        // Advance epic to release
+        await prisma.epic.update({ where: { id: epId }, data: { epicLifecycleStep: 'release' } });
+        await logEvent(storyId, 'deploy', 'completed',
+          `Epic deploy complete${deployVersion ? ` — v${deployVersion}` : ''}`, 'human');
+        await logEvent(storyId, 'release', 'started', 'Epic release step started', 'system');
+        // Don't update story-level fields — story stays at 'merged'
+        break;
+      }
+
+      case 'epic-release': {
+        // Epic is fully released — mark all stories in epic as released
+        const epRelStory = await prisma.story.findUnique({ where: { id: storyId }, select: { epicId: true } });
+        if (!epRelStory?.epicId) { return NextResponse.json({ error: 'Story has no epic' }, { status: 400 }); }
+        const relEpicId = epRelStory.epicId;
+        const epData = await prisma.epic.findUnique({ where: { id: relEpicId }, select: { targetVersion: true } });
+        // Mark epic as released
+        await prisma.epic.update({ where: { id: relEpicId }, data: {
+          epicLifecycleStep: 'released',
+          epicReleasedAt: new Date(),
+          status: 'released',
+        }});
+        // Mark all stories in epic as released
+        await prisma.story.updateMany({ where: { epicId: relEpicId }, data: { status: 'released' } });
+        const ver = epData?.targetVersion;
+        await logEvent(storyId, 'release', 'completed',
+          `Epic released${ver ? ` — v${ver}` : ''}`, 'human');
+        await logEvent(storyId, 'release', 'progress', JSON.stringify({ subStep: 'notes', message: 'Release notes published' }), 'system');
+        await logEvent(storyId, 'release', 'progress', JSON.stringify({ subStep: 'notify', message: 'Stakeholders notified' }), 'system');
+        await logEvent(storyId, 'release', 'progress', JSON.stringify({ subStep: 'docs', message: 'Documentation updated' }), 'system');
+        // Don't update story-level step — status update above is sufficient
+        break;
+      }
 
       // ── Internal CI dispatch (called by engine auto-advance) ──
       case 'dispatch-ci': {

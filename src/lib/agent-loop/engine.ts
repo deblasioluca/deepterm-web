@@ -149,7 +149,7 @@ async function commitAndOpenPRs(
 // ── Constants ────────────────────────────────────
 
 const ITERATION_DELAY_MS = 5_000; // Delay between iterations to avoid rate limits
-const MAX_CONTEXT_CHARS = 80_000; // Max chars for conversation context
+const MAX_CONTEXT_CHARS = 400_000; // Max chars for conversation context
 const MAX_CONSECUTIVE_ERRORS = 3; // Stop early after this many consecutive errors
 const BUILD_GATE_TIMEOUT_MS = 25 * 60 * 1000; // 10 min max wait for build gate
 const BUILD_GATE_POLL_MS = 15_000;             // Poll every 15s
@@ -496,12 +496,25 @@ export async function runAgentLoop(loopId: string, feedbackContext?: string): Pr
       const iterStart = Date.now();
 
       try {
-        // Trim conversation if too long
-        let conversationText = messages.map(m => m.content).join('\n');
-        while (conversationText.length > MAX_CONTEXT_CHARS && messages.length > 2) {
-          // Remove oldest assistant+user pair (keep first user message)
-          messages.splice(1, 2);
-          conversationText = messages.map(m => m.content).join('\n');
+        // Context pressure: summarize old iterations before hard-trimming
+        {
+          const ctxText = messages.map((m: {role:string,content:unknown}) => typeof m.content === 'string' ? m.content : '').join('\n');
+          const pressure = ctxText.length / MAX_CONTEXT_CHARS;
+          if (pressure > 0.6 && messages.length > 6) {
+            const toSum = messages.slice(2, messages.length - 4);
+            const sumPrompt = 'Summarize these agent iterations in <=300 words, preserving key decisions and file changes:\n' + toSum.map((m: {role:string,content:unknown}) => m.role + ': ' + String(m.content).slice(0, 400)).join('\n---\n');
+            try {
+              const sumResp = await callAI('agent-loop.summarize', 'You are a concise technical summarizer.', [{ role: 'user', content: sumPrompt }], { maxTokens: 400 });
+              const sumText = typeof sumResp.content === 'string' ? sumResp.content : (sumResp.content as Array<{type:string,text?:string}>).filter((b: {type:string,text?:string}) => b.type === 'text').map((b: {type:string,text?:string}) => b.text || '').join('');
+              messages.splice(2, toSum.length, { role: 'assistant', content: '[Context summary — ' + toSum.length + ' iterations compressed]:\n' + sumText });
+            } catch { /* summarization failed — fall through to hard trim */ }
+          }
+          // Hard trim fallback
+          let trimText = messages.map((m: {role:string,content:unknown}) => typeof m.content === 'string' ? m.content : '').join('\n');
+          while (trimText.length > MAX_CONTEXT_CHARS && messages.length > 4) {
+            messages.splice(1, 2);
+            trimText = messages.map((m: {role:string,content:unknown}) => typeof m.content === 'string' ? m.content : '').join('\n');
+          }
         }
 
         // Call AI
@@ -596,12 +609,31 @@ export async function runAgentLoop(loopId: string, feedbackContext?: string): Pr
           errorCause.includes('ECONNREFUSED') ||
           errorCause.includes('ETIMEDOUT') ||
           errorCause.includes('ENOTFOUND');
+        const isContextOverflow = (errorMsg.toLowerCase().includes('context') && errorMsg.toLowerCase().includes('length')) ||
+          errorMsg.toLowerCase().includes('too many tokens') ||
+          errorMsg.toLowerCase().includes('input is too long');
+        const isRateLimit = errorMsg.includes('429') ||
+          errorMsg.toLowerCase().includes('overloaded') ||
+          errorMsg.toLowerCase().includes('rate limit') ||
+          errorMsg.toLowerCase().includes('rate_limit');
+        const errorType = isContextOverflow ? 'context_overflow' : isRateLimit ? 'rate_limit' : isConnectionError ? 'connection' : 'api_error';
 
-        const errorDetail = isConnectionError
-          ? `Connection error (${errorCause.includes('ECONNREFUSED') ? 'ECONNREFUSED' : errorCause.includes('ETIMEDOUT') ? 'ETIMEDOUT' : 'network'}): Cannot reach AI provider`
+        // Rate limit: exponential backoff, do NOT count as consecutive error
+        if (isRateLimit) {
+          const backoffMs = Math.min(10_000 * Math.pow(2, consecutiveErrors), 120_000);
+          console.warn(`[AgentLoop] ${loopId} rate-limited — backing off ${backoffMs}ms`);
+          await delay(backoffMs);
+        }
+
+        const errorDetail = isContextOverflow
+          ? 'Context length exceeded — conversation compressed and retrying'
+          : isRateLimit
+          ? 'Rate limited — retrying after backoff'
+          : isConnectionError
+          ? 'Connection error (' + (errorCause.includes('ECONNREFUSED') ? 'ECONNREFUSED' : errorCause.includes('ETIMEDOUT') ? 'ETIMEDOUT' : 'ENOTFOUND') + ')'
           : errorMsg;
 
-        console.error(`[AgentLoop] ${loopId} iteration ${i} failed: ${errorDetail}`);
+        console.error(`[AgentLoop] ${loopId} iteration ${i} ${errorType}: ${errorDetail}`);
 
         await prisma.agentIteration.update({
           where: { id: iteration.id },
@@ -609,11 +641,12 @@ export async function runAgentLoop(loopId: string, feedbackContext?: string): Pr
             phase: 'error',
             observation: errorDetail,
             durationMs: Date.now() - iterStart,
+            errorType,
           },
         });
 
-        // Track consecutive errors for early termination
-        consecutiveErrors++;
+        // Rate limits don't count as logic failures
+        if (!isRateLimit) consecutiveErrors++;
         lastErrorMessage = errorDetail;
 
         if (consecutiveErrors >= MAX_CONSECUTIVE_ERRORS) {

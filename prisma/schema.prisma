@@ -625,6 +625,9 @@ model Epic {
   sortOrder            Int                   @default(0)
   releaseType          String                @default("minor")  // "minor" | "major"
   targetVersion        String?               // Computed when deploy is triggered
+  epicLifecycleStep    String?
+  epicDeployStarted    DateTime?
+  epicReleasedAt       DateTime?
   createdAt            DateTime              @default(now())
   updatedAt            DateTime              @updatedAt
   deliberations        Deliberation[]
@@ -943,7 +946,11 @@ model AgentIteration {
   thinking     String    @default("")
   action       String    @default("")
   observation  String    @default("")
-  filesChanged String    @default("[]")
+  filesChanged     String    @default("[]")
+  filesSnapshot    String?
+  contextSummary   String?
+  isCheckpoint     Boolean   @default(false)
+  errorType        String?
   inputTokens  Int       @default(0)
   outputTokens Int       @default(0)
   costCents    Float     @default(0)
