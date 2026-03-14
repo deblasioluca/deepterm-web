@@ -699,7 +699,13 @@ export async function runAgentLoop(loopId: string, feedbackContext?: string): Pr
             `build-gate: verify implementation (loop ${loopId})`);
           verifyPushed = true;
         } catch (err) {
-          console.warn(`[AgentLoop] ${loopId} verify branch push failed — skipping build gate:`, err);
+          console.error(`[AgentLoop] ${loopId} verify branch push failed — treating as build-gate-fail:`, err);
+          if (loop.storyId) {
+            await logEvent(loop.storyId, "implement", "build-gate-fail",
+              JSON.stringify({ message: "Build gate skipped — branch push failed", error: String(err), loopId }), "system");
+          }
+          finalStatus = "failed";
+          buildGatePassed = false;
         }
 
         if (verifyPushed) {
