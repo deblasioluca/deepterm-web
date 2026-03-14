@@ -139,12 +139,21 @@ export function middleware(request: NextRequest) {
 
   // Check if the path is an admin route (protected with admin auth)
   if (pathname.startsWith('/admin') || pathname.startsWith('/api/admin')) {
-    // Skip auth routes, CI callback endpoints, and internal API-key-authenticated requests
-    if (pathname.startsWith('/api/admin/auth') || pathname.startsWith('/api/admin/cockpit/lifecycle/events') || pathname.startsWith('/api/admin/cockpit/github-dispatch')) {
+    // Internal paths: always bypass session auth (CI callbacks, events)
+    const INTERNAL_API_PATHS = [
+      '/api/admin/auth',
+      '/api/admin/cockpit/lifecycle/events',
+      '/api/admin/cockpit/github-dispatch',
+    ];
+    if (INTERNAL_API_PATHS.some(p => pathname.startsWith(p))) {
       return NextResponse.next();
     }
-    // Allow x-api-key authenticated requests to the lifecycle endpoint (engine auto-advance)
-    if (pathname === '/api/admin/cockpit/lifecycle' && request.headers.get('x-api-key')) {
+    // Engine paths: allow if x-api-key header present
+    const INTERNAL_ENGINE_PATHS = [
+      '/api/admin/cockpit/lifecycle',
+      '/api/admin/cockpit/agent-loop',
+    ];
+    if (INTERNAL_ENGINE_PATHS.some(p => pathname === p) && request.headers.get("x-api-key")) {
       return NextResponse.next();
     }
 

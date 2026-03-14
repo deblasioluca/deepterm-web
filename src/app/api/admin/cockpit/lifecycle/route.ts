@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { createAndRunAgentLoop } from '@/lib/agent-loop/engine';
 import { prisma } from '@/lib/prisma';
 import { closePR, deleteBranch, commentOnPR, findStoryPR } from '@/lib/github-pulls';
 
@@ -244,8 +245,39 @@ async function bumpVersionInXcode(releaseType: 'minor' | 'major'): Promise<{ ok:
   }
 }
 
+// ── Stale loop recovery: called on each GET poll ──
+async function recoverStaleLoops() {
+  const STALE_THRESHOLD_MS = 5 * 60 * 1000; // 5 minutes without heartbeat = stale
+  const staleLoops = await prisma.agentLoop.findMany({
+    where: {
+      status: { in: ['running', 'queued'] },
+      updatedAt: { lt: new Date(Date.now() - STALE_THRESHOLD_MS) },
+    },
+    select: { id: true, storyId: true },
+  });
+  for (const loop of staleLoops) {
+    await prisma.agentLoop.update({
+      where: { id: loop.id },
+      data: { status: 'failed' },
+    });
+    if (loop.storyId) {
+      await logEvent(
+        loop.storyId,
+        'implement',
+        'failed',
+        JSON.stringify({ message: `AgentLoop ${loop.id} marked failed — stale (no update for 5+ min, likely killed by PM2 restart)` }),
+        'system',
+      );
+    }
+    console.warn(`[StaleLoopRecovery] Marked loop ${loop.id} as failed (stale)`);
+  }
+}
+
 export async function GET(req: NextRequest) {
   try {
+    // Recover any loops that were killed by a PM2 restart (fire-and-forget, don't await)
+    recoverStaleLoops().catch(e => console.warn('[StaleLoopRecovery] Error:', e));
+
     const { searchParams } = new URL(req.url);
     const storyId = searchParams.get('storyId');
     const status = searchParams.get('status');
@@ -734,19 +766,30 @@ export async function POST(req: NextRequest) {
           data: { type: 'implementation', status: 'decided', storyId, title: 'Skipped', summary: 'Deliberation skipped by operator.' },
         });
         updates.status = 'in_progress';
+        updates.lifecycleStep = 'implement';
         await logEvent(storyId, 'deliberation', 'skipped', reason || 'Operator skipped deliberation', 'human');
+        await logEvent(storyId, 'implement', 'started', JSON.stringify({ message: 'Implement step started after deliberation skip' }), 'system');
         break;
 
       case 'approve-decision': {
         const delib = await prisma.deliberation.findFirst({ where: { storyId }, orderBy: { createdAt: 'desc' } });
         if (delib) await prisma.deliberation.update({ where: { id: delib.id }, data: { status: 'decided' } });
         updates.status = 'in_progress';
+        updates.lifecycleStep = 'implement';
         await logEvent(storyId, 'deliberation', 'completed', 'Decision approved by operator', 'human');
+        await logEvent(storyId, 'implement', 'started', JSON.stringify({ message: 'Implement step started after deliberation approval' }), 'system');
         break;
       }
 
       case 'restart-deliberation':
         await logEvent(storyId, 'deliberation', 'retried', reason || 'Operator restarted deliberation', 'human');
+        break;
+
+      case 'complete-plan':
+        updates.lifecycleStep = 'deliberation';
+        updates.status = 'in_progress';
+        await logEvent(storyId, 'plan', 'completed', 'Plan step completed by operator', 'human');
+        await logEvent(storyId, 'deliberation', 'started', JSON.stringify({ message: 'Deliberation starting after plan completion' }), 'system');
         break;
 
       case 'manual-pr':
@@ -929,6 +972,28 @@ export async function POST(req: NextRequest) {
           await logEvent(storyId, 'test', 'progress', JSON.stringify({
             message: ciResult.ok ? 'CI workflow dispatched on CI Mac (pr-check.yml)' : `CI dispatch failed: ${ciResult.error}`,
             ciDispatched: ciResult.ok,
+          }), 'system');
+        }
+        // Auto-spawn a new AgentLoop when retrying implement step
+        if (stepId === 'implement') {
+          const { createAndRunAgentLoop } = await import('@/lib/agent-loop/engine');
+          const lastLoop = await prisma.agentLoop.findFirst({
+            where: { storyId },
+            orderBy: { createdAt: 'desc' },
+            select: { errorLog: true },
+          });
+          // Mark any stale running loops as failed before starting a new one
+          await prisma.agentLoop.updateMany({
+            where: { storyId, status: { in: ['running', 'queued'] } },
+            data: { status: 'failed' },
+          });
+          const loopId = await createAndRunAgentLoop({
+            storyId,
+            feedbackContext: reason || (lastLoop?.errorLog ?? undefined),
+          });
+          await logEvent(storyId, 'implement', 'progress', JSON.stringify({
+            message: `AgentLoop ${loopId} started (retry)`,
+            loopId,
           }), 'system');
         }
         break;
