@@ -262,7 +262,7 @@ function extractFileKeywords(title: string, description: string): string[] {
     host:["host","connection","session"], hosts:["host","connection"],
     connection:["connection","session","host"], connections:["connection","session","host"],
     disconnect:["connection","session","toolbar"], toolbar:["toolbar","mainwindow","window"],
-    settings:["settings","preferences","general"], preferences:["preferences","settings","general"],
+    settings:["settingsview","preferencesview","general"], preferences:["preferencesview","settingsview","general"],
     search:["search","filter"], empty:["empty","placeholder"],
     timestamp:["host","connection","row"], badge:["host","connection","row"],
     latency:["host","connection","row"], ping:["host","connection"],
@@ -295,8 +295,8 @@ function matchTargetFiles(
   keywords: string[], excludedFiles: string[], repoTree: string, maxFiles = 5,
 ): string[] {
   const swiftFiles = repoTree.split("\n").filter(line =>
-    line.includes(".swift") && line.includes("Sources/") &&
-    !line.includes("/Preview ") && !line.includes("Generated") && !line.includes(".build/")
+    line.endsWith(".swift") && line.includes("Sources/") &&
+    !line.includes(".swift-version") && !line.includes("AppSettings.swift") && !line.includes("/Preview ") && !line.includes("Generated") && !line.includes(".build/")
   ).map(l => l.trim().replace(/^[|\-\s]+/, ""));
   const scored: Array<{ path: string; score: number }> = [];
   for (const fp of swiftFiles) {
@@ -331,7 +331,6 @@ async function fetchTargetFileContents(
   }
   return results;
 }
-
 async function buildTaskContext(loop: {
   storyId: string | null;
   deliberationId: string | null;
@@ -399,6 +398,38 @@ async function buildTaskContext(loop: {
   const repoCtx = await getRepoContext();
   if (repoCtx) {
     parts.push(`## Codebase Context\n${repoCtx}`);
+  }
+
+
+  // ── Inject target file contents (Issue #7/8 fix) ──
+  if (loop.storyId) {
+    const storyForFiles = await prisma.story.findUnique({
+      where: { id: loop.storyId },
+      select: { title: true, description: true },
+    });
+    if (storyForFiles) {
+      const ghTok = process.env.GITHUB_TOKEN;
+      if (ghTok && repoCtx) {
+        const kws = extractFileKeywords(storyForFiles.title, storyForFiles.description);
+        const excl = extractExcludedFiles(storyForFiles.description);
+        const tPaths = matchTargetFiles(kws, excl, repoCtx, 5);
+        if (tPaths.length > 0) {
+          const fileContents = await fetchTargetFileContents(tPaths, "deblasioluca/deepterm", "main", ghTok);
+          if (fileContents.length > 0) {
+            const fileSection = fileContents
+              .map(f => `### ${f.path}\n\`\`\`swift\n${f.content}\n\`\`\``)
+              .join("\n\n");
+            parts.push(
+              `## Existing File Contents — READ BEFORE MODIFYING\n` +
+              `**CRITICAL: These are the CURRENT file contents. Make MINIMAL targeted changes. ` +
+              `Do NOT rewrite the entire file. Find the exact insertion point and add only what is needed.**\n\n` +
+              fileSection
+            );
+            console.log(`[TaskContext] Injected ${fileContents.length} target files: ${fileContents.map(f => f.path.split("/").pop()).join(", ")}`);
+          }
+        }
+      }
+    }
   }
 
 
