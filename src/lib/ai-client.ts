@@ -144,7 +144,8 @@ async function callAnthropic(
   const { default: Anthropic } = await import('@anthropic-ai/sdk');
   const client = new Anthropic({
     apiKey: config.apiKey,
-    maxRetries: 4,
+    maxRetries: 0, // We handle retries in withRetry — SDK retries compound with our own
+    timeout: 120_000, // 2 min hard timeout per API call
     ...(config.baseUrl ? { baseURL: config.baseUrl } : {}),
   });
 
@@ -293,8 +294,14 @@ export async function callAI(
   let success = true;
   let errorMessage: string | undefined;
 
+  // Global timeout: 3 min max per callAI invocation regardless of provider
+  const AI_CALL_TIMEOUT_MS = 3 * 60 * 1000;
+  const timeoutPromise = new Promise<never>((_, reject) =>
+    setTimeout(() => reject(new Error(`[AI Client] callAI timed out after ${AI_CALL_TIMEOUT_MS / 1000}s for activity "${activity}"`)), AI_CALL_TIMEOUT_MS)
+  );
+
   try {
-    response = await withRetry(dispatch, 4, activity);
+    response = await Promise.race([withRetry(dispatch, 4, activity), timeoutPromise]);
     return response;
   } catch (err) {
     success = false;
