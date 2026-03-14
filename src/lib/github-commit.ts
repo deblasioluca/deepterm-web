@@ -20,7 +20,7 @@ function getHeaders(): Record<string, string> {
 }
 
 async function ghFetch<T>(url: string, options?: RequestInit): Promise<T> {
-  const res = await fetch(url, { headers: getHeaders(), ...options });
+  const res = await fetch(url, { signal: AbortSignal.timeout(30_000), headers: getHeaders(), ...options });
   if (!res.ok) { const body = await res.text().catch(() => ""); throw new Error(`GitHub API ${res.status}: ${body.slice(0, 500)}`); }
   return res.json();
 }
