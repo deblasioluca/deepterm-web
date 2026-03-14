@@ -33,6 +33,10 @@
 | API key | Pi `.env` → `AI_DEV_API_KEY` |
 | Apple Team ID | `54344JBE7L` |
 | deepterm.net | Public docs site |
+| **Tailscale — Pi** | `100.96.166.43` (rp5m3) |
+| **Tailscale — CI Mac** | `100.103.71.66` (ci-mac-1) |
+| **Tailscale — Dev Mac** | `100.107.108.33` (lucas-mini-6237) |
+| **Cockpit via Tailscale** | `http://100.96.166.43:3000/admin/cockpit` |
 
 ---
 
@@ -181,15 +185,15 @@ Epic flow: `(all stories merged) → DEPLOY → RELEASE`
 
 ## Next Up (in priority order)
 
-1. **H3** — Stripe Live: follow `STRIPE-LIVE-MIGRATION.md` (manual steps in Stripe Dashboard + Pi .env update)
-2. **I4** — Tailscale: install on Pi + CI Mac + dev Mac for remote cockpit access
-3. **I1/I2** — Load testing harnesses (SSH + web)
-4. **I3** — AI eval golden suite
-5. **I5** — Full E2E smoke test
-6. **J1–J5** — Security audit/verification
-7. **H4** — Revenue dashboard
+1. **I1/I2** — Load testing harnesses (SSH + web)
+2. **I3** — AI eval golden test suite + evaluation runner
+3. **I5** — Full E2E smoke test (manual lifecycle dry run)
+4. **I6** — Security audit: rotate passwords, move hardcoded keys to env
+5. **J1–J5** — Security verification checklist
+6. **H3** — Stripe Live (waiting until everything stable — guide in `STRIPE-LIVE-MIGRATION.md`)
+7. **H4** — Revenue dashboard in cockpit
 8. **H5** — Apple App Store Server Notifications v2
-9. **E9** — UI tests (XCUITest GUI session on CI Mac)
+9. **E9** — UI tests (XCUITest needs GUI session on CI Mac)
 
 ---
 
