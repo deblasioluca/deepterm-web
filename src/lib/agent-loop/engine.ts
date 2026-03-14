@@ -242,6 +242,96 @@ function formatBuildGateFailure(detail: string): string {
 
 // ── Context Building ─────────────────────────────
 
+
+// ── Target File Detection & Fetching (Issue #7/8 fix) ────────────────────────
+
+function extractFileKeywords(title: string, description: string): string[] {
+  const combined = (title + " " + description).toLowerCase();
+  const explicitFiles: string[] = [];
+  const re = /([a-z][a-z0-9]+(?:view|controller|manager|service|model|store|helper|cell|row|button|panel|sheet))\.swift/gi;
+  let mm: RegExpExecArray | null;
+  while ((mm = re.exec(combined)) !== null) explicitFiles.push(mm[1].toLowerCase());
+
+  const titleWords = title.toLowerCase().split(/\s+/);
+  const viewKws = titleWords.filter(w =>
+    w.length > 3 &&
+    !["show","add","with","from","into","when","that","this","each","last","list",
+      "the","and","for","not","has","are","new","any","button","toolbar"].includes(w)
+  );
+  const domainMap: Record<string, string[]> = {
+    host:["host","connection","session"], hosts:["host","connection"],
+    connection:["connection","session","host"], connections:["connection","session","host"],
+    disconnect:["connection","session","toolbar"], toolbar:["toolbar","mainwindow","window"],
+    settings:["settings","preferences","general"], preferences:["preferences","settings","general"],
+    search:["search","filter"], empty:["empty","placeholder"],
+    timestamp:["host","connection","row"], badge:["host","connection","row"],
+    latency:["host","connection","row"], ping:["host","connection"],
+    tooltip:["toolbar","button","mainwindow"], clipboard:["connection","host","detail"],
+    version:["preferences","general","about","settings"], command:["command","palette"],
+    palette:["command","palette"], shortcut:["shortcut","command","keyboard"],
+  };
+  const mapped: string[] = [];
+  for (const word of titleWords) { const hits = domainMap[word]; if (hits) mapped.push(...hits); }
+  return Array.from(new Set([...explicitFiles, ...viewKws, ...mapped])).slice(0, 10);
+}
+
+function extractExcludedFiles(description: string): string[] {
+  const excluded: string[] = [];
+  const pats: RegExp[] = [
+    /do not modify\s+([A-Za-z0-9./]+\.swift)/gi,
+    /not modify\s+([A-Za-z0-9./]+\.swift)/gi,
+    /avoid\s+([A-Za-z0-9./]+\.swift)/gi,
+  ];
+  for (const pat of pats) {
+    let mm2: RegExpExecArray | null;
+    while ((mm2 = pat.exec(description)) !== null) {
+      excluded.push((mm2[1].toLowerCase().split("/").pop() || mm2[1]));
+    }
+  }
+  return excluded;
+}
+
+function matchTargetFiles(
+  keywords: string[], excludedFiles: string[], repoTree: string, maxFiles = 5,
+): string[] {
+  const swiftFiles = repoTree.split("\n").filter(line =>
+    line.includes(".swift") && line.includes("Sources/") &&
+    !line.includes("/Preview ") && !line.includes("Generated") && !line.includes(".build/")
+  ).map(l => l.trim().replace(/^[|\-\s]+/, ""));
+  const scored: Array<{ path: string; score: number }> = [];
+  for (const fp of swiftFiles) {
+    const fn = (fp.toLowerCase().split("/").pop() || "").replace(".swift", "");
+    if (excludedFiles.some(ex => fn.includes(ex.replace(".swift", "")))) continue;
+    let score = 0;
+    for (const kw of keywords) { if (fn.includes(kw)) score += 3; else if (fp.toLowerCase().includes(kw)) score += 1; }
+    if (score > 0) scored.push({ path: fp, score });
+  }
+  return scored.sort((a, b) => b.score - a.score).slice(0, maxFiles).map(s => s.path);
+}
+
+async function fetchTargetFileContents(
+  paths: string[], repo: string, branch: string, token: string,
+): Promise<Array<{ path: string; content: string }>> {
+  const MAX_LINES = 150;
+  const results: Array<{ path: string; content: string }> = [];
+  for (const fp of paths) {
+    try {
+      const res = await fetch(
+        `https://api.github.com/repos/${repo}/contents/${fp}?ref=${branch}`,
+        { signal: AbortSignal.timeout(10_000), headers: { Authorization: `Bearer ${token}`, Accept: "application/vnd.github.raw+json" } }
+      );
+      if (!res.ok) continue;
+      const raw = await res.text();
+      const lines = raw.split("\n");
+      const truncated = lines.length > MAX_LINES
+        ? lines.slice(0, MAX_LINES).join("\n") + `\n// ... (${lines.length - MAX_LINES} more lines truncated)`
+        : raw;
+      results.push({ path: fp, content: truncated });
+    } catch { /* skip */ }
+  }
+  return results;
+}
+
 async function buildTaskContext(loop: {
   storyId: string | null;
   deliberationId: string | null;
@@ -311,6 +401,38 @@ async function buildTaskContext(loop: {
     parts.push(`## Codebase Context\n${repoCtx}`);
   }
 
+
+  // ── Inject target file contents (Issue #7/8 fix) ──
+  if (loop.storyId) {
+    const storyForFiles = await prisma.story.findUnique({
+      where: { id: loop.storyId },
+      select: { title: true, description: true },
+    });
+    if (storyForFiles) {
+      const ghTok = process.env.GITHUB_TOKEN;
+      if (ghTok && repoCtx) {
+        const kws = extractFileKeywords(storyForFiles.title, storyForFiles.description);
+        const excl = extractExcludedFiles(storyForFiles.description);
+        const tPaths = matchTargetFiles(kws, excl, repoCtx, 5);
+        if (tPaths.length > 0) {
+          const fileContents = await fetchTargetFileContents(tPaths, "deblasioluca/deepterm", "main", ghTok);
+          if (fileContents.length > 0) {
+            const fileSection = fileContents
+              .map(f => `### ${f.path}\n\`\`\`swift\n${f.content}\n\`\`\``)
+              .join("\n\n");
+            parts.push(
+              `## Existing File Contents — READ BEFORE MODIFYING\n` +
+              `**CRITICAL: These are the CURRENT file contents. Make MINIMAL targeted changes. ` +
+              `Do NOT rewrite the entire file. Find the exact insertion point and add only what is needed.**\n\n` +
+              fileSection
+            );
+            console.log(`[TaskContext] Injected ${fileContents.length} target files: ${fileContents.map(f => f.path.split("/").pop()).join(", ")}`);
+          }
+        }
+      }
+    }
+  }
+
   return parts.join('\n\n');
 }
 
@@ -358,6 +480,10 @@ One of:
 - **BLOCKED**: Cannot proceed, explain why
 
 ## Rules
+- **MINIMAL CHANGES ONLY**: Always prefer the smallest possible change. Never rewrite an entire file when you can add 2-5 lines.
+- If "Existing File Contents" are provided above, you MUST base your changes on those exact contents. Do not reconstruct or rewrite.
+- **NEVER use @EnvironmentObject** unless the existing code already uses it for that type. Check the existing file first.
+- **ALWAYS check existing class/struct signatures** before modifying initializers or adding properties.
 - Make focused, incremental changes each iteration
 - ${config.requireTests ? 'Include tests for new functionality' : 'Tests are optional'}
 - ${config.requireBuild ? 'Ensure changes compile/build correctly' : 'Build verification is optional'}
