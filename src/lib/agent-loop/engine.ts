@@ -151,7 +151,7 @@ async function commitAndOpenPRs(
 const ITERATION_DELAY_MS = 5_000; // Delay between iterations to avoid rate limits
 const MAX_CONTEXT_CHARS = 400_000; // Max chars for conversation context
 const MAX_CONSECUTIVE_ERRORS = 3; // Stop early after this many consecutive errors
-const BUILD_GATE_TIMEOUT_MS = 25 * 60 * 1000; // 10 min max wait for build gate
+const BUILD_GATE_TIMEOUT_MS = 10 * 60 * 1000; // 10 min max wait for build gate
 const BUILD_GATE_POLL_MS = 15_000;             // Poll every 15s
 const MAX_BUILD_GATE_ATTEMPTS = 3;             // Max fix-and-retry cycles before giving up
 // Local logEvent helper (mirrors lifecycle/route.ts)
@@ -420,6 +420,10 @@ function parseIterationResponse(content: string): ParsedIteration {
  * Call fire-and-forget — updates DB records as it progresses.
  */
 export async function runAgentLoop(loopId: string, feedbackContext?: string): Promise<void> {
+  // Hard cap: entire loop must complete within 15 minutes
+  const LOOP_DEADLINE = Date.now() + 15 * 60 * 1000;
+  const loopDeadlineError = new Error(`[AgentLoop] ${loopId} exceeded 15-minute total deadline`);
+
   const loop = await prisma.agentLoop.findUnique({
     where: { id: loopId },
     include: { config: true },
@@ -741,7 +745,8 @@ export async function runAgentLoop(loopId: string, feedbackContext?: string): Pr
             // Inject errors → agent fixes → re-push
             const errMsg = formatBuildGateFailure(gate.detail);
             messages.push({ role: 'user', content: `${errMsg}\n\nFix all issues above. Set status to DONE when resolved.` });
-            for (let fi = 1; fi <= 5; fi++) {
+            for (let fi = 1; fi <= 2; fi++) { // max 2 self-correction attempts (2 x 3min = 6min cap)
+              if (Date.now() > LOOP_DEADLINE) { console.warn(`[AgentLoop] ${loopId} deadline exceeded in fix loop — aborting`); finalStatus = 'failed'; break; }
               const fr = await callAI(
                 'agent-loop.implement',
                 getSystemPrompt({ requireTests: config.requireTests ?? true, requireBuild: config.requireBuild ?? true }),
