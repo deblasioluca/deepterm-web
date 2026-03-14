@@ -515,6 +515,8 @@ One of:
 - If "Existing File Contents" are provided above, you MUST base your changes on those exact contents. Do not reconstruct or rewrite.
 - **NEVER use @EnvironmentObject** unless the existing code already uses it for that type. Check the existing file first.
 - **ALWAYS check existing class/struct signatures** before modifying initializers or adding properties.
+- **BRACE BALANCING**: After every code insertion into an existing Swift file, count { and } in the modified function/struct/body. They must match. If you add code before a closing brace, ensure that closing brace is preserved on the NEXT line. Never insert code AFTER the final closing brace of a function.
+- **Swift insertion pattern**: To add code inside a VStack/Form/body, insert BEFORE the closing } of that block, not after it.
 - Make focused, incremental changes each iteration
 - ${config.requireTests ? 'Include tests for new functionality' : 'Tests are optional'}
 - ${config.requireBuild ? 'Ensure changes compile/build correctly' : 'Build verification is optional'}
