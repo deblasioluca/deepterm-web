@@ -161,7 +161,7 @@ Epic flow: `(all stories merged) → DEPLOY → RELEASE`
 | I1 | SSH load testing harness | ⏳ TODO |
 | I2 | Web (Next.js) load testing harness | ⏳ TODO |
 | I3 | AI eval golden test suite + evaluation runner | ⏳ TODO |
-| I4 | Tailscale remote cockpit access | ⏳ TODO |
+| I4 | Tailscale remote cockpit access | ✅ DONE |
 | I5 | End-to-end dry run of full pipeline (E2E smoke test) | ⏳ TODO |
 | I6 | Security audit: rotate passwords, move hardcoded keys to env | ⏳ TODO |
 
