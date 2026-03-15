@@ -247,10 +247,21 @@ function formatBuildGateFailure(detail: string): string {
 
 function extractFileKeywords(title: string, description: string): string[] {
   const combined = (title + " " + description).toLowerCase();
+  const combinedRaw = title + " " + description; // preserve case for CamelCase matching
   const explicitFiles: string[] = [];
-  const re = /([a-z][a-z0-9]+(?:view|controller|manager|service|model|store|helper|cell|row|button|panel|sheet))\.swift/gi;
+
+  // Match explicit filenames WITH .swift extension (highest confidence)
+  const reWithExt = /([a-z][a-z0-9]+(?:view|controller|manager|service|model|store|helper|cell|row|button|panel|sheet))\.swift/gi;
   let mm: RegExpExecArray | null;
-  while ((mm = re.exec(combined)) !== null) explicitFiles.push(mm[1].toLowerCase());
+  while ((mm = reWithExt.exec(combined)) !== null) explicitFiles.push(mm[1].toLowerCase());
+
+  // Also match CamelCase type names WITHOUT .swift extension (e.g. "ConnectionsView" in title)
+  const reCamel = /\b([A-Z][a-zA-Z0-9]+(?:View|Controller|Manager|Service|Model|Store|Helper|Cell|Row|Button|Panel|Sheet|Tab|List|Detail|Item))\b/g;
+  let mc: RegExpExecArray | null;
+  while ((mc = reCamel.exec(combinedRaw)) !== null) {
+    const name = mc[1].toLowerCase();
+    if (!explicitFiles.includes(name)) explicitFiles.push(name);
+  }
 
   const titleWords = title.toLowerCase().split(/\s+/);
   const viewKws = titleWords.filter(w =>
@@ -303,7 +314,12 @@ function matchTargetFiles(
     const fn = (fp.toLowerCase().split("/").pop() || "").replace(".swift", "");
     if (excludedFiles.some(ex => fn.includes(ex.replace(".swift", "")))) continue;
     let score = 0;
-    for (const kw of keywords) { if (fn.includes(kw)) score += 3; else if (fp.toLowerCase().includes(kw)) score += 1; }
+    for (const kw of keywords) {
+      // Exact filename match (from explicit file extraction) → highest priority
+      if (fn === kw) score += 10;
+      else if (fn.includes(kw)) score += 3;
+      else if (fp.toLowerCase().includes(kw)) score += 1;
+    }
     if (score > 0) scored.push({ path: fp, score });
   }
   return scored.sort((a, b) => b.score - a.score).slice(0, maxFiles).map(s => s.path);
