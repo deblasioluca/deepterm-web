@@ -270,6 +270,32 @@ async function recoverStaleLoops() {
       );
     }
     console.warn(`[StaleLoopRecovery] Marked loop ${loop.id} as failed (stale)`);
+
+    // Auto-trigger retry-step so a new loop starts with the stale error as context
+    if (loop.storyId) {
+      try {
+        const baseUrl = process.env.NEXTAUTH_URL || 'http://localhost:3000';
+        const apiKey = process.env.AI_DEV_API_KEY || process.env.NODE_RED_API_KEY || '';
+        const retryRes = await fetch(`${baseUrl}/api/admin/cockpit/lifecycle`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey },
+          body: JSON.stringify({
+            action: 'retry-step',
+            storyId: loop.storyId,
+            stepId: 'implement',
+            reason: `Auto-retry after stale loop ${loop.id} was recovered`,
+          }),
+          signal: AbortSignal.timeout(15000),
+        });
+        if (retryRes.ok) {
+          console.log(`[StaleLoopRecovery] Auto-triggered retry-step for story ${loop.storyId}`);
+        } else {
+          console.error(`[StaleLoopRecovery] retry-step failed: ${retryRes.status}`);
+        }
+      } catch (retryErr) {
+        console.error(`[StaleLoopRecovery] retry-step error:`, retryErr);
+      }
+    }
   }
 }
 
