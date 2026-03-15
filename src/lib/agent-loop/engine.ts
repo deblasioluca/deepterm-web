@@ -994,6 +994,9 @@ export async function runAgentLoop(loopId: string, feedbackContext?: string): Pr
           const prSummary = prResult.allPRs.map(p => `${p.repo}: ${p.url}`).join(', ');
           console.log(`[AgentLoop] ${loopId} opened ${prResult.allPRs.length} PRs: ${prSummary}`);
         }
+      // PR created successfully — mark loop as completed for auto-advance
+      finalStatus = 'completed';
+
       } catch (err) {
         console.error(`[AgentLoop] ${loopId} failed to create PR:`, err);
         // Don't fail the loop — the code was generated, just PR creation failed
@@ -1015,7 +1018,7 @@ export async function runAgentLoop(loopId: string, feedbackContext?: string): Pr
     });
 
     // T1-5: Auto-advance lifecycle when agent loop completes with a PR
-    if (finalStatus === 'completed' && loop.storyId) {
+    if ((finalStatus === 'completed' || finalStatus === 'awaiting_review') && loop.storyId) {
       try {
         const updatedLoop = await prisma.agentLoop.findUnique({
           where: { id: loopId },
