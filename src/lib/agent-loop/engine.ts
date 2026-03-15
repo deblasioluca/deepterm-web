@@ -939,6 +939,37 @@ export async function runAgentLoop(loopId: string, feedbackContext?: string): Pr
 
       if (!buildGatePassed) {
         console.log(`[AgentLoop] ${loopId} skipping PR — build gate failed`);
+        // Auto-trigger retry-step implement so a fresh AgentLoop starts with error context
+        if (loop.storyId) {
+          try {
+            const baseUrl = process.env.NEXTAUTH_URL || 'http://localhost:3000';
+            const apiKey = process.env.AI_DEV_API_KEY || process.env.NODE_RED_API_KEY || '';
+            const lastErrorLog = await prisma.agentLoop.findUnique({
+              where: { id: loopId }, select: { errorLog: true },
+            });
+            const retryRes = await fetch(`${baseUrl}/api/admin/cockpit/lifecycle`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey },
+              body: JSON.stringify({
+                action: 'retry-step',
+                storyId: loop.storyId,
+                stepId: 'implement',
+                reason: `Auto-retry after build gate failed ${MAX_BUILD_GATE_ATTEMPTS} times. Last error: ${lastErrorLog?.errorLog?.slice(0, 500) ?? 'unknown'}`,
+              }),
+              signal: AbortSignal.timeout(15000),
+            });
+            if (retryRes.ok) {
+              console.log(`[AgentLoop] ${loopId} auto-triggered retry-step implement for story ${loop.storyId}`);
+              await logEvent(loop.storyId, 'implement', 'progress',
+                JSON.stringify({ message: `Auto-retry triggered after ${MAX_BUILD_GATE_ATTEMPTS} failed build gate attempts`, loopId }), 'system');
+            } else {
+              const errBody = await retryRes.text().catch(() => '');
+              console.error(`[AgentLoop] ${loopId} auto retry-step failed: ${retryRes.status} ${errBody}`);
+            }
+          } catch (retryErr) {
+            console.error(`[AgentLoop] ${loopId} auto retry-step error:`, retryErr);
+          }
+        }
       } else {
 
 
