@@ -515,8 +515,13 @@ One of:
 - If "Existing File Contents" are provided above, you MUST base your changes on those exact contents. Do not reconstruct or rewrite.
 - **NEVER use @EnvironmentObject** unless the existing code already uses it for that type. Check the existing file first.
 - **ALWAYS check existing class/struct signatures** before modifying initializers or adding properties.
-- **BRACE BALANCING**: After every code insertion into an existing Swift file, count { and } in the modified function/struct/body. They must match. If you add code before a closing brace, ensure that closing brace is preserved on the NEXT line. Never insert code AFTER the final closing brace of a function.
-- **Swift insertion pattern**: To add code inside a VStack/Form/body, insert BEFORE the closing } of that block, not after it.
+- **BRACE BALANCING**: After every code insertion into an existing Swift file, count { and } in the ENTIRE modified block (function, computed property, or view body). They must match exactly. Common failure: inserting a new view after Spacer() or after the last item in a VStack/Section, without preserving the closing brace of that block.
+- **Swift insertion pattern — MANDATORY**: To add code inside a VStack/Form/Section/body, you MUST insert BEFORE the closing brace of that block, and that closing brace MUST appear on the next line after your new code. Never insert code AFTER a closing brace.
+- **Insertion example (correct)** — insert new code BEFORE the closing brace of the block:
+  BEFORE: Section { Toggle(...) / Spacer() / closing-brace }
+  AFTER:  Section { Toggle(...) / Spacer() / Text("Version: x") / closing-brace }
+  The closing brace after your new line is PRESERVED — never deleted or moved.
+- **Self-check before DONE**: Count opening and closing braces in every modified computed property or function body. If they do not match, fix before setting DONE.
 - Make focused, incremental changes each iteration
 - ${config.requireTests ? 'Include tests for new functionality' : 'Tests are optional'}
 - ${config.requireBuild ? 'Ensure changes compile/build correctly' : 'Build verification is optional'}
