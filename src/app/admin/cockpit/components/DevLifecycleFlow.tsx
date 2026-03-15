@@ -1093,6 +1093,9 @@ function buildLifecycleSteps(story: StoryLifecycleData | null): LifecycleStep[] 
     id: 'planning', label: 'Plan', description: 'Create epic & stories, set priority',
     icon: <FileText className="w-3.5 h-3.5" />, actor: 'human', status: planStatus,
     detail: s.epicId ? `Epic: ${s.epicTitle || s.epicId}` : undefined, events,
+    gate: planStatus === 'active' ? { required: false, actions: [
+      { label: 'Complete Plan', action: 'complete-plan', variant: 'approve' },
+    ]} : undefined,
   });
 
   // 3. AI Deliberation

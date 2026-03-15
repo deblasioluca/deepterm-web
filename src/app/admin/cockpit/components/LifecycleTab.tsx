@@ -469,6 +469,7 @@ export default function LifecycleTab() {
           method: 'POST',
           body: { storyId, configId: 'default' },
         },
+        'complete-plan': { url: '/api/admin/cockpit/lifecycle', method: 'POST', body: { action: 'complete-plan', storyId } },
         'approve-triage': { url: '/api/admin/cockpit/lifecycle', method: 'POST', body: { action: 'approve-triage', storyId } },
         'reject-triage': { url: '/api/admin/cockpit/lifecycle', method: 'POST', body: { action: 'reject-triage', storyId, reason: reason || 'Rejected at triage' } },
         'defer-triage': { url: '/api/admin/cockpit/lifecycle', method: 'POST', body: { action: 'defer-triage', storyId, reason: reason || 'Deferred for later' } },
