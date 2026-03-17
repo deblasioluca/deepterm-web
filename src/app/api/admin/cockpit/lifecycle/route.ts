@@ -561,12 +561,13 @@ export async function POST(req: NextRequest) {
         break;
 
       case 'approve-pr': {
-        // Mark as merged and trigger epic gate check
+        // Mark as merged and advance to deploy step
         updates.status = 'in_progress';
-        updates.lifecycleStep = 'merged';
-        updates.lifecycleStartedAt = null;
+        updates.lifecycleStep = 'deploy';
+        updates.lifecycleStartedAt = new Date();
         (updates as Record<string, unknown>).mergedAt = new Date();
         await logEvent(storyId, 'review', 'completed', 'PR approved and merged', 'human');
+        await logEvent(storyId, 'deploy', 'started', 'Deploy step started after PR merge', 'system');
         await doPostMergeEpicCheck(storyId);
         break;
       }

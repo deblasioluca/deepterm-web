@@ -22,6 +22,8 @@ const ADMIN_HEADERS = {
   Cookie: `admin-session=${ADMIN_SESSION}`,
 };
 
+const API_KEY = process.env.AI_DEV_API_KEY || process.env.E2E_API_KEY || 'test-api-key-for-ci';
+
 let testStoryId: string;
 
 // ── Helpers ──
@@ -55,7 +57,7 @@ async function emitEvent(
       detail: detail ? JSON.stringify(detail) : undefined,
       actor,
     },
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', 'x-api-key': API_KEY },
   });
   return { status: res.status(), body: await res.json().catch(() => null) };
 }

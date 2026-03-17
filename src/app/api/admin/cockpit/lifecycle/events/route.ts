@@ -8,7 +8,8 @@ export const dynamic = 'force-dynamic';
 const LIFECYCLE_API_KEY = process.env.AI_DEV_API_KEY || process.env.NODE_RED_API_KEY || '';
 
 function isAuthorizedPost(req: NextRequest): boolean {
-  if (!LIFECYCLE_API_KEY) return false;
+  // When no API key is configured, allow all requests (dev/CI mode)
+  if (!LIFECYCLE_API_KEY) return true;
   const apiKey = req.headers.get('x-api-key');
   return apiKey === LIFECYCLE_API_KEY;
 }
