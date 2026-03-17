@@ -72,8 +72,7 @@ async function getGithubIssues() {
     );
     if (!res.ok) return [];
     const items = await res.json();
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    return items.filter((i: any) => !i.pull_request).map((issue: any) => ({
+    return items.filter((i: { pull_request?: unknown }) => !i.pull_request).map((issue: { number: number; title: string; labels?: { name: string }[]; assignee?: { login: string } | null }) => ({
       number: issue.number,
       title: issue.title,
       labels: issue.labels?.map((l: { name: string }) => l.name) || [],
