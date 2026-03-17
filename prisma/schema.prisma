@@ -121,6 +121,7 @@ model ZKVaultItem {
   vaultId       String
   userId        String
   type          Int?
+  name          String?   // Encrypted name (sent by Swift client alongside encryptedData)
   encryptedData String
   revisionDate  DateTime  @default(now())
   deletedAt     DateTime?

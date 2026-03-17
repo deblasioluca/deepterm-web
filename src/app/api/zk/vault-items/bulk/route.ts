@@ -19,7 +19,8 @@ interface BulkCreateItem {
   id?: string; // Optional client-generated stable ID
   vaultId: string;
   encryptedData: string;
-  type?: number; // 0=password,1=key,2=cert,10=managedKey,11=identity,12=hostGroup
+  type?: number; // Keep in sync with VaultItemType in zk/index.ts
+  name?: string; // Encrypted name (persisted alongside encryptedData)
   clientId?: string; // Client-side temporary ID for tracking
 }
 
@@ -28,6 +29,7 @@ interface BulkUpdateItem {
   vaultId?: string;
   encryptedData?: string;
   type?: number;
+  name?: string; // Encrypted name
   revisionDate?: string; // For optimistic concurrency
 }
 
@@ -183,6 +185,7 @@ export async function POST(request: NextRequest) {
                 vaultId: targetVaultId,
                 encryptedData: item.encryptedData,
                 type: typeof item.type === 'number' ? item.type : existingById.type,
+                name: item.name !== undefined ? item.name : undefined,
                 deletedAt: null,
                 revisionDate: newRevisionDate,
               },
@@ -232,6 +235,7 @@ export async function POST(request: NextRequest) {
             vaultId: item.vaultId,
             userId: auth.userId,
             type: typeof item.type === 'number' ? item.type : null,
+            name: item.name || null,
             encryptedData: item.encryptedData,
             revisionDate,
           },
@@ -314,6 +318,7 @@ export async function POST(request: NextRequest) {
             vaultId: item.vaultId || existing.vaultId,
             encryptedData: item.encryptedData || existing.encryptedData,
             type: typeof item.type === 'number' ? item.type : undefined,
+            name: item.name !== undefined ? item.name : undefined,
             revisionDate: newRevisionDate,
           },
         });

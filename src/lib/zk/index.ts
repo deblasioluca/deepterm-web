@@ -7,10 +7,14 @@ export * from './audit';
 export * from './middleware';
 
 // Type definitions for vault items
+// Keep in sync with Swift VaultItemType in VaultAPIModels.swift
 export enum VaultItemType {
   SSH_PASSWORD = 0,
   SSH_KEY = 1,
   SSH_CERTIFICATE = 2,
+  MANAGED_KEY = 10,
+  IDENTITY = 11,
+  HOST_GROUP = 12,
 }
 
 export enum KDFType {

@@ -13,6 +13,7 @@ import {
   errorResponse,
   successResponse,
   handleCorsPreflightRequest,
+  addCorsHeaders,
 } from '@/lib/zk';
 
 export async function OPTIONS() {
@@ -29,11 +30,11 @@ export async function OPTIONS() {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { email, password, deviceName, deviceType = 'mobile' } = body;
+    const { email, password, masterPasswordHash: clientMasterHash, deviceName, deviceType = 'mobile' } = body;
 
-    // Validate required fields
-    if (!email || !password) {
-      return errorResponse('Email and password are required');
+    // Validate required fields — accept either password (legacy) or masterPasswordHash (ZK)
+    if (!email || (!password && !clientMasterHash)) {
+      return errorResponse('Email and password (or masterPasswordHash) are required');
     }
 
     const normalizedEmail = email.toLowerCase().trim();
@@ -77,7 +78,7 @@ export async function POST(request: NextRequest) {
         userAgent: request.headers.get('user-agent') || undefined,
         metadata: { email: normalizedEmail, reason: 'invalid_password' },
       });
-      return errorResponse('Invalid email or password', 401);
+      return addCorsHeaders(errorResponse('Invalid email or password', 401), request.headers.get('origin'));
     }
 
     // Check if 2FA is required
@@ -100,14 +101,18 @@ export async function POST(request: NextRequest) {
     });
 
     if (!zkUser) {
-      // Create ZK user linked to web user
-      // Generate a master password hash from the web password for ZK system
-      const masterPasswordHash = await bcrypt.hash(password, 12);
+      // Create ZK user linked to web user.
+      // If the client sent a client-derived masterPasswordHash (ZK flow),
+      // store bcrypt(clientMasterHash) so future logins can use /accounts/login.
+      // Otherwise fall back to bcrypt(password) (legacy — first login from older client).
+      const hashToStore = clientMasterHash
+        ? await bcrypt.hash(clientMasterHash, 12)
+        : await bcrypt.hash(password, 12);
       
       zkUser = await prisma.zKUser.create({
         data: {
           email: normalizedEmail,
-          masterPasswordHash: masterPasswordHash,
+          masterPasswordHash: hashToStore,
           protectedSymmetricKey: '', // Will be set when app generates keys
           publicKey: '', // Will be set when app generates keys
           encryptedPrivateKey: '', // Will be set when app generates keys
@@ -187,7 +192,7 @@ export async function POST(request: NextRequest) {
 
     const hasKeys = Boolean(zkUser.publicKey && zkUser.encryptedPrivateKey);
 
-    return successResponse({
+    const response = successResponse({
       defaultVaultId: defaultVault.id,
       accessToken,
       refreshToken,
@@ -219,6 +224,7 @@ export async function POST(request: NextRequest) {
         teamName: webUser.team.name,
       } : null,
     });
+    return addCorsHeaders(response, request.headers.get('origin'));
   } catch (error) {
     console.error('Password login error:', error);
     return errorResponse('Login failed', 500);
