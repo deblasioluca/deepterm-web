@@ -8,7 +8,8 @@ export const dynamic = 'force-dynamic';
 const LIFECYCLE_API_KEY = process.env.AI_DEV_API_KEY || process.env.NODE_RED_API_KEY || '';
 
 function isAuthorizedPost(req: NextRequest): boolean {
-  if (!LIFECYCLE_API_KEY) return false;
+  // When no API key is configured, allow all requests (dev/CI mode)
+  if (!LIFECYCLE_API_KEY) return true;
   const apiKey = req.headers.get('x-api-key');
   return apiKey === LIFECYCLE_API_KEY;
 }
@@ -53,12 +54,8 @@ export async function GET(req: NextRequest) {
 //   cancelled, skipped, retried, reset, loop-back
 export async function POST(req: NextRequest) {
   try {
-    // Auth check — CI and agent must authenticate
-    // Allow localhost/internal calls without key (cockpit UI calls from same server)
-    const host = req.headers.get('host') || '';
-    const isLocalhost = host.startsWith('localhost') || host.startsWith('127.0.0.1') || host.startsWith('10.10.10.10');
-    
-    if (!isLocalhost && !isAuthorizedPost(req)) {
+    // Auth check — CI and agent must authenticate via x-api-key header
+    if (!isAuthorizedPost(req)) {
       return NextResponse.json({ error: 'Unauthorized — x-api-key required' }, { status: 401 });
     }
 

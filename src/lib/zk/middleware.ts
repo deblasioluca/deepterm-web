@@ -131,20 +131,41 @@ export function addRateLimitHeaders(
 }
 
 /**
+ * Allowed CORS origins for ZK vault API routes.
+ * Falls back to permissive '*' only in development.
+ */
+const ALLOWED_ORIGINS: string[] = (process.env.CORS_ALLOWED_ORIGINS || '')
+  .split(',')
+  .map(o => o.trim())
+  .filter(Boolean);
+
+/**
  * CORS headers for API routes
  */
-export function addCorsHeaders(response: NextResponse): NextResponse {
-  response.headers.set('Access-Control-Allow-Origin', '*');
+export function addCorsHeaders(response: NextResponse, requestOrigin?: string | null): NextResponse {
+  const origin =
+    ALLOWED_ORIGINS.length > 0 && requestOrigin && ALLOWED_ORIGINS.includes(requestOrigin)
+      ? requestOrigin
+      : ALLOWED_ORIGINS.length > 0
+        ? '' // no match — don't set header
+        : '*'; // no config (dev) — allow all
+
+  if (origin) {
+    response.headers.set('Access-Control-Allow-Origin', origin);
+  }
   response.headers.set('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
   response.headers.set('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Device-Type');
   response.headers.set('Access-Control-Max-Age', '86400');
+  if (ALLOWED_ORIGINS.length > 0) {
+    response.headers.set('Vary', 'Origin');
+  }
   return response;
 }
 
 /**
  * Handle OPTIONS preflight requests
  */
-export function handleCorsPreflightRequest(): NextResponse {
+export function handleCorsPreflightRequest(requestOrigin?: string | null): NextResponse {
   const response = new NextResponse(null, { status: 204 });
-  return addCorsHeaders(response);
+  return addCorsHeaders(response, requestOrigin);
 }

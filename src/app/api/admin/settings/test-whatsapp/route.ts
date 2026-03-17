@@ -88,8 +88,7 @@ export async function POST(request: NextRequest) {
     const payload = SAMPLE_PAYLOADS[webhookType];
 
     // Use wait: true so we can report success/failure to the admin
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const result = await notifyNodeRed(webhookType, payload as any, { wait: true, timeoutMs: 10000 });
+    const result = await notifyNodeRed(webhookType, payload as never, { wait: true, timeoutMs: 10000 });
 
     if (!result.ok) {
       return NextResponse.json(

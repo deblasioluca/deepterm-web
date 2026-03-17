@@ -98,12 +98,10 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
     GitHub({
       clientId: process.env.GITHUB_ID!,
       clientSecret: process.env.GITHUB_SECRET!,
-      allowDangerousEmailAccountLinking: true,
     }),
     Apple({
       clientId: process.env.APPLE_ID!,
       clientSecret: process.env.APPLE_SECRET!,
-      allowDangerousEmailAccountLinking: true,
     }),
   ],
   session: {
@@ -139,6 +137,14 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         const fallback = (user.email ?? '').split('@')[0];
         await prisma.user.update({ where: { id: user.id }, data: { name: fallback } });
       }
+
+      // Audit-log OAuth account linking so admins can trace account associations
+      if (account && user.id && (account.provider === 'github' || account.provider === 'apple')) {
+        console.info(
+          `[Auth] OAuth link: provider=${account.provider} userId=${user.id} email=${user.email ?? 'N/A'}`
+        );
+      }
+
       return true;
     },
     async jwt({ token, user }) {
