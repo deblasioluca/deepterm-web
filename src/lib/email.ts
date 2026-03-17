@@ -54,7 +54,7 @@ const transporter = nodemailer.createTransport({
   },
 });
 
-const ADMIN_EMAIL = 'luca.deblasio@bluewin.ch';
+const ADMIN_EMAIL = process.env.ADMIN_ALERT_EMAIL || 'luca.deblasio@bluewin.ch';
 const FROM_EMAIL = process.env.EMAIL_FROM || process.env.SMTP_FROM || 'noreply@deepterm.net';
 
 export async function sendNewUserNotification(user: {
