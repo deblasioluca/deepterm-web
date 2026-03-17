@@ -3,61 +3,10 @@ import bcrypt from 'bcryptjs';
 import { prisma } from '@/lib/prisma';
 import { verifyToken, verifyBackupCode } from '@/lib/2fa';
 import { getAuthFromRequest } from '@/lib/zk/middleware';
+import { determineLicenseStatus } from '@/lib/app/license';
 
 // API Key for app authentication
 const APP_API_KEY = process.env.APP_API_KEY || '';
-
-// License plan features
-const PLAN_FEATURES: Record<string, {
-  maxVaults: number;
-  maxCredentials: number;
-  maxTeamMembers: number;
-  ssoEnabled: boolean;
-  prioritySupport: boolean;
-}> = {
-  free: {
-    maxVaults: 1,
-    maxCredentials: 10,
-    maxTeamMembers: 0,
-    ssoEnabled: false,
-    prioritySupport: false,
-  },
-  starter: {
-    maxVaults: 5,
-    maxCredentials: 50,
-    maxTeamMembers: 3,
-    ssoEnabled: false,
-    prioritySupport: false,
-  },
-  pro: {
-    maxVaults: 20,
-    maxCredentials: 200,
-    maxTeamMembers: 10,
-    ssoEnabled: false,
-    prioritySupport: true,
-  },
-  team: {
-    maxVaults: 100,
-    maxCredentials: 1000,
-    maxTeamMembers: 50,
-    ssoEnabled: true,
-    prioritySupport: true,
-  },
-  enterprise: {
-    maxVaults: -1, // unlimited
-    maxCredentials: -1, // unlimited
-    maxTeamMembers: -1, // unlimited
-    ssoEnabled: true,
-    prioritySupport: true,
-  },
-  business: {
-    maxVaults: -1, // unlimited
-    maxCredentials: -1, // unlimited
-    maxTeamMembers: -1, // unlimited
-    ssoEnabled: true,
-    prioritySupport: true,
-  },
-};
 
 // POST - Validate user by email and optionally authenticate
 export async function POST(request: NextRequest) {
@@ -120,24 +69,7 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: 'TOKEN_EMAIL_MISMATCH' }, { status: 403 });
       }
 
-      // Determine license status
-      const team = user.team;
-      let plan = user.plan || 'free';
-      let subscriptionStatus = plan !== 'free' ? 'active' : 'active';
-      let expiresAt: Date | null = user.subscriptionExpiresAt || null;
-
-      if (team) {
-        plan = team.plan || plan;
-        subscriptionStatus = team.subscriptionStatus || 'active';
-        expiresAt = team.currentPeriodEnd || expiresAt;
-      }
-
-      const isSubscriptionValid =
-        subscriptionStatus === 'active' ||
-        subscriptionStatus === 'trialing' ||
-        (subscriptionStatus === 'past_due' && expiresAt && expiresAt > new Date());
-
-      const features = PLAN_FEATURES[plan] || PLAN_FEATURES.free;
+      const license = determineLicenseStatus(user);
 
       return NextResponse.json({
         valid: true,
@@ -150,16 +82,7 @@ export async function POST(request: NextRequest) {
           twoFactorEnabled: user.twoFactorEnabled,
           createdAt: user.createdAt,
         },
-        license: {
-          valid: isSubscriptionValid,
-          plan,
-          status: subscriptionStatus,
-          teamId: team?.id || null,
-          teamName: team?.name || null,
-          seats: team?.seats || 1,
-          expiresAt: expiresAt?.toISOString() || null,
-          features,
-        },
+        license,
       });
     }
 
@@ -242,25 +165,7 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Determine license status (individual plan or team plan)
-    const team = user.team;
-    let plan = user.plan || 'free';
-    let subscriptionStatus = plan !== 'free' ? 'active' : 'active';
-    let expiresAt: Date | null = user.subscriptionExpiresAt || null;
-
-    if (team) {
-      plan = team.plan || plan;
-      subscriptionStatus = team.subscriptionStatus || 'active';
-      expiresAt = team.currentPeriodEnd || expiresAt;
-    }
-
-    // Check if subscription is valid
-    const isSubscriptionValid =
-      subscriptionStatus === 'active' ||
-      subscriptionStatus === 'trialing' ||
-      (subscriptionStatus === 'past_due' && expiresAt && expiresAt > new Date());
-
-    const features = PLAN_FEATURES[plan] || PLAN_FEATURES.free;
+    const license = determineLicenseStatus(user);
 
     return NextResponse.json({
       valid: true,
@@ -273,16 +178,7 @@ export async function POST(request: NextRequest) {
         twoFactorEnabled: user.twoFactorEnabled,
         createdAt: user.createdAt,
       },
-      license: {
-        valid: isSubscriptionValid,
-        plan,
-        status: subscriptionStatus,
-        teamId: team?.id || null,
-        teamName: team?.name || null,
-        seats: team?.seats || 1,
-        expiresAt: expiresAt?.toISOString() || null,
-        features,
-      },
+      license,
     });
   } catch (error) {
     console.error('App validation error:', error);
@@ -346,34 +242,12 @@ export async function GET(request: NextRequest) {
         return NextResponse.json({ error: 'TOKEN_EMAIL_MISMATCH' }, { status: 403 });
       }
 
-      const team = user.team;
-      let plan = user.plan || 'free';
-      let subscriptionStatus = plan !== 'free' ? 'active' : 'active';
-      let expiresAt: Date | null = user.subscriptionExpiresAt || null;
-
-      if (team) {
-        plan = team.plan || plan;
-        subscriptionStatus = team.subscriptionStatus || 'active';
-        expiresAt = team.currentPeriodEnd || expiresAt;
-      }
-
-      const isSubscriptionValid =
-        subscriptionStatus === 'active' ||
-        subscriptionStatus === 'trialing' ||
-        (subscriptionStatus === 'past_due' && expiresAt && expiresAt > new Date());
-
-      const features = PLAN_FEATURES[plan] || PLAN_FEATURES.free;
+      const license = determineLicenseStatus(user);
 
       return NextResponse.json({
         valid: true,
         exists: true,
-        license: {
-          valid: isSubscriptionValid,
-          plan,
-          status: subscriptionStatus,
-          expiresAt: expiresAt?.toISOString() || null,
-          features,
-        },
+        license,
       });
     }
 
@@ -399,36 +273,12 @@ export async function GET(request: NextRequest) {
       });
     }
 
-    // Determine license status (individual plan or team plan)
-    const team = user.team;
-    let plan = user.plan || 'free';
-    let subscriptionStatus = plan !== 'free' ? 'active' : 'active';
-    let expiresAt: Date | null = user.subscriptionExpiresAt || null;
-
-    if (team) {
-      plan = team.plan || plan;
-      subscriptionStatus = team.subscriptionStatus || 'active';
-      expiresAt = team.currentPeriodEnd || expiresAt;
-    }
-
-    // Check if subscription is valid
-    const isSubscriptionValid =
-      subscriptionStatus === 'active' ||
-      subscriptionStatus === 'trialing' ||
-      (subscriptionStatus === 'past_due' && expiresAt && expiresAt > new Date());
-
-    const features = PLAN_FEATURES[plan] || PLAN_FEATURES.free;
+    const license = determineLicenseStatus(user);
 
     return NextResponse.json({
       valid: true,
       exists: true,
-      license: {
-        valid: isSubscriptionValid,
-        plan,
-        status: subscriptionStatus,
-        expiresAt: expiresAt?.toISOString() || null,
-        features,
-      },
+      license,
     });
   } catch (error) {
     console.error('App license check error:', error);
