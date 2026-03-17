@@ -165,6 +165,7 @@ export async function GET(request: NextRequest) {
       select: {
         id: true,
         vaultId: true,
+        type: true,
         encryptedData: true,
         revisionDate: true,
         deletedAt: true,
@@ -218,6 +219,7 @@ export async function GET(request: NextRequest) {
       items: items.map(item => ({
         id: item.id,
         vaultId: item.vaultId,
+        type: item.type ?? null,
         encryptedData: item.encryptedData,
         revisionDate: item.revisionDate.toISOString(),
         deletedAt: item.deletedAt?.toISOString() || null,

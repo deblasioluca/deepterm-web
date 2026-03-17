@@ -19,6 +19,7 @@ interface BulkCreateItem {
   id?: string; // Optional client-generated stable ID
   vaultId: string;
   encryptedData: string;
+  type?: number; // 0=password,1=key,2=cert,10=managedKey,11=identity,12=hostGroup
   clientId?: string; // Client-side temporary ID for tracking
 }
 
@@ -26,6 +27,7 @@ interface BulkUpdateItem {
   id: string;
   vaultId?: string;
   encryptedData?: string;
+  type?: number;
   revisionDate?: string; // For optimistic concurrency
 }
 
@@ -81,29 +83,69 @@ export async function POST(request: NextRequest) {
       errors: [] as { id?: string; clientId?: string; error: string; operation: string }[],
     };
 
-    // Enforce vault item limits for creates
+    // Enforce vault item limits for creates (only count truly new items, not upserts)
     if (create.length > 0) {
       const limitCheck = await checkVaultItemLimit(auth.userId);
-      if (!limitCheck.allowed) {
-        // Reject all creates — user is at or over limit
-        for (const item of create) {
-          results.errors.push({
-            clientId: item.clientId,
-            error: `Vault item limit reached (${limitCheck.maxVaultItems}). Upgrade your plan.`,
-            operation: 'create',
+      if (limitCheck.remaining !== -1) {
+        // Determine which create items already exist (upserts don't consume slots)
+        const itemsWithId = create.filter((item: BulkCreateItem) => item.id);
+        const existingIdSet = new Set<string>();
+        if (itemsWithId.length > 0) {
+          const existing = await prisma.zKVaultItem.findMany({
+            where: {
+              id: { in: itemsWithId.map((item: BulkCreateItem) => item.id!) },
+              userId: auth.userId,
+            },
+            select: { id: true },
           });
+          for (const e of existing) existingIdSet.add(e.id);
         }
-        // Clear create array so the loop below is skipped
-        create.length = 0;
-      } else if (limitCheck.remaining !== -1 && create.length > limitCheck.remaining) {
-        // Partially reject — allow up to remaining slots
-        const rejected = create.splice(limitCheck.remaining);
-        for (const item of rejected) {
-          results.errors.push({
-            clientId: item.clientId,
-            error: `Vault item limit (${limitCheck.maxVaultItems}) would be exceeded. ${limitCheck.remaining} slots remaining.`,
-            operation: 'create',
-          });
+        const trulyNewCount = create.length - existingIdSet.size;
+
+        if (trulyNewCount > 0 && !limitCheck.allowed) {
+          // Only reject truly new items — let upserts through
+          const newItems: typeof create = [];
+          const upsertItems: typeof create = [];
+          for (const item of create) {
+            if (item.id && existingIdSet.has(item.id)) {
+              upsertItems.push(item);
+            } else {
+              newItems.push(item);
+            }
+          }
+
+          // Reject all truly new creates
+          for (const item of newItems) {
+            results.errors.push({
+              clientId: item.clientId,
+              error: `Vault item limit reached (${limitCheck.maxVaultItems}). Upgrade your plan.`,
+              operation: 'create',
+            });
+          }
+          // Keep only upsert candidates in the create array
+          create.length = 0;
+          create.push(...upsertItems);
+        } else if (trulyNewCount > 0 && limitCheck.remaining < trulyNewCount) {
+          // Partially reject — allow upserts + up to remaining slots for new items
+          const upsertItems: typeof create = [];
+          const newItems: typeof create = [];
+          for (const item of create) {
+            if (item.id && existingIdSet.has(item.id)) {
+              upsertItems.push(item);
+            } else {
+              newItems.push(item);
+            }
+          }
+          const allowedNew = newItems.splice(0, limitCheck.remaining);
+          for (const item of newItems) {
+            results.errors.push({
+              clientId: item.clientId,
+              error: `Vault item limit (${limitCheck.maxVaultItems}) would be exceeded. ${limitCheck.remaining} slots remaining.`,
+              operation: 'create',
+            });
+          }
+          create.length = 0;
+          create.push(...upsertItems, ...allowedNew);
         }
       }
     }
@@ -111,19 +153,13 @@ export async function POST(request: NextRequest) {
     // Process creates
     for (const item of create) {
       try {
-        if (!vaultIds.includes(item.vaultId)) {
-          results.errors.push({
-            clientId: item.clientId,
-            error: 'Vault not found or access denied',
-            operation: 'create',
-          });
-          continue;
-        }
-
+        // For items with a client-provided ID, check if they already exist (upsert)
+        // BEFORE checking vault ID — the client may send a stale/wrong vault ID
+        // for items that already exist on the server.
         if (item.id) {
           const existingById = await prisma.zKVaultItem.findUnique({
             where: { id: item.id },
-            select: { id: true, vaultId: true, revisionDate: true },
+            select: { id: true, vaultId: true, type: true, revisionDate: true },
           });
 
           if (existingById) {
@@ -137,12 +173,16 @@ export async function POST(request: NextRequest) {
               continue;
             }
 
+            // Use the client's vaultId only if it's valid, otherwise keep existing
+            const targetVaultId = vaultIds.includes(item.vaultId) ? item.vaultId : existingById.vaultId;
+
             const newRevisionDate = new Date();
             await prisma.zKVaultItem.update({
               where: { id: existingById.id },
               data: {
-                vaultId: item.vaultId,
+                vaultId: targetVaultId,
                 encryptedData: item.encryptedData,
+                type: typeof item.type === 'number' ? item.type : existingById.type,
                 deletedAt: null,
                 revisionDate: newRevisionDate,
               },
@@ -154,6 +194,16 @@ export async function POST(request: NextRequest) {
             });
             continue;
           }
+        }
+
+        // For truly new creates (no existing item found), validate vault ID
+        if (!vaultIds.includes(item.vaultId)) {
+          results.errors.push({
+            clientId: item.clientId,
+            error: 'Vault not found or access denied',
+            operation: 'create',
+          });
+          continue;
         }
 
         // Check for duplicate (same vault + encrypted data)
@@ -181,6 +231,7 @@ export async function POST(request: NextRequest) {
             ...(item.id ? { id: item.id } : {}),
             vaultId: item.vaultId,
             userId: auth.userId,
+            type: typeof item.type === 'number' ? item.type : null,
             encryptedData: item.encryptedData,
             revisionDate,
           },
@@ -262,6 +313,7 @@ export async function POST(request: NextRequest) {
           data: {
             vaultId: item.vaultId || existing.vaultId,
             encryptedData: item.encryptedData || existing.encryptedData,
+            type: typeof item.type === 'number' ? item.type : undefined,
             revisionDate: newRevisionDate,
           },
         });

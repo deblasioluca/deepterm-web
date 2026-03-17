@@ -44,6 +44,13 @@ interface UserDetail {
     createdAt: string;
     _count: { zkVaults: number; zkVaultItems: number; devices: number };
   } | null;
+  zkItemTypeCounts: {
+    credentials: number;
+    managedKeys: number;
+    identities: number;
+    hostGroups: number;
+    unknown: number;
+  } | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -273,6 +280,27 @@ export default function UserDetailPage({ params }: { params: { id: string } }) {
                     <span className="text-text-tertiary">Created</span>
                     <span className="text-text-primary">{timeAgo(user.zkUser.createdAt)}</span>
                   </div>
+                  {user.zkItemTypeCounts && (
+                    <div className="mt-3 pt-3 border-t border-border">
+                      <p className="text-xs text-text-tertiary mb-2">Items by Type</p>
+                      <div className="grid grid-cols-2 gap-1 text-xs">
+                        <span className="text-text-tertiary">Credentials</span>
+                        <span className="text-text-primary text-right">{user.zkItemTypeCounts.credentials}</span>
+                        <span className="text-text-tertiary">Managed Keys</span>
+                        <span className="text-text-primary text-right">{user.zkItemTypeCounts.managedKeys}</span>
+                        <span className="text-text-tertiary">Identities</span>
+                        <span className="text-text-primary text-right">{user.zkItemTypeCounts.identities}</span>
+                        <span className="text-text-tertiary">Host Groups</span>
+                        <span className="text-text-primary text-right">{user.zkItemTypeCounts.hostGroups}</span>
+                        {user.zkItemTypeCounts.unknown > 0 && (
+                          <>
+                            <span className="text-text-tertiary">Unknown</span>
+                            <span className="text-text-primary text-right">{user.zkItemTypeCounts.unknown}</span>
+                          </>
+                        )}
+                      </div>
+                    </div>
+                  )}
                 </div>
               ) : (
                 <p className="text-sm text-text-tertiary">No linked vault account</p>

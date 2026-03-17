@@ -104,5 +104,5 @@
 - Web app: /home/macan/deepterm
 - Build: npm run build → pm2 restart deepterm
 - Git: git add -A && git commit -m "..." && git push origin main
-- CI Mac: ssh lucadeblasio@192.168.1.248
+- CI Mac: ssh lucadeblasio@192.168.20.198
 - Swift repo workflows: ~/Development/deepterm/.github/workflows/

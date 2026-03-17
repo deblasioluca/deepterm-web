@@ -47,6 +47,12 @@ export async function checkVaultItemLimit(userId: string): Promise<VaultLimitChe
     ? (zkUser?.webUser?.team?.plan || 'starter')
     : 'starter';
 
+  // DEBUG: Log plan resolution (remove after debugging)
+  console.log('[vault-limits] userId:', userId,
+    'webUser:', zkUser?.webUser ? 'yes' : 'no',
+    'team:', zkUser?.webUser?.team ? JSON.stringify(zkUser.webUser.team) : 'none',
+    'isActive:', isActive, 'plan:', plan);
+
   const limits = getLimitsForPlan(plan);
 
   // Unlimited

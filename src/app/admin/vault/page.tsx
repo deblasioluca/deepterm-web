@@ -23,6 +23,7 @@ interface VaultUser {
   id: string;
   email: string;
   emailVerified: boolean;
+  rateLimitExempt: boolean;
   kdfType: number;
   kdfIterations: number;
   createdAt: string;
@@ -43,6 +44,13 @@ interface UserStats {
   totalVaults: number;
   totalItems: number;
   deletedItems: number;
+  typeCounts?: {
+    credentials: number;
+    managedKeys: number;
+    identities: number;
+    hostGroups: number;
+    unknown: number;
+  };
 }
 
 interface AuditLog {
@@ -95,6 +103,22 @@ export default function VaultManagementPage() {
 
   const { setPageContext } = useAdminAI();
 
+  const toggleRateLimitExempt = async (userId: string, current: boolean) => {
+    try {
+      const res = await fetch(`/api/admin/vault/users/${userId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ rateLimitExempt: !current }),
+      });
+      if (!res.ok) return;
+      setUsers((prev) =>
+        prev.map((u) => u.id === userId ? { ...u, rateLimitExempt: !current } : u)
+      );
+    } catch {
+      // silent
+    }
+  };
+
   const fetchData = useCallback(async () => {
     setIsLoading(true);
     try {
@@ -130,6 +154,7 @@ export default function VaultManagementPage() {
         totalVaults: stats.totalVaults,
         totalItems: stats.totalItems,
         deletedItems: stats.deletedItems,
+        typeCounts: stats.typeCounts,
       } : { loading: true },
     });
     return () => setPageContext(null);
@@ -175,6 +200,7 @@ export default function VaultManagementPage() {
 
         {/* Stat cards (users tab only) */}
         {tab === 'users' && stats && (
+          <>
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
             {[
               { label: 'Vault Users', value: stats.totalUsers, icon: Users, color: 'text-accent-primary', bg: 'bg-accent-primary/10' },
@@ -198,6 +224,32 @@ export default function VaultManagementPage() {
               );
             })}
           </div>
+
+          {/* Type breakdown cards */}
+          {stats.typeCounts && (
+            <div className="grid grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
+              {[
+                { label: 'SSH Credentials', value: stats.typeCounts.credentials, color: 'text-blue-400', bg: 'bg-blue-500/10' },
+                { label: 'Managed Keys', value: stats.typeCounts.managedKeys, color: 'text-orange-400', bg: 'bg-orange-500/10' },
+                { label: 'Identities', value: stats.typeCounts.identities, color: 'text-cyan-400', bg: 'bg-cyan-500/10' },
+                { label: 'Host Groups', value: stats.typeCounts.hostGroups, color: 'text-pink-400', bg: 'bg-pink-500/10' },
+                { label: 'Unknown Type', value: stats.typeCounts.unknown, color: 'text-text-tertiary', bg: 'bg-white/5' },
+              ].map((s) => (
+                <Card key={s.label}>
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-xs text-text-tertiary">{s.label}</p>
+                      <p className="text-lg font-bold text-text-primary">{s.value}</p>
+                    </div>
+                    <div className={`p-2 rounded-lg ${s.bg}`}>
+                      <span className={`text-sm ${s.color}`}>●</span>
+                    </div>
+                  </div>
+                </Card>
+              ))}
+            </div>
+          )}
+          </>
         )}
 
         {/* Tabs + Search */}
@@ -266,6 +318,7 @@ export default function VaultManagementPage() {
                     <th className="pb-3 text-text-tertiary font-medium text-center">Devices</th>
                     <th className="pb-3 text-text-tertiary font-medium">KDF</th>
                     <th className="pb-3 text-text-tertiary font-medium">Linked</th>
+                    <th className="pb-3 text-text-tertiary font-medium text-center">Rate Limit</th>
                     <th className="pb-3 text-text-tertiary font-medium">Created</th>
                   </tr>
                 </thead>
@@ -299,11 +352,23 @@ export default function VaultManagementPage() {
                           <span className="text-xs px-1.5 py-0.5 rounded bg-blue-500/20 text-blue-400 ml-1">IAP</span>
                         ) : null}
                       </td>
+                      <td className="py-3 text-center">
+                        <button
+                          onClick={() => toggleRateLimitExempt(user.id, user.rateLimitExempt)}
+                          className={`text-xs px-2 py-0.5 rounded cursor-pointer transition-colors ${
+                            user.rateLimitExempt
+                              ? 'bg-amber-500/20 text-amber-400 hover:bg-amber-500/30'
+                              : 'bg-green-500/20 text-green-400 hover:bg-green-500/30'
+                          }`}
+                        >
+                          {user.rateLimitExempt ? 'exempt' : 'active'}
+                        </button>
+                      </td>
                       <td className="py-3 text-text-tertiary text-xs">{timeAgo(user.createdAt)}</td>
                     </tr>
                   )) : (
                     <tr>
-                      <td colSpan={7} className="py-8 text-center text-text-secondary">
+                      <td colSpan={8} className="py-8 text-center text-text-secondary">
                         {search ? 'No users match your search' : 'No vault users'}
                       </td>
                     </tr>

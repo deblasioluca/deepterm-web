@@ -56,6 +56,26 @@ export async function GET(
       },
     });
 
+    // Per-user vault item type breakdown
+    let zkItemTypeCounts: Record<string, number> | null = null;
+    if (zkUser) {
+      const typeStats = await prisma.zKVaultItem.groupBy({
+        by: ['type'],
+        where: { userId: zkUser.id, deletedAt: null },
+        _count: { id: true },
+      });
+      zkItemTypeCounts = { credentials: 0, managedKeys: 0, identities: 0, hostGroups: 0, unknown: 0 };
+      for (const stat of typeStats) {
+        const t = stat.type;
+        if (t === null || t === undefined) zkItemTypeCounts.unknown += stat._count.id;
+        else if (t <= 2) zkItemTypeCounts.credentials += stat._count.id;
+        else if (t === 10) zkItemTypeCounts.managedKeys += stat._count.id;
+        else if (t === 11) zkItemTypeCounts.identities += stat._count.id;
+        else if (t === 12) zkItemTypeCounts.hostGroups += stat._count.id;
+        else zkItemTypeCounts.unknown += stat._count.id;
+      }
+    }
+
     return NextResponse.json({
       id: user.id,
       name: user.name,
@@ -78,6 +98,7 @@ export async function GET(
         sessions: user._count.sessions,
       },
       zkUser,
+      zkItemTypeCounts,
       createdAt: user.createdAt,
       updatedAt: user.updatedAt,
     });

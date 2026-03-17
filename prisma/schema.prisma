@@ -20,6 +20,7 @@ model ZKUser {
   kdfParallelism             Int?
   passwordHint               String?
   emailVerified              Boolean            @default(false)
+  rateLimitExempt            Boolean            @default(false)
   createdAt                  DateTime           @default(now())
   updatedAt                  DateTime           @updatedAt
   webUserId                  String?            @unique
@@ -119,6 +120,7 @@ model ZKVaultItem {
   id            String    @id @default(cuid())
   vaultId       String
   userId        String
+  type          Int?
   encryptedData String
   revisionDate  DateTime  @default(now())
   deletedAt     DateTime?
@@ -129,6 +131,7 @@ model ZKVaultItem {
 
   @@index([vaultId])
   @@index([userId])
+  @@index([type])
   @@index([revisionDate])
   @@index([deletedAt])
 }

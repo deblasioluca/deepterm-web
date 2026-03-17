@@ -10,9 +10,9 @@ import type { AdminPageContext } from '@/components/admin/AdminAIContext';
 const INFRA_BLOCK = `
 ## Infrastructure
 - **Webapp (Raspberry Pi 5):** SSH \`macan@10.10.10.10\` — primary production server, runs Next.js via PM2
-- **CI Mac:** SSH \`lucadeblasio@192.168.1.248\` — macOS CI/CD machine (SSH access pending network config)
-- **AI Dev Mac:** SSH \`luca@192.168.1.249\` — Xcode + Swift development machine (SSH access pending)
-- **Airflow:** \`http://192.168.1.249:8080\` — Apache Airflow (Docker Compose), 5 DAGs for CI/CD orchestration
+- **CI Mac:** SSH \`lucadeblasio@192.168.20.198\` — macOS CI/CD machine (SSH access pending network config)
+- **AI Dev Mac:** SSH \`luca@192.168.20.222\` — Xcode + Swift development machine (SSH access pending)
+- **Airflow:** \`http://192.168.20.222:8080\` — Apache Airflow (Docker Compose), 5 DAGs for CI/CD orchestration
 - **Node-RED:** configured via \`NODE_RED_URL\` env var — automation and notifications
 
 ## Repositories

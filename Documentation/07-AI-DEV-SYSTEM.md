@@ -34,7 +34,7 @@ Story moves to "in_progress"
              + AI Usage logging threads through all three phases
 ```
 
-**Infrastructure context:** The Raspberry Pi (10.10.10.10) runs the web app and orchestration. The AI Dev Mac (192.168.1.249) executes code via agent loops and hosts Apache Airflow. The CI Mac runs builds and tests.
+**Infrastructure context:** The Raspberry Pi (10.10.10.10) runs the web app and orchestration. The AI Dev Mac (192.168.20.222) executes code via agent loops and hosts Apache Airflow. The CI Mac runs builds and tests.
 
 ---
 
@@ -784,11 +784,11 @@ Apache Airflow on the AI Dev Mac provides DAG-based orchestration for the cross-
 | Role | Machine | Address |
 |------|---------|---------|
 | Web app and API | Raspberry Pi | 10.10.10.10 |
-| Airflow + agent execution | AI Dev Mac | 192.168.1.249 |
+| Airflow + agent execution | AI Dev Mac | 192.168.20.222 |
 | Build and test | CI Mac | configured via `DEEPTERM_CI_MAC_HOST` |
 | Notifications | Node-RED | 192.168.1.30:1880 |
 
-Airflow runs in Docker Compose on the AI Dev Mac. The web UI is at `http://192.168.1.249:8080`. The connection credentials are stored encrypted in `SystemSettings` (`airflow_base_url`, `airflow_username`, `airflow_password`) and configured in the Integrations settings tab.
+Airflow runs in Docker Compose on the AI Dev Mac. The web UI is at `http://192.168.20.222:8080`. The connection credentials are stored encrypted in `SystemSettings` (`airflow_base_url`, `airflow_username`, `airflow_password`) and configured in the Integrations settings tab.
 
 ### DAG Definitions
 
@@ -866,7 +866,7 @@ The "Pipelines" tab shows:
 - **Recent runs:** Last 7 days of DAG executions with status and duration
 - **Scheduled DAGs:** Upcoming scheduled runs
 - **Quick actions:** Buttons to manually trigger each DAG
-- **"Open Airflow UI" link:** Direct link to `http://192.168.1.249:8080`
+- **"Open Airflow UI" link:** Direct link to `http://192.168.20.222:8080`
 
 ---
 

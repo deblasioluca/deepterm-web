@@ -771,7 +771,7 @@ Full or delta sync of all vault data.
     { "id": "vault_abc", "name": "<encrypted>", "userId": "zk_abc", "organizationId": null, "isDefault": true, "isPersonal": true, "createdAt": "...", "updatedAt": "..." }
   ],
   "items": [
-    { "id": "item_1", "vaultId": "vault_abc", "encryptedData": "<encrypted JSON>", "revisionDate": "...", "deletedAt": null, "createdAt": "...", "updatedAt": "..." }
+    { "id": "item_1", "vaultId": "vault_abc", "type": 0, "encryptedData": "<encrypted JSON>", "revisionDate": "...", "deletedAt": null, "createdAt": "...", "updatedAt": "..." }
   ],
   "devices": [
     { "id": "dev_1", "name": "MacBook Pro", "deviceType": "desktop", "lastActive": "...", "createdAt": "..." }
@@ -800,10 +800,10 @@ Batch create, update, and delete vault items in a single request.
 ```json
 {
   "create": [
-    { "id": "client-uuid-1", "vaultId": "vault_abc", "encryptedData": "<encrypted>", "clientId": "local_ref_1" }
+    { "id": "client-uuid-1", "vaultId": "vault_abc", "type": 0, "encryptedData": "<encrypted>", "clientId": "local_ref_1" }
   ],
   "update": [
-    { "id": "item_existing", "encryptedData": "<new encrypted data>", "revisionDate": "2026-02-19T00:00:00.000Z" }
+    { "id": "item_existing", "type": 1, "encryptedData": "<new encrypted data>", "revisionDate": "2026-02-19T00:00:00.000Z" }
   ],
   "delete": [
     { "id": "item_to_delete", "permanent": false }
@@ -817,7 +817,8 @@ Batch create, update, and delete vault items in a single request.
 |-------|------|----------|-------------|
 | `id` | string | No | Client-generated UUID. If exists on server, **upserts** (updates). This is the recommended way to prevent duplicates. |
 | `vaultId` | string | Yes | Target vault |
-| `encryptedData` | string | Yes | Encrypted JSON blob (contains type, name, host, credentials, etc.) |
+| `type` | integer | No | Item type: `0`=password, `1`=key, `2`=cert, `10`=managedKey, `11`=identity, `12`=hostGroup. Stored as server-side metadata for filtering/stats. |
+| `encryptedData` | string | Yes | Encrypted JSON blob (contains name, host, credentials, etc.) |
 | `clientId` | string | No | Local reference ID (returned in response for correlation) |
 
 **Update fields:**
@@ -825,8 +826,9 @@ Batch create, update, and delete vault items in a single request.
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `id` | string | Yes | Server item ID |
+| `type` | integer | No | Item type (same values as create). Only updates if provided. |
+| `encryptedData` | string | No | New encrypted data blob |
 | `revisionDate` | string | No | For optimistic concurrency — if provided and doesn't match server's, reported as conflict |
-| All other fields | | No | Only provided fields are updated |
 
 **Delete fields:**
 
@@ -919,7 +921,7 @@ List vault items.
 **Response (200):**
 ```json
 [
-  { "id": "item_1", "vaultId": "vault_abc", "encryptedData": "<encrypted>", "revisionDate": "...", "deletedAt": null, "createdAt": "...", "updatedAt": "..." }
+  { "id": "item_1", "vaultId": "vault_abc", "type": 0, "encryptedData": "<encrypted>", "revisionDate": "...", "deletedAt": null, "createdAt": "...", "updatedAt": "..." }
 ]
 ```
 
@@ -936,6 +938,7 @@ Create a single vault item.
 {
   "id": "client-uuid",
   "vaultId": "vault_abc",
+  "type": 0,
   "encryptedData": "<encrypted>"
 }
 ```
@@ -973,8 +976,11 @@ After client-side decryption, vault item `encryptedData` contains:
 | SSH Password | 0 | host, port, username, password |
 | SSH Key | 1 | host, port, username, privateKey, passphrase |
 | SSH Certificate | 2 | host, port, username, certificate, privateKey |
+| Managed Key | 10 | Managed SSH key (no host binding) |
+| Identity | 11 | User identity profile |
+| Host Group | 12 | Group of hosts |
 
-> **Note:** `type` and `name` exist only inside the encrypted blob. The server has no metadata columns for these — it stores only the opaque `encryptedData` field.
+> **Note:** `type` is stored **both** inside the encrypted blob AND as a server-side metadata column (`ZKVaultItem.type`). The server column enables filtering and statistics in the admin panel without decrypting data. `name` and all credential fields remain inside the encrypted blob only — the server never sees them.
 
 ---
 

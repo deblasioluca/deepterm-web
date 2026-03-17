@@ -4,21 +4,29 @@ import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { Card, Badge } from '@/components/ui';
 import {
-  ChevronDown,
-  ChevronRight,
   Loader2,
   Users,
   User,
   ShieldCheck,
   Lock,
   Smartphone,
+  KeyRound,
+  FileKey2,
+  ShieldAlert,
+  Fingerprint,
+  FolderTree,
+  HelpCircle,
 } from 'lucide-react';
 
-interface Credential {
-  id: string;
-  encrypted: boolean;
-  createdAt: string;
-}
+const TYPE_META: Record<string, { label: string; icon: typeof KeyRound; color: string }> = {
+  '0':  { label: 'SSH Passwords',   icon: Lock,        color: 'text-blue-400' },
+  '1':  { label: 'SSH Keys',        icon: KeyRound,    color: 'text-emerald-400' },
+  '2':  { label: 'Certificates',    icon: FileKey2,    color: 'text-amber-400' },
+  '10': { label: 'Managed Keys',    icon: ShieldAlert,  color: 'text-purple-400' },
+  '11': { label: 'Identities',      icon: Fingerprint, color: 'text-cyan-400' },
+  '12': { label: 'Host Groups',     icon: FolderTree,  color: 'text-orange-400' },
+  'unknown': { label: 'Unclassified', icon: HelpCircle, color: 'text-text-tertiary' },
+};
 
 interface Vault {
   id: string;
@@ -28,14 +36,14 @@ interface Vault {
   ownerName: string;
   teamId: string | null;
   isOwner: boolean;
-  credentials: Credential[];
+  totalItems: number;
+  typeCounts: Record<string, number>;
   createdAt: string;
 }
 
 export default function VaultsPage() {
   const [vaults, setVaults] = useState<Vault[]>([]);
   const [loading, setLoading] = useState(true);
-  const [expandedVaults, setExpandedVaults] = useState<string[]>([]);
 
   useEffect(() => {
     fetchVaults();
@@ -47,22 +55,12 @@ export default function VaultsPage() {
       if (response.ok) {
         const data = await response.json();
         setVaults(data.vaults || []);
-        // Auto-expand first vault
-        if (data.vaults?.length > 0 && expandedVaults.length === 0) {
-          setExpandedVaults([data.vaults[0].id]);
-        }
       }
     } catch (err) {
       console.error('Failed to fetch vaults:', err);
     } finally {
       setLoading(false);
     }
-  };
-
-  const toggleVault = (id: string) => {
-    setExpandedVaults((prev) =>
-      prev.includes(id) ? prev.filter((v) => v !== id) : [...prev, id]
-    );
   };
 
   if (loading) {
@@ -103,101 +101,76 @@ export default function VaultsPage() {
           </Card>
         ) : (
           <div className="space-y-4">
-            {vaults.map((vault) => (
-              <Card key={vault.id} className="p-0 overflow-hidden">
-                <div
-                  className="p-4 flex items-center justify-between cursor-pointer hover:bg-background-tertiary/50 transition-colors"
-                  onClick={() => toggleVault(vault.id)}
-                >
-                  <div className="flex items-center gap-3">
-                    {expandedVaults.includes(vault.id) ? (
-                      <ChevronDown className="w-5 h-5 text-text-tertiary" />
-                    ) : (
-                      <ChevronRight className="w-5 h-5 text-text-tertiary" />
-                    )}
-                    <ShieldCheck className="w-5 h-5 text-green-500" />
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <h3 className="font-semibold text-text-primary">{vault.name}</h3>
-                        <Badge variant="default" className="text-xs !bg-green-500/10 !text-green-500">
-                          <Lock className="w-3 h-3 mr-1" />
-                          E2E Encrypted
-                        </Badge>
-                        {vault.type === 'team' ? (
-                          <Badge variant="secondary" className="text-xs">
-                            <Users className="w-3 h-3 mr-1" />
-                            Team
+            {vaults.map((vault) => {
+              const typeEntries = Object.entries(vault.typeCounts)
+                .sort(([a], [b]) => Number(a) - Number(b));
+
+              return (
+                <Card key={vault.id} className="p-0 overflow-hidden">
+                  {/* Vault header */}
+                  <div className="p-4 flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <ShieldCheck className="w-5 h-5 text-green-500" />
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <h3 className="font-semibold text-text-primary">{vault.name}</h3>
+                          <Badge variant="default" className="text-xs !bg-green-500/10 !text-green-500">
+                            <Lock className="w-3 h-3 mr-1" />
+                            E2E Encrypted
                           </Badge>
-                        ) : (
-                          <Badge variant="default" className="text-xs">
-                            <User className="w-3 h-3 mr-1" />
-                            Personal
-                          </Badge>
-                        )}
+                          {vault.type === 'team' ? (
+                            <Badge variant="secondary" className="text-xs">
+                              <Users className="w-3 h-3 mr-1" />
+                              Team
+                            </Badge>
+                          ) : (
+                            <Badge variant="default" className="text-xs">
+                              <User className="w-3 h-3 mr-1" />
+                              Personal
+                            </Badge>
+                          )}
+                        </div>
+                        <p className="text-sm text-text-tertiary">
+                          <Smartphone className="w-3 h-3 inline mr-1" />
+                          Synced from DeepTerm app
+                        </p>
                       </div>
-                      <p className="text-sm text-text-tertiary">
-                        <Smartphone className="w-3 h-3 inline mr-1" />
-                        Synced from DeepTerm app
-                      </p>
                     </div>
-                  </div>
-                  <div className="flex items-center gap-3">
                     <Badge variant="secondary">
-                      {vault.credentials.length} credential
-                      {vault.credentials.length !== 1 ? 's' : ''}
+                      {vault.totalItems} item{vault.totalItems !== 1 ? 's' : ''}
                     </Badge>
                   </div>
-                </div>
 
-                {expandedVaults.includes(vault.id) && (
-                  <div className="border-t border-border">
-                    <div className="p-6">
-                      <div className="flex items-center gap-3 mb-4">
-                        <div className="w-10 h-10 rounded-full bg-green-500/10 flex items-center justify-center">
-                          <ShieldCheck className="w-5 h-5 text-green-500" />
-                        </div>
-                        <div>
-                          <p className="font-medium text-text-primary">
-                            {vault.credentials.length} encrypted credential{vault.credentials.length !== 1 ? 's' : ''} synced
-                          </p>
-                          <p className="text-sm text-text-secondary">
-                            End-to-end encrypted — only accessible from the DeepTerm app
-                          </p>
-                        </div>
-                      </div>
-                      {vault.credentials.length > 0 && (
-                        <div className="space-y-2">
-                          {vault.credentials.map((cred, index) => (
+                  {/* Type statistics */}
+                  {vault.totalItems > 0 && (
+                    <div className="border-t border-border px-4 py-4">
+                      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+                        {typeEntries.map(([typeKey, count]) => {
+                          const meta = TYPE_META[typeKey] || TYPE_META['unknown'];
+                          const Icon = meta.icon;
+                          return (
                             <div
-                              key={cred.id}
+                              key={typeKey}
                               className="flex items-center gap-3 py-2 px-3 rounded-lg bg-background-tertiary/30"
                             >
-                              <Lock className="w-4 h-4 text-green-500 shrink-0" />
-                              <div className="flex-1 min-w-0">
-                                <p className="text-sm font-medium text-text-primary">
-                                  Credential {index + 1}
-                                </p>
-                                <p className="text-xs text-text-tertiary">
-                                  Added {new Date(cred.createdAt).toLocaleDateString()}
-                                </p>
+                              <Icon className={`w-4 h-4 shrink-0 ${meta.color}`} />
+                              <div className="min-w-0">
+                                <p className="text-sm font-medium text-text-primary">{count}</p>
+                                <p className="text-xs text-text-tertiary truncate">{meta.label}</p>
                               </div>
-                              <Badge variant="default" className="text-xs !bg-green-500/10 !text-green-500">
-                                <Lock className="w-3 h-3 mr-1" />
-                                Encrypted
-                              </Badge>
                             </div>
-                          ))}
-                        </div>
-                      )}
-                      <p className="text-xs text-text-tertiary mt-4 flex items-center gap-1">
+                          );
+                        })}
+                      </div>
+                      <p className="text-xs text-text-tertiary mt-3 flex items-center gap-1">
                         <Smartphone className="w-3 h-3" />
                         Open the DeepTerm app to view, edit, or use these credentials
                       </p>
                     </div>
-                  </div>
-                )}
-              </Card>
-            ))}
+                  )}
+                </Card>
+              );
+            })}
           </div>
         )}
       </motion.div>

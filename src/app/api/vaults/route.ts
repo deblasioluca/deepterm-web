@@ -38,7 +38,7 @@ export async function GET() {
       include: {
         items: {
           where: { deletedAt: null },
-          orderBy: { createdAt: 'desc' },
+          select: { type: true },
         },
         organization: {
           select: { name: true },
@@ -47,22 +47,28 @@ export async function GET() {
       orderBy: { createdAt: 'desc' },
     });
 
-    const vaults = zkVaultRecords.map((v) => ({
-      id: v.id,
-      name: v.name || (v.isDefault ? 'Default Vault' : 'ZK Vault'),
-      type: v.organizationId ? 'team' : 'personal',
-      source: 'zk' as const,
-      ownerId: zkUser.id,
-      ownerName: zkUser.email,
-      teamId: v.organizationId,
-      isOwner: v.userId === zkUser.id,
-      credentials: v.items.map((item) => ({
-        id: item.id,
-        encrypted: true,
-        createdAt: item.createdAt,
-      })),
-      createdAt: v.createdAt,
-    }));
+    const vaults = zkVaultRecords.map((v) => {
+      // Build type statistics
+      const typeCounts: Record<string, number> = {};
+      for (const item of v.items) {
+        const key = item.type !== null && item.type !== undefined ? String(item.type) : 'unknown';
+        typeCounts[key] = (typeCounts[key] || 0) + 1;
+      }
+
+      return {
+        id: v.id,
+        name: v.name || (v.isDefault ? 'Default Vault' : 'ZK Vault'),
+        type: v.organizationId ? 'team' : 'personal',
+        source: 'zk' as const,
+        ownerId: zkUser.id,
+        ownerName: zkUser.email,
+        teamId: v.organizationId,
+        isOwner: v.userId === zkUser.id,
+        totalItems: v.items.length,
+        typeCounts,
+        createdAt: v.createdAt,
+      };
+    });
 
     return NextResponse.json({ vaults });
   } catch (error) {

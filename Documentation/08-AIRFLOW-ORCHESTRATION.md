@@ -2,7 +2,7 @@
 
 Apache Airflow orchestrates the cross-platform pipeline: Main Mac → GitHub → CI Mac → Pi → Node-RED → AI Dev Mac. It replaces ad-hoc webhooks and SSH calls with DAG-based workflows that provide retry/timeout handling, scheduling, dependency management, and monitoring.
 
-Airflow runs on the AI Dev Mac (`luca@192.168.1.249`) as a Docker Compose stack. The full Airflow UI is at `http://192.168.1.249:8080`. The Cockpit Pipelines tab on the web app provides a read-only summary view proxied through the admin API.
+Airflow runs on the AI Dev Mac (`luca@192.168.20.222`) as a Docker Compose stack. The full Airflow UI is at `http://192.168.20.222:8080`. The Cockpit Pipelines tab on the web app provides a read-only summary view proxied through the admin API.
 
 ---
 
@@ -10,7 +10,7 @@ Airflow runs on the AI Dev Mac (`luca@192.168.1.249`) as a Docker Compose stack.
 
 ### Prerequisites
 
-- macOS 26.3 on AI Dev Mac (`luca@192.168.1.249`)
+- macOS 26.3 on AI Dev Mac (`luca@192.168.20.222`)
 - Admin access (sudo)
 - Homebrew installed
 - Docker Desktop installed
@@ -41,7 +41,7 @@ cat >> .env << 'EOF'
 DEEPTERM_PI_HOST=macan@10.10.10.10
 DEEPTERM_PI_API=http://10.10.10.10:3000
 DEEPTERM_CI_MAC_HOST=ci-user@ci-mac-ip
-DEEPTERM_AI_DEV_MAC=luca@192.168.1.249
+DEEPTERM_AI_DEV_MAC=luca@192.168.20.222
 DEEPTERM_APP_REPO_PATH=~/Development/deepterm
 DEEPTERM_WEB_REPO_PATH=~/deepterm
 DEEPTERM_PI_API_KEY=your-internal-api-key
@@ -846,7 +846,7 @@ The web app reads Airflow connection details from the `SystemSettings` table:
 
 | Key | Example Value | Notes |
 |-----|--------------|-------|
-| `airflow_base_url` | `http://192.168.1.249:8080` | Airflow web server URL |
+| `airflow_base_url` | `http://192.168.20.222:8080` | Airflow web server URL |
 | `airflow_username` | `admin` | Airflow user |
 | `airflow_password` | (encrypted) | Stored via `encryptApiKey()` |
 
@@ -873,7 +873,7 @@ async function getAirflowConfig() {
   });
   const map = new Map(settings.map(s => [s.key, s.value]));
   return {
-    baseUrl: map.get('airflow_base_url') || 'http://192.168.1.249:8080',
+    baseUrl: map.get('airflow_base_url') || 'http://192.168.20.222:8080',
     username: map.get('airflow_username') || 'admin',
     password: decryptApiKey(map.get('airflow_password') || ''),
   };
@@ -1051,7 +1051,7 @@ All variables are set in `~/airflow/.env` on the AI Dev Mac alongside `AIRFLOW_U
 | `DEEPTERM_PI_HOST` | `macan@10.10.10.10` | SSH target for the Raspberry Pi |
 | `DEEPTERM_PI_API` | `http://10.10.10.10:3000` | Pi web app base URL |
 | `DEEPTERM_CI_MAC_HOST` | — | SSH target for the CI Mac (set to actual host) |
-| `DEEPTERM_AI_DEV_MAC` | `luca@192.168.1.249` | AI Dev Mac SSH identity |
+| `DEEPTERM_AI_DEV_MAC` | `luca@192.168.20.222` | AI Dev Mac SSH identity |
 | `DEEPTERM_APP_REPO_PATH` | `~/Development/deepterm` | Native app repo on CI Mac |
 | `DEEPTERM_WEB_REPO_PATH` | `~/deepterm` | Web app repo on Pi |
 | `DEEPTERM_PI_API_KEY` | — | `x-api-key` for Pi internal API calls |

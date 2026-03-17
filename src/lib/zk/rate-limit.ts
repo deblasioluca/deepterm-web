@@ -25,6 +25,16 @@ export function getRateLimitKey(email: string, ip: string): string {
  * Uses database as fallback (Redis recommended for production)
  */
 export async function checkRateLimit(key: string): Promise<RateLimitResult> {
+  // Bypass rate limiting for users with rateLimitExempt flag
+  const email = key.split(':')[0];
+  const exemptUser = await prisma.zKUser.findUnique({
+    where: { email },
+    select: { rateLimitExempt: true },
+  });
+  if (exemptUser?.rateLimitExempt) {
+    return { allowed: true, remaining: MAX_ATTEMPTS, resetAt: new Date(Date.now() + RATE_LIMIT_WINDOW_MS) };
+  }
+
   const now = new Date();
   
   // Find existing entry

@@ -207,9 +207,12 @@ Content-Type: application/json
 
 {
   "vaultId": "vault_abc123",
+  "type": 0,
   "encryptedData": "<AES-256-GCM encrypted credential JSON>"
 }
 ```
+
+**The `type` field** is stored as server-side metadata (not encrypted). It enables admin filtering and statistics without decrypting vault data. Always include it when creating or updating items.
 
 The `encryptedData` blob should be the AES-256-GCM encryption of:
 ```json
@@ -228,7 +231,18 @@ The `encryptedData` blob should be the AES-256-GCM encryption of:
 }
 ```
 
-Item types: `SSH_PASSWORD` (0), `SSH_KEY` (1), `SSH_CERTIFICATE` (2).
+**Item types:**
+
+| Type | Value | Description |
+|------|-------|-------------|
+| SSH Password | `0` | Host + username + password |
+| SSH Key | `1` | Host + username + private key |
+| SSH Certificate | `2` | Host + username + certificate + key |
+| Managed Key | `10` | Managed SSH key (no host binding) |
+| Identity | `11` | User identity profile |
+| Host Group | `12` | Group of hosts |
+
+**Important:** The `type` value must be sent both inside the encrypted blob AND as a top-level field in the API request body. The server stores it as metadata for admin panel filtering.
 
 **Response `201`:** New item created.
 **Response `200`:** Exact duplicate detected (same vault + same encryptedData blob) — returns existing item. No duplicate is stored.
@@ -248,10 +262,13 @@ Authorization: Bearer <token>
 Content-Type: application/json
 
 {
+  "type": 0,
   "encryptedData": "<new encrypted blob>",
   "vaultId": "vault_abc123"
 }
 ```
+
+Include `type` if the item type has changed or to ensure it is set (e.g. migrating older items that were created before type tracking). If `type` is omitted, the existing server-side value is preserved.
 
 Server updates `revisionDate` automatically.
 
@@ -458,6 +475,7 @@ Content-Type: application/json
 
 {
   "vaultId": "vault_xyz789",
+  "type": 0,
   "encryptedData": "<AES-256-GCM credential JSON, encrypted with ORG KEY>"
 }
 ```
@@ -757,6 +775,78 @@ This ceremony is optional but recommended after removing a member for security r
 4. POST /api/zk/accounts/token/refresh  ← mandatory
 5. GET /api/zk/sync  ← now includes team vault + items
 ```
+
+---
+
+## 16. Account Switching & Local Data Isolation
+
+**Critical:** The app must detect when a different user logs in and wipe all local vault data. Failure to do so causes stale items from the previous account to be pushed under the new account's auth, resulting in bulk errors ("Vault not found or access denied").
+
+### Required Flow: Login with Account-Change Detection
+
+```
+1. Login → POST /api/zk/accounts/login → receive { userId, accessToken, ... }
+2. Read locally stored lastUserId from persistent storage
+3. IF userId ≠ lastUserId (account switch detected):
+   ├── Delete ALL local vault items from local database
+   ├── Delete ALL local vaults from local database
+   ├── Delete ALL cached org keys from memory/keychain
+   ├── Clear any stored serverTimestamp (force full sync)
+   └── Store userId as new lastUserId
+4. Full sync: GET /api/zk/sync (no ?since= parameter)
+5. Replace local state entirely with sync response:
+   ├── Vaults = response.vaults
+   ├── Items = response.items
+   ├── defaultVaultId = response.defaultVaultId
+   └── Store response.serverTimestamp for future delta syncs
+6. Proceed normally
+```
+
+### Safeguard: Pre-filter Before Bulk Push
+
+Even without an account switch, the app should **never bulk-push items with unknown vault IDs**. Before any bulk operation:
+
+```swift
+// Build set of valid vault IDs from the last sync response
+let validVaultIds = Set(syncResponse.vaults.map { $0.id })
+
+// Filter out items that don't belong to any known vault
+let itemsToSync = localDirtyItems.filter { validVaultIds.contains($0.vaultId) }
+
+// Only push validated items
+if !itemsToSync.isEmpty {
+    POST /api/zk/vault-items/bulk with { create: itemsToSync }
+}
+```
+
+Items that fail this filter should be logged locally and **not retried** — they indicate stale data from a previous account or a deleted vault.
+
+### Handling Bulk Errors
+
+The bulk endpoint returns per-item errors. The app must handle them:
+
+```json
+{
+  "data": {
+    "created": [...],
+    "updated": [...],
+    "deleted": [...],
+    "conflicts": [...],
+    "errors": [
+      { "id": "item_abc", "error": "Vault not found or access denied", "operation": "create" },
+      { "clientId": "local_xyz", "error": "Vault item limit reached (10). Upgrade your plan.", "operation": "create" }
+    ]
+  }
+}
+```
+
+**Error handling rules:**
+- `"Vault not found or access denied"` → Remove item from local store. It belongs to a vault the user cannot access (stale data or wrong account).
+- `"Vault item limit reached"` → Show upgrade prompt. Do not retry.
+- `"Item exists but access denied"` → Remove from local store. The item ID collides with another user's item.
+- `"Failed to create item"` → Retry once. If still fails, log and skip.
+
+**Never retry the same failed batch in a loop.** If a bulk push returns errors, handle them, then proceed with the next sync cycle.
 
 ---
 

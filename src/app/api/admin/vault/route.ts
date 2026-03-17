@@ -12,6 +12,7 @@ export async function GET(request: Request) {
           id: true,
           email: true,
           emailVerified: true,
+          rateLimitExempt: true,
           kdfType: true,
           kdfIterations: true,
           createdAt: true,
@@ -34,6 +35,31 @@ export async function GET(request: Request) {
       const totalItems = await prisma.zKVaultItem.count();
       const deletedItems = await prisma.zKVaultItem.count({ where: { deletedAt: { not: null } } });
 
+      // Type breakdown of active vault items
+      const typeStats = await prisma.zKVaultItem.groupBy({
+        by: ['type'],
+        where: { deletedAt: null },
+        _count: { id: true },
+      });
+
+      const typeCounts = {
+        credentials: 0,
+        managedKeys: 0,
+        identities: 0,
+        hostGroups: 0,
+        unknown: 0,
+      };
+
+      for (const stat of typeStats) {
+        const t = stat.type;
+        if (t === null || t === undefined) typeCounts.unknown += stat._count.id;
+        else if (t <= 2) typeCounts.credentials += stat._count.id;
+        else if (t === 10) typeCounts.managedKeys += stat._count.id;
+        else if (t === 11) typeCounts.identities += stat._count.id;
+        else if (t === 12) typeCounts.hostGroups += stat._count.id;
+        else typeCounts.unknown += stat._count.id;
+      }
+
       return NextResponse.json({
         users,
         stats: {
@@ -41,6 +67,7 @@ export async function GET(request: Request) {
           totalVaults: users.reduce((sum, u) => sum + u._count.zkVaults, 0),
           totalItems,
           deletedItems,
+          typeCounts,
         },
       });
     }

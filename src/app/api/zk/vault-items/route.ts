@@ -66,6 +66,16 @@ export async function GET(request: NextRequest) {
 
     const items = await prisma.zKVaultItem.findMany({
       where,
+      select: {
+        id: true,
+        vaultId: true,
+        type: true,
+        encryptedData: true,
+        revisionDate: true,
+        deletedAt: true,
+        createdAt: true,
+        updatedAt: true,
+      },
       orderBy: { updatedAt: 'desc' },
     });
 
@@ -73,6 +83,7 @@ export async function GET(request: NextRequest) {
       items.map(item => ({
         id: item.id,
         vaultId: item.vaultId,
+        type: item.type ?? null,
         encryptedData: item.encryptedData,
         revisionDate: item.revisionDate.toISOString(),
         deletedAt: item.deletedAt?.toISOString() || null,
@@ -101,7 +112,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { id, vaultId, encryptedData } = body;
+    const { id, vaultId, encryptedData, type } = body;
 
     // Validate required fields
     if (!vaultId || !encryptedData) {
@@ -154,7 +165,7 @@ export async function POST(request: NextRequest) {
     if (id) {
       const existingById = await prisma.zKVaultItem.findUnique({
         where: { id },
-        select: { id: true, vaultId: true, revisionDate: true },
+        select: { id: true, vaultId: true, type: true, revisionDate: true },
       });
 
       if (existingById) {
@@ -167,6 +178,7 @@ export async function POST(request: NextRequest) {
           where: { id: existingById.id },
           data: {
             encryptedData,
+            type: typeof type === 'number' ? type : existingById.type,
             deletedAt: null,
             revisionDate: newRevisionDate,
           },
@@ -199,6 +211,7 @@ export async function POST(request: NextRequest) {
         ...(id ? { id } : {}),
         vaultId,
         userId: auth.userId,
+        type: typeof type === 'number' ? type : null,
         encryptedData,
         revisionDate,
       },

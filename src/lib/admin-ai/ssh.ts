@@ -33,14 +33,14 @@ export const MACHINES: Record<string, Machine> = {
   },
   'ci-mac': {
     id: 'ci-mac',
-    host: '192.168.1.248',
+    host: '192.168.20.198',
     user: 'lucadeblasio',
     label: 'CI Mac',
     local: false, // Phase 4 — firewall not configured
   },
   'ai-dev': {
     id: 'ai-dev',
-    host: '192.168.1.249',
+    host: '192.168.20.222',
     user: 'luca',
     label: 'AI Dev Mac',
     local: false, // Phase 4 — firewall not configured

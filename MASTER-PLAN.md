@@ -24,7 +24,7 @@
 | Pi app path | `/home/macan/deepterm` (deepterm-web repo) |
 | Pi build | `npm run build` → `pm2 restart deepterm` |
 | Pi git | `git add -A && git commit -m "..." && git push origin main` |
-| CI Mac SSH | `lucadeblasio@192.168.1.248` |
+| CI Mac SSH | `lucadeblasio@192.168.20.198` |
 | CI Mac app | `~/Development/deepterm` (Swift repo) |
 | GitHub repos | `deblasioluca/deepterm` (Swift), `deblasioluca/deepterm-web` (Pi/web) |
 | Cockpit URL | `http://10.10.10.10:3000/admin/cockpit` |

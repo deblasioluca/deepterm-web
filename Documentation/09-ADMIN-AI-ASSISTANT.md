@@ -214,8 +214,8 @@ Document chunks with embeddings for semantic search.
 
 | Tool | Machine | Blocker |
 |------|---------|---------|
-| `ssh_exec` on CI Mac | `lucadeblasio@192.168.1.248` | Firewall/port config needed |
-| `ssh_exec` on AI Dev Mac | `luca@192.168.1.249` | Firewall/port config needed |
+| `ssh_exec` on CI Mac | `lucadeblasio@192.168.20.198` | Firewall/port config needed |
+| `ssh_exec` on AI Dev Mac | `luca@192.168.20.222` | Firewall/port config needed |
 
 ---
 
@@ -463,7 +463,7 @@ export default function MyAdminPage() {
 - **RPi (webapp):** uses `child_process.exec()` directly — no SSH needed (app runs on the RPi)
 - Machine registry: `MACHINES` object in `src/lib/admin-ai/ssh.ts`
 - Safety filter: blocks `rm -rf /`, `dd if=`, `mkfs`, redirects to raw devices, `sudo passwd`
-- CI Mac (`lucadeblasio@192.168.1.248`) and AI Dev Mac (`luca@192.168.1.249`) deferred to Phase 4 pending firewall configuration — Phase 4 will use `ssh2` package for remote execution
+- CI Mac (`lucadeblasio@192.168.20.198`) and AI Dev Mac (`luca@192.168.20.222`) deferred to Phase 4 pending firewall configuration — Phase 4 will use `ssh2` package for remote execution
 
 ### MCP Integration (Phase 4)
 - Config: URL + auth header stored in `AdminAIConfig.mcpServers`

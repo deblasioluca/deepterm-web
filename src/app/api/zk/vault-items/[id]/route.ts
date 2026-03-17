@@ -81,6 +81,7 @@ export async function GET(
     const response = successResponse({
       id: item.id,
       vaultId: item.vaultId,
+      type: item.type ?? null,
       encryptedData: item.encryptedData,
       revisionDate: item.revisionDate.toISOString(),
       deletedAt: item.deletedAt?.toISOString() || null,
@@ -112,7 +113,7 @@ export async function PUT(
 
     const { id } = await params;
     const body = await request.json();
-    const { vaultId, encryptedData } = body;
+    const { vaultId, encryptedData, type } = body;
 
     // Get If-Match header for optimistic concurrency
     const ifMatch = request.headers.get('if-match');
@@ -183,6 +184,7 @@ export async function PUT(
       data: {
         vaultId: vaultId || existingItem.vaultId,
         encryptedData: encryptedData || existingItem.encryptedData,
+        type: typeof type === 'number' ? type : undefined,
         revisionDate: newRevisionDate,
       },
     });
