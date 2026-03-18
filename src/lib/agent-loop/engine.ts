@@ -840,7 +840,8 @@ export async function runAgentLoop(loopId: string, feedbackContext?: string): Pr
     if (accumulatedFiles.length > 0 && (finalStatus === 'awaiting_review' || finalStatus === 'completed')) {
       const targetRepo = config.targetRepo || 'deblasioluca/deepterm';
       const baseBranch = config.targetBranch || 'main';
-      const baseUrl = process.env.NEXTAUTH_URL || 'http://localhost:3000';
+      // Use localhost for internal server-to-server calls to avoid nginx/reverse-proxy issues.
+      const baseUrl = `http://localhost:${process.env.PORT || 3000}`;
       const apiKey = process.env.AI_DEV_API_KEY || process.env.NODE_RED_API_KEY || '';
       const githubToken = process.env.GITHUB_TOKEN || '';
       const hasSwiftChanges = accumulatedFiles.some(
