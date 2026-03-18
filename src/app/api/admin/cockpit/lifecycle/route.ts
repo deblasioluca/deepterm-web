@@ -518,6 +518,11 @@ export async function POST(req: NextRequest) {
         await logEvent(storyId, 'implement', 'started', JSON.stringify({ message: 'Implement step started after deliberation skip' }), 'system');
         // Auto-spawn agent loop so implement starts immediately
         {
+          // Cancel any stale running/queued loops before spawning (same guard as retry-step)
+          await prisma.agentLoop.updateMany({
+            where: { storyId, status: { in: ['running', 'queued'] } },
+            data: { status: 'cancelled' },
+          });
           const { createAndRunAgentLoop } = await import('@/lib/agent-loop/engine');
           const _loopId = await createAndRunAgentLoop({ storyId });
           await logEvent(storyId, 'implement', 'progress', JSON.stringify({
@@ -537,6 +542,11 @@ export async function POST(req: NextRequest) {
         await logEvent(storyId, 'implement', 'started', JSON.stringify({ message: 'Implement step started after deliberation approval' }), 'system');
         // Auto-spawn agent loop so implement starts immediately
         {
+          // Cancel any stale running/queued loops before spawning (same guard as retry-step)
+          await prisma.agentLoop.updateMany({
+            where: { storyId, status: { in: ['running', 'queued'] } },
+            data: { status: 'cancelled' },
+          });
           const { createAndRunAgentLoop } = await import('@/lib/agent-loop/engine');
           const _loopId = await createAndRunAgentLoop({ storyId });
           await logEvent(storyId, 'implement', 'progress', JSON.stringify({
