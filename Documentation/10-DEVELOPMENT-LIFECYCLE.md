@@ -677,10 +677,9 @@ Every AI call in the pipeline goes through `callAI(activityKey, ...)` which rout
 | `issues.create-from-review` | issues | Claude Sonnet | Extract issues from architecture reviews |
 | `agent-loop.iterate` | agent | Claude Sonnet | Agent loop think/act/observe iterations |
 | `agent-loop.implement` | agent | Claude Sonnet | Agent loop build-gate fix iterations |
-| `agent-loop.summarize` | agent | — | Context compression for long-running loops |
+| `agent-loop.summarize` | agent | Claude Sonnet | Context compression for long-running loops |
 | `pr.code-review` | ci | Claude Opus | AI code review on pull requests |
 | `admin.chat` | agent | Claude Opus | Admin panel AI assistant |
-| `triage.review` | issues | Claude Sonnet | Auto-triage of issues and ideas |
 
 ### 13b. Model Routing
 
