@@ -508,7 +508,7 @@ export async function POST(req: NextRequest) {
         break;
 
       // ── Existing gate actions ──
-      case 'skip-deliberation':
+      case 'skip-deliberation': {
         await prisma.deliberation.create({
           data: { type: 'implementation', status: 'decided', storyId, title: 'Skipped', summary: 'Deliberation skipped by operator.' },
         });
@@ -516,7 +516,17 @@ export async function POST(req: NextRequest) {
         updates.lifecycleStep = 'implement';
         await logEvent(storyId, 'deliberation', 'skipped', reason || 'Operator skipped deliberation', 'human');
         await logEvent(storyId, 'implement', 'started', JSON.stringify({ message: 'Implement step started after deliberation skip' }), 'system');
+        // Auto-spawn agent loop so implement starts immediately
+        {
+          const { createAndRunAgentLoop } = await import('@/lib/agent-loop/engine');
+          const _loopId = await createAndRunAgentLoop({ storyId });
+          await logEvent(storyId, 'implement', 'progress', JSON.stringify({
+            message: `AgentLoop ${_loopId} auto-spawned after deliberation skip`,
+            loopId: _loopId,
+          }), 'system');
+        }
         break;
+      }
 
       case 'approve-decision': {
         const delib = await prisma.deliberation.findFirst({ where: { storyId }, orderBy: { createdAt: 'desc' } });
@@ -525,6 +535,15 @@ export async function POST(req: NextRequest) {
         updates.lifecycleStep = 'implement';
         await logEvent(storyId, 'deliberation', 'completed', 'Decision approved by operator', 'human');
         await logEvent(storyId, 'implement', 'started', JSON.stringify({ message: 'Implement step started after deliberation approval' }), 'system');
+        // Auto-spawn agent loop so implement starts immediately
+        {
+          const { createAndRunAgentLoop } = await import('@/lib/agent-loop/engine');
+          const _loopId = await createAndRunAgentLoop({ storyId });
+          await logEvent(storyId, 'implement', 'progress', JSON.stringify({
+            message: `AgentLoop ${_loopId} auto-spawned after deliberation approval`,
+            loopId: _loopId,
+          }), 'system');
+        }
         break;
       }
 

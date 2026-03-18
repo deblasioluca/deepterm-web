@@ -281,9 +281,10 @@ export async function recoverStaleLoops() {
 
     if (loop.storyId) {
       try {
-        const baseUrl = process.env.NEXTAUTH_URL || 'http://localhost:3000';
         const apiKey = process.env.AI_DEV_API_KEY || process.env.NODE_RED_API_KEY || '';
-        const retryRes = await fetch(`${baseUrl}/api/admin/cockpit/lifecycle`, {
+        // Use localhost for internal server-to-server calls to avoid
+        // going through nginx/reverse-proxy (which can return 403).
+        const retryRes = await fetch('http://localhost:3000/api/admin/cockpit/lifecycle', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey },
           body: JSON.stringify({
