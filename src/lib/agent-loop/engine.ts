@@ -151,6 +151,28 @@ async function commitAndOpenPRs(
 const ITERATION_DELAY_MS = 5_000; // Delay between iterations to avoid rate limits
 const MAX_CONTEXT_CHARS = 400_000; // Max chars for conversation context
 const MAX_CONSECUTIVE_ERRORS = 3; // Stop early after this many consecutive errors
+// Graceful shutdown: mark running loops as failed when PM2 restarts
+let _shuttingDown = false;
+async function gracefulShutdown(signal: string) {
+  if (_shuttingDown) return;
+  _shuttingDown = true;
+  console.warn(`[AgentLoop] ${signal} received -- marking running loops as failed`);
+  try {
+    const { PrismaClient } = await import('@prisma/client');
+    const _p = new PrismaClient();
+    await _p.agentLoop.updateMany({
+      where: { status: { in: ['running', 'queued'] } },
+      data: { status: 'failed', errorLog: `Process received ${signal}` },
+    });
+    await _p.$disconnect();
+  } catch (e) { console.error('[AgentLoop] Shutdown cleanup error:', e); }
+  process.exit(0);
+}
+process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+process.on('SIGINT',  () => gracefulShutdown('SIGINT'));
+process.on('uncaughtException', (err) => console.error('[AgentLoop] Uncaught:', err));
+process.on('unhandledRejection', (reason) => console.error('[AgentLoop] Unhandled rejection:', reason));
+
 const BUILD_GATE_TIMEOUT_MS = 10 * 60 * 1000; // 10 min max wait for build gate
 const BUILD_GATE_POLL_MS = 15_000;             // Poll every 15s
 const MAX_BUILD_GATE_ATTEMPTS = 3;             // Max fix-and-retry cycles before giving up
@@ -280,6 +302,18 @@ function extractFileKeywords(title: string, description: string): string[] {
     tooltip:["toolbar","button","mainwindow"], clipboard:["connection","host","detail"],
     version:["preferences","general","about","settings"], command:["command","palette"],
     palette:["command","palette"], shortcut:["shortcut","command","keyboard"],
+    // Extended domain mappings
+    fingerprint:["hostdetailview","hostinfoview","connectiondetailview","hostinfopanel"],
+    detail:["hostdetailview","hostinfoview","connectiondetailview"],
+    details:["hostdetailview","connectiondetailview","hostinfoview"],
+    panel:["hostdetailview","hostinfoview","connectiondetailview","hostinfoPanel"],
+    info:["hostinfoview","hostdetailview","connectiondetailview"],
+    port:["host","connection","hostdetailview"], username:["host","credential","authview"],
+    key:["credential","biometrickeystore","authview"], vault:["vault","zkservice","biometrickeystore"],
+    sync:["syncengine","syncscheduler","syncentity"], credential:["credentialstore","authview"],
+    sidebar:["sidebarsection","connectionssidebar","groupssidebar"],
+    group:["group","groupsview","connectiongroup"], icon:["host","connection","iconview"],
+    menu:["mainmenu","contextmenu","toolbar"], status:["statusbar","connectionstatus"],
   };
   const mapped: string[] = [];
   for (const word of titleWords) { const hits = domainMap[word]; if (hits) mapped.push(...hits); }

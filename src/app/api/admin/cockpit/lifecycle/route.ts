@@ -833,6 +833,21 @@ export async function POST(req: NextRequest) {
         break;
       }
 
+
+
+      case 'cancel': {
+        // Cancel the story and kill any running agent loops
+        updates.status = 'cancelled';
+        updates.lifecycleStartedAt = null;
+        updates.lifecycleHeartbeat = null;
+        await prisma.agentLoop.updateMany({
+          where: { storyId, status: { in: ['queued', 'running'] } },
+          data: { status: 'cancelled' },
+        });
+        const currentStep = story.lifecycleStep || 'triage';
+        await logEvent(storyId, currentStep, 'cancelled', reason || 'Story cancelled by operator', 'human');
+        break;
+      }
       // ── Loop-back actions (Lifecycle V2) ──
       case 'loop-test-to-implement': {
         // Test failure → send back to implement for AI auto-fix

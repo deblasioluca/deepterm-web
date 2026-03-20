@@ -124,6 +124,12 @@ async function withRetry<T>(fn: () => Promise<T>, maxRetries = 4, label = ''): P
     try {
       return await fn();
     } catch (err) {
+      // Never retry timeout/abort errors -- propagate immediately so Promise.race wins
+      const isTimeoutErr = err instanceof Error && (
+        err.message.includes("timed out") || err.message.includes("timeout") ||
+        err.name === "AbortError" || (err as any).status === 408
+      );
+      if (isTimeoutErr) throw err;
       if (attempt < maxRetries && isRateLimitError(err)) {
         const delay = delays[Math.min(attempt, delays.length - 1)];
         console.warn(`[AI Client] Rate limit hit${label ? ` for ${label}` : ''}, retrying in ${delay / 1000}s (attempt ${attempt + 1}/${maxRetries})`);
@@ -394,7 +400,7 @@ export async function callAI(
   let errorMessage: string | undefined;
 
   // Global timeout: 3 min max per callAI invocation regardless of provider
-  const AI_CALL_TIMEOUT_MS = 3 * 60 * 1000;
+  const AI_CALL_TIMEOUT_MS = 85 * 1000; // 85s — shorter than SDK 120s so Promise.race always wins
   const timeoutPromise = new Promise<never>((_, reject) =>
     setTimeout(() => reject(new Error(`[AI Client] callAI timed out after ${AI_CALL_TIMEOUT_MS / 1000}s for activity "${activity}"`)), AI_CALL_TIMEOUT_MS)
   );
