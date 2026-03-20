@@ -57,6 +57,13 @@ export async function POST(request: NextRequest) {
       delete: deleteItems = [] as BulkDeleteItem[],
     } = body;
 
+    // Bulk operation logging
+    console.log(
+      `[Bulk] create=${create.length} update=${update.length} delete=${deleteItems.length}`,
+      update.length > 0 ? `updates=${JSON.stringify(update.map((u: BulkUpdateItem) => ({ id: u.id, revDate: u.revisionDate, hasData: !!u.encryptedData, hasVault: !!u.vaultId })))}` : '',
+      create.length > 0 ? `creates=${JSON.stringify(create.map((c: BulkCreateItem) => ({ id: c.id, hasData: !!c.encryptedData, type: c.type })))}` : '',
+    );
+
     // Get user's org memberships
     const orgUsers = await prisma.organizationUser.findMany({
       where: { userId: auth.userId, status: 'confirmed' },
@@ -290,6 +297,23 @@ export async function POST(request: NextRequest) {
         if (item.revisionDate) {
           const expectedRevision = new Date(item.revisionDate);
           if (existing.revisionDate.getTime() !== expectedRevision.getTime()) {
+            // Auto-resolve: if client data matches server data, skip the update
+            // and report success — prevents infinite conflict loops
+            const dataMatch = item.encryptedData === existing.encryptedData;
+            const vaultMatch = !item.vaultId || item.vaultId === existing.vaultId;
+            if (dataMatch && vaultMatch) {
+              console.log(
+                `[Bulk] CONFLICT-AUTORESOLVED id=${item.id} client_rev=${item.revisionDate} server_rev=${existing.revisionDate.getTime()}`
+              );
+              results.updated.push({
+                id: item.id,
+                revisionDate: existing.revisionDate.toISOString(),
+              });
+              continue;
+            }
+            console.log(
+              `[Bulk] CONFLICT id=${item.id} client_rev=${item.revisionDate} server_rev=${existing.revisionDate.getTime()} data_match=${dataMatch}`
+            );
             results.conflicts.push({
               id: item.id,
               currentRevisionDate: existing.revisionDate.toISOString(),
