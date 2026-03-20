@@ -255,6 +255,119 @@ async function callGoogle(
   };
 }
 
+async function callDevin(
+  config: ResolvedConfig, systemPrompt: string, messages: AIMessage[]
+): Promise<AIResponse> {
+  // Combine system prompt + messages into a single prompt for Devin
+  const parts: string[] = [];
+  if (systemPrompt) parts.push(`Instructions:\n${systemPrompt}`);
+  for (const m of messages) {
+    parts.push(`${m.role === 'user' ? 'User' : 'Assistant'}:\n${m.content}`);
+  }
+  const prompt = parts.join('\n\n');
+
+  // baseUrl must be set to https://api.devin.ai/v3/organizations/{org_id}
+  const baseUrl = config.baseUrl;
+  if (!baseUrl) {
+    throw new Error('Devin provider requires baseUrl set to https://api.devin.ai/v3/organizations/{org_id}');
+  }
+
+  // Create a session with structured output schema for text response
+  const createRes = await fetch(`${baseUrl}/sessions`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${config.apiKey}`,
+    },
+    body: JSON.stringify({
+      prompt,
+      structured_output_schema: {
+        type: 'object',
+        properties: { response: { type: 'string', description: 'The text response to the prompt' } },
+        required: ['response'],
+      },
+    }),
+  });
+
+  if (!createRes.ok) {
+    const text = await createRes.text();
+    throw new Error(`Devin API error ${createRes.status}: ${text}`);
+  }
+
+  const session = await createRes.json();
+  const sessionId: string = session.session_id;
+  const devinId = sessionId.startsWith('devin-') ? sessionId : `devin-${sessionId}`;
+
+  // Poll for completion — 5s intervals, max ~2.5 min (within the 3-min global timeout)
+  const MAX_POLLS = 30;
+  const POLL_INTERVAL = 5000;
+
+  for (let i = 0; i < MAX_POLLS; i++) {
+    await sleep(POLL_INTERVAL);
+
+    const pollRes = await fetch(`${baseUrl}/sessions/${devinId}`, {
+      headers: { Authorization: `Bearer ${config.apiKey}` },
+    });
+
+    if (!pollRes.ok) {
+      throw new Error(`Devin poll error ${pollRes.status}: ${await pollRes.text()}`);
+    }
+
+    const status = await pollRes.json();
+
+    if (status.status === 'error') {
+      throw new Error('Devin session ended with error');
+    }
+    if (status.status === 'suspended') {
+      throw new Error(`Devin session suspended: ${status.status_detail || 'unknown reason'}`);
+    }
+
+    // Session completed
+    if (status.status === 'exit' || status.status_detail === 'finished') {
+      // Try structured output first
+      if (status.structured_output?.response) {
+        return {
+          content: status.structured_output.response,
+          model: config.modelId,
+          provider: 'devin',
+          inputTokens: 0,
+          outputTokens: 0,
+        };
+      }
+
+      // Fallback: get last Devin message
+      const msgsRes = await fetch(`${baseUrl}/sessions/${devinId}/messages?first=200`, {
+        headers: { Authorization: `Bearer ${config.apiKey}` },
+      });
+
+      if (msgsRes.ok) {
+        const msgsData = await msgsRes.json();
+        const devinMsgs = msgsData.items?.filter((m: { source: string }) => m.source === 'devin') || [];
+        const lastMsg = devinMsgs[devinMsgs.length - 1];
+        if (lastMsg?.message) {
+          return {
+            content: lastMsg.message,
+            model: config.modelId,
+            provider: 'devin',
+            inputTokens: 0,
+            outputTokens: 0,
+          };
+        }
+      }
+
+      return {
+        content: `Devin session completed. View at: ${status.url || 'N/A'}`,
+        model: config.modelId,
+        provider: 'devin',
+        inputTokens: 0,
+        outputTokens: 0,
+      };
+    }
+  }
+
+  throw new Error(`Devin session timed out after ${MAX_POLLS * POLL_INTERVAL / 1000}s (session: ${sessionId})`);
+}
+
 // ── Public API ───────────────────────────────────
 
 /**
@@ -285,6 +398,8 @@ export async function callAI(
         return callOpenAICompatible(config, finalPrompt, messages, config.providerSlug);
       case 'google':
         return callGoogle(config, finalPrompt, messages);
+      case 'devin':
+        return callDevin(config, finalPrompt, messages);
       default:
         throw new Error(`Unsupported AI provider: ${config.providerSlug}`);
     }
