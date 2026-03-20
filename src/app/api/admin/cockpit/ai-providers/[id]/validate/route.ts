@@ -71,6 +71,16 @@ export async function POST(_req: NextRequest, { params }: { params: { id: string
           if (!valid) error = `HTTP ${res.status}`;
           break;
         }
+        case 'devin': {
+          const res = await fetch('https://api.devin.ai/v1/sessions', {
+            headers: { Authorization: `Bearer ${apiKey}` },
+            signal: ctrl.signal,
+          });
+          // 200 = valid key (returns session list), 401 = invalid
+          valid = res.ok;
+          if (!valid) error = `HTTP ${res.status}`;
+          break;
+        }
         default:
           error = `Unknown provider slug: ${provider.slug}`;
       }

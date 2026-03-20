@@ -266,27 +266,16 @@ async function callDevin(
   }
   const prompt = parts.join('\n\n');
 
-  // baseUrl must be set to https://api.devin.ai/v3/organizations/{org_id}
-  const baseUrl = config.baseUrl;
-  if (!baseUrl) {
-    throw new Error('Devin provider requires baseUrl set to https://api.devin.ai/v3/organizations/{org_id}');
-  }
+  const baseUrl = config.baseUrl || 'https://api.devin.ai';
 
-  // Create a session with structured output schema for text response
-  const createRes = await fetch(`${baseUrl}/sessions`, {
+  // Create a session via Devin v1 API
+  const createRes = await fetch(`${baseUrl}/v1/sessions`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
       Authorization: `Bearer ${config.apiKey}`,
     },
-    body: JSON.stringify({
-      prompt,
-      structured_output_schema: {
-        type: 'object',
-        properties: { response: { type: 'string', description: 'The text response to the prompt' } },
-        required: ['response'],
-      },
-    }),
+    body: JSON.stringify({ prompt }),
   });
 
   if (!createRes.ok) {
@@ -296,7 +285,6 @@ async function callDevin(
 
   const session = await createRes.json();
   const sessionId: string = session.session_id;
-  const devinId = sessionId.startsWith('devin-') ? sessionId : `devin-${sessionId}`;
 
   // Poll for completion — 5s intervals, max ~2.5 min (within the 3-min global timeout)
   const MAX_POLLS = 30;
@@ -305,7 +293,7 @@ async function callDevin(
   for (let i = 0; i < MAX_POLLS; i++) {
     await sleep(POLL_INTERVAL);
 
-    const pollRes = await fetch(`${baseUrl}/sessions/${devinId}`, {
+    const pollRes = await fetch(`${baseUrl}/v1/sessions/${sessionId}`, {
       headers: { Authorization: `Bearer ${config.apiKey}` },
     });
 
@@ -314,16 +302,17 @@ async function callDevin(
     }
 
     const status = await pollRes.json();
+    const sessionStatus: string = status.status_enum || '';
 
-    if (status.status === 'error') {
-      throw new Error('Devin session ended with error');
+    if (sessionStatus === 'expired') {
+      throw new Error('Devin session expired');
     }
-    if (status.status === 'suspended') {
-      throw new Error(`Devin session suspended: ${status.status_detail || 'unknown reason'}`);
+    if (sessionStatus === 'blocked') {
+      throw new Error('Devin session is blocked — may need user input');
     }
 
     // Session completed
-    if (status.status === 'exit' || status.status_detail === 'finished') {
+    if (sessionStatus === 'finished') {
       // Try structured output first
       if (status.structured_output?.response) {
         return {
@@ -335,15 +324,10 @@ async function callDevin(
         };
       }
 
-      // Fallback: get last Devin message
-      const msgsRes = await fetch(`${baseUrl}/sessions/${devinId}/messages?first=200`, {
-        headers: { Authorization: `Bearer ${config.apiKey}` },
-      });
-
-      if (msgsRes.ok) {
-        const msgsData = await msgsRes.json();
-        const devinMsgs = msgsData.items?.filter((m: { source: string }) => m.source === 'devin') || [];
-        const lastMsg = devinMsgs[devinMsgs.length - 1];
+      // Fallback: last message from the session's inline messages array
+      const sessionMsgs = status.messages || [];
+      if (sessionMsgs.length > 0) {
+        const lastMsg = sessionMsgs[sessionMsgs.length - 1];
         if (lastMsg?.message) {
           return {
             content: lastMsg.message,
@@ -356,7 +340,7 @@ async function callDevin(
       }
 
       return {
-        content: `Devin session completed. View at: ${status.url || 'N/A'}`,
+        content: `Devin session completed. View at: https://app.devin.ai/sessions/${sessionId}`,
         model: config.modelId,
         provider: 'devin',
         inputTokens: 0,

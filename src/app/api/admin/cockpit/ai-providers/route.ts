@@ -35,7 +35,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'name and slug are required' }, { status: 400 });
     }
 
-    const validSlugs = ['anthropic', 'openai', 'google', 'mistral', 'groq'];
+    const validSlugs = ['anthropic', 'openai', 'google', 'mistral', 'groq', 'devin'];
     if (!validSlugs.includes(slug)) {
       return NextResponse.json({ error: `slug must be one of: ${validSlugs.join(', ')}` }, { status: 400 });
     }
