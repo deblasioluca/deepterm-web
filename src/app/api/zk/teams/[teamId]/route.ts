@@ -113,7 +113,7 @@ export async function PUT(
     await prisma.orgTeam.update({
       where: { id: teamId },
       data: {
-        ...(name !== undefined && { name: name.trim() }),
+        ...(name !== undefined && name !== null && { name: String(name).trim() }),
         ...(description !== undefined && { description }),
         ...(allowFederation !== undefined && { allowFederation }),
       },
