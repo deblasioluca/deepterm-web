@@ -185,7 +185,7 @@ Detailed metadata about items in a specific vault. Returns item types, modificat
 **Parameters:**
 | Name | Type | Default | Description |
 |------|------|---------|-------------|
-| `vaultId` | string | *(first vault)* | Vault ID to inspect |
+| `vault_id` | string | *(all vaults)* | Vault ID to inspect. Omit to summarize all vaults |
 
 ---
 
@@ -210,7 +210,7 @@ Lists your billing invoices.
 **Parameters:**
 | Name | Type | Default | Description |
 |------|------|---------|-------------|
-| `limit` | number | 20 | Max invoices to return (1–100) |
+| `limit` | number | 10 | Max invoices to return (1–50) |
 
 ---
 
@@ -221,7 +221,7 @@ Lists payment events — purchases, renewals, cancellations, refunds.
 **Parameters:**
 | Name | Type | Default | Description |
 |------|------|---------|-------------|
-| `limit` | number | 20 | Max events to return (1–100) |
+| `limit` | number | 10 | Max events to return (1–50) |
 
 ---
 
@@ -232,7 +232,7 @@ Lists your bug reports and support tickets.
 **Parameters:**
 | Name | Type | Default | Description |
 |------|------|---------|-------------|
-| `status` | string | *(all)* | Filter by status: open, in_progress, resolved, closed |
+| `status` | string | *(all)* | Filter by status: open, in-progress, resolved, closed |
 | `limit` | number | 20 | Max issues to return (1–50) |
 
 ---
@@ -244,7 +244,7 @@ Returns a single issue with full details, admin updates, and attachments.
 **Parameters:**
 | Name | Type | Required | Description |
 |------|------|----------|-------------|
-| `issueId` | string | Yes | Issue ID |
+| `issue_id` | string | Yes | Issue ID |
 
 ---
 
@@ -255,7 +255,7 @@ Lists feature ideas from the voting board.
 **Parameters:**
 | Name | Type | Default | Description |
 |------|------|---------|-------------|
-| `status` | string | *(all)* | Filter: pending, approved, planned, in_progress, completed, declined |
+| `status` | string | *(all)* | Filter: consideration, planned, in-progress, launched |
 | `limit` | number | 20 | Max ideas to return (1–50) |
 
 ---
@@ -275,10 +275,9 @@ Lists your notifications.
 
 Lists product announcements.
 
-**Parameters:**
-| Name | Type | Default | Description |
-|------|------|---------|-------------|
-| `limit` | number | 10 | Max announcements to return (1–20) |
+**Parameters:** None
+
+Returns the 10 most recent active announcements. No parameters accepted.
 
 ---
 
