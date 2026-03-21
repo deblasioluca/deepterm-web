@@ -118,7 +118,7 @@ module.exports = {
       ref: 'origin/develop',
       repo: 'git@github.com:username/deepterm.git',
       path: '/home/macan/deepterm-staging',
-      'post-deploy': 'npm install && npm run build && pm2 reload ecosystem.config.js --env development',
+      'post-deploy': 'npm install --legacy-peer-deps && npm run build && pm2 reload ecosystem.config.js --env development',
       env: {
         NODE_ENV: 'development',
       },
