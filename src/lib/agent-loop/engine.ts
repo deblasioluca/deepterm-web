@@ -900,7 +900,7 @@ export async function runAgentLoop(loopId: string, feedbackContext?: string): Pr
     if (accumulatedFiles.length > 0 && (finalStatus === 'awaiting_review' || finalStatus === 'completed')) {
       const targetRepo = config.targetRepo || 'deblasioluca/deepterm';
       const baseBranch = config.targetBranch || 'main';
-      const baseUrl = process.env.NEXTAUTH_URL || 'http://localhost:3000';
+      const baseUrl = process.env.INTERNAL_API_URL || 'http://localhost:3000';
       const apiKey = process.env.AI_DEV_API_KEY || process.env.NODE_RED_API_KEY || '';
       const githubToken = process.env.GITHUB_TOKEN || '';
       const hasSwiftChanges = accumulatedFiles.some(
@@ -997,7 +997,7 @@ export async function runAgentLoop(loopId: string, feedbackContext?: string): Pr
         // Auto-trigger retry-step implement so a fresh AgentLoop starts with error context
         if (loop.storyId) {
           try {
-            const baseUrl = process.env.NEXTAUTH_URL || 'http://localhost:3000';
+            const baseUrl = process.env.INTERNAL_API_URL || 'http://localhost:3000';
             const apiKey = process.env.AI_DEV_API_KEY || process.env.NODE_RED_API_KEY || '';
             const lastErrorLog = await prisma.agentLoop.findUnique({
               where: { id: loopId }, select: { errorLog: true },
@@ -1141,7 +1141,7 @@ export async function runAgentLoop(loopId: string, feedbackContext?: string): Pr
 
           // Dispatch CI workflow via lifecycle API (handles dispatch + event logging)
           try {
-            const baseUrl = process.env.NEXTAUTH_URL || 'http://localhost:3000';
+            const baseUrl = process.env.INTERNAL_API_URL || 'http://localhost:3000';
             const apiKey = process.env.AI_DEV_API_KEY || process.env.NODE_RED_API_KEY || '';
             const ciRes = await fetch(`${baseUrl}/api/admin/cockpit/lifecycle`, {
               method: 'POST',
