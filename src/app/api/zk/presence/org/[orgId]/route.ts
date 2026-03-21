@@ -19,13 +19,13 @@ export async function OPTIONS() {
  */
 export async function GET(
   request: NextRequest,
-  { params }: { params: { orgId: string } }
+  { params }: { params: Promise<{ orgId: string }> }
 ) {
   try {
     const auth = getAuthFromRequest(request);
     if (!auth) return errorResponse('Unauthorized', 401);
 
-    const { orgId } = params;
+    const { orgId } = await params;
 
     // Verify user is a member of this org
     const membership = await prisma.organizationUser.findUnique({

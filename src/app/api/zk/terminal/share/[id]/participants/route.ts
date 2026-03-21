@@ -19,19 +19,20 @@ export async function OPTIONS() {
  */
 export async function PUT(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const auth = getAuthFromRequest(request);
     if (!auth) return errorResponse('Unauthorized', 401);
 
+    const { id } = await params;
     const body = await request.json();
     const { action, userId, canWrite } = body;
 
     if (!action) return errorResponse('action is required');
 
     const session = await prisma.sharedTerminalSession.findUnique({
-      where: { id: params.id },
+      where: { id },
     });
     if (!session) return errorResponse('Session not found', 404);
     if (!session.isActive) return errorResponse('Session is no longer active');
@@ -45,10 +46,10 @@ export async function PUT(
         if (!userId) return errorResponse('userId is required');
 
         await prisma.sharedSessionParticipant.upsert({
-          where: { sessionId_userId: { sessionId: params.id, userId } },
+          where: { sessionId_userId: { sessionId: id, userId } },
           update: { canWrite: canWrite ?? false, status: 'invited' },
           create: {
-            sessionId: params.id,
+            sessionId: id,
             userId,
             canWrite: canWrite ?? false,
             status: 'invited',
@@ -64,7 +65,7 @@ export async function PUT(
         if (!userId) return errorResponse('userId is required');
 
         await prisma.sharedSessionParticipant.update({
-          where: { sessionId_userId: { sessionId: params.id, userId } },
+          where: { sessionId_userId: { sessionId: id, userId } },
           data: { canWrite: canWrite ?? false },
         });
         break;
@@ -77,7 +78,7 @@ export async function PUT(
         if (!userId) return errorResponse('userId is required');
 
         await prisma.sharedSessionParticipant.update({
-          where: { sessionId_userId: { sessionId: params.id, userId } },
+          where: { sessionId_userId: { sessionId: id, userId } },
           data: { status: 'left', leftAt: new Date() },
         });
         break;
@@ -85,13 +86,13 @@ export async function PUT(
       case 'join': {
         // Participant joins
         const participant = await prisma.sharedSessionParticipant.findUnique({
-          where: { sessionId_userId: { sessionId: params.id, userId: auth.userId } },
+          where: { sessionId_userId: { sessionId: id, userId: auth.userId } },
         });
         if (!participant || participant.status === 'left') {
           return errorResponse('Not invited to this session', 403);
         }
         await prisma.sharedSessionParticipant.update({
-          where: { sessionId_userId: { sessionId: params.id, userId: auth.userId } },
+          where: { sessionId_userId: { sessionId: id, userId: auth.userId } },
           data: { status: 'joined', joinedAt: new Date() },
         });
         break;
@@ -99,7 +100,7 @@ export async function PUT(
       case 'leave': {
         // Participant leaves
         await prisma.sharedSessionParticipant.update({
-          where: { sessionId_userId: { sessionId: params.id, userId: auth.userId } },
+          where: { sessionId_userId: { sessionId: id, userId: auth.userId } },
           data: { status: 'left', leftAt: new Date() },
         });
         break;

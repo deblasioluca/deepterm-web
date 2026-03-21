@@ -18,13 +18,13 @@ export async function OPTIONS() {
  */
 export async function GET(
   request: NextRequest,
-  { params }: { params: { channelId: string } }
+  { params }: { params: Promise<{ channelId: string }> }
 ) {
   try {
     const auth = getAuthFromRequest(request);
     if (!auth) return errorResponse('Unauthorized', 401);
 
-    const { channelId } = params;
+    const { channelId } = await params;
     const limit = Math.min(parseInt(request.nextUrl.searchParams.get('limit') || '50'), 100);
     const before = request.nextUrl.searchParams.get('before');
 
@@ -99,13 +99,13 @@ export async function GET(
  */
 export async function POST(
   request: NextRequest,
-  { params }: { params: { channelId: string } }
+  { params }: { params: Promise<{ channelId: string }> }
 ) {
   try {
     const auth = getAuthFromRequest(request);
     if (!auth) return errorResponse('Unauthorized', 401);
 
-    const { channelId } = params;
+    const { channelId } = await params;
     const body = await request.json();
     const { content, type, fileId } = body;
 

@@ -18,14 +18,15 @@ export async function OPTIONS() {
  */
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const auth = getAuthFromRequest(request);
     if (!auth) return errorResponse('Unauthorized', 401);
 
+    const { id } = await params;
     const session = await prisma.sharedTerminalSession.findUnique({
-      where: { id: params.id },
+      where: { id },
       include: {
         owner: { select: { id: true, email: true } },
         participants: {
@@ -35,7 +36,6 @@ export async function GET(
     });
     if (!session) return errorResponse('Session not found', 404);
 
-    // Verify user is owner or participant
     const isOwner = session.ownerId === auth.userId;
     const isParticipant = session.participants.some(p => p.userId === auth.userId);
     if (!isOwner && !isParticipant) {
@@ -71,14 +71,15 @@ export async function GET(
  */
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const auth = getAuthFromRequest(request);
     if (!auth) return errorResponse('Unauthorized', 401);
 
+    const { id } = await params;
     const session = await prisma.sharedTerminalSession.findUnique({
-      where: { id: params.id },
+      where: { id },
     });
     if (!session) return errorResponse('Session not found', 404);
     if (session.ownerId !== auth.userId) {
@@ -86,13 +87,13 @@ export async function DELETE(
     }
 
     await prisma.sharedTerminalSession.update({
-      where: { id: params.id },
+      where: { id },
       data: { isActive: false, endedAt: new Date() },
     });
 
     // Mark all participants as left
     await prisma.sharedSessionParticipant.updateMany({
-      where: { sessionId: params.id, status: { not: 'left' } },
+      where: { sessionId: id, status: { not: 'left' } },
       data: { status: 'left', leftAt: new Date() },
     });
 

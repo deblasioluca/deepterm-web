@@ -10,6 +10,9 @@ import { WebSocketServer, WebSocket } from 'ws';
 import { IncomingMessage } from 'http';
 import { Server } from 'http';
 import { verifyAccessToken } from '../zk/jwt';
+import { PrismaClient } from '@prisma/client';
+
+const prisma = new PrismaClient();
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -101,10 +104,38 @@ function handlePresence(ws: AuthenticatedSocket, payload: Record<string, unknown
   }
 }
 
-function handleChat(ws: AuthenticatedSocket, payload: Record<string, unknown>) {
+async function handleChat(ws: AuthenticatedSocket, payload: Record<string, unknown>) {
   const { channelId, content, type: msgType, fileId, messageId } = payload;
 
   if (!channelId || typeof channelId !== 'string') return;
+
+  // Verify user has access to this channel before joining
+  if (!chatRooms.get(channelId)?.has(ws)) {
+    const channel = await prisma.chatChannel.findUnique({
+      where: { id: channelId },
+      include: { participants: { select: { userId: true } } },
+    });
+    if (!channel) {
+      ws.send(JSON.stringify({ type: 'error', message: 'Channel not found' }));
+      return;
+    }
+    if (channel.type === 'dm') {
+      const isParticipant = channel.participants.some(p => p.userId === ws.userId);
+      if (!isParticipant) {
+        ws.send(JSON.stringify({ type: 'error', message: 'Access denied to channel' }));
+        return;
+      }
+    } else {
+      // Team channel: verify org membership
+      const membership = await prisma.organizationUser.findUnique({
+        where: { organizationId_userId: { organizationId: channel.organizationId, userId: ws.userId } },
+      });
+      if (!membership || membership.status !== 'confirmed') {
+        ws.send(JSON.stringify({ type: 'error', message: 'Access denied to channel' }));
+        return;
+      }
+    }
+  }
 
   joinRoom(chatRooms, channelId, ws);
 
@@ -127,13 +158,30 @@ function handleChat(ws: AuthenticatedSocket, payload: Record<string, unknown>) {
   }
 }
 
-function handleTerminal(ws: AuthenticatedSocket, payload: Record<string, unknown>) {
+async function handleTerminal(ws: AuthenticatedSocket, payload: Record<string, unknown>) {
   const { sessionId, action, data: termData, canWrite } = payload;
 
   if (!sessionId || typeof sessionId !== 'string') return;
 
   switch (action) {
     case 'join': {
+      // Verify user is owner or invited participant before joining
+      const session = await prisma.sharedTerminalSession.findUnique({
+        where: { id: sessionId },
+        include: { participants: { select: { userId: true, status: true } } },
+      });
+      if (!session || !session.isActive) {
+        ws.send(JSON.stringify({ type: 'error', message: 'Session not found or inactive' }));
+        return;
+      }
+      const isOwner = session.ownerId === ws.userId;
+      const isParticipant = session.participants.some(
+        p => p.userId === ws.userId && p.status !== 'left'
+      );
+      if (!isOwner && !isParticipant) {
+        ws.send(JSON.stringify({ type: 'error', message: 'Not authorized to join this session' }));
+        return;
+      }
       joinRoom(terminalRooms, sessionId, ws);
       const room = terminalRooms.get(sessionId);
       if (room) {
