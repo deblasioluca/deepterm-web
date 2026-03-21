@@ -1,0 +1,117 @@
+import { NextRequest } from 'next/server';
+import { prisma } from '@/lib/prisma';
+import {
+  getAuthFromRequest,
+  errorResponse,
+  successResponse,
+  handleCorsPreflightRequest,
+  addCorsHeaders,
+} from '@/lib/zk';
+
+export async function OPTIONS() {
+  return handleCorsPreflightRequest();
+}
+
+/**
+ * PUT /api/zk/terminal/share/[id]/participants
+ * Add/update/remove participants in a shared session.
+ * Body: { action: "add"|"update"|"remove"|"join"|"leave", userId, canWrite? }
+ */
+export async function PUT(
+  request: NextRequest,
+  { params }: { params: { id: string } }
+) {
+  try {
+    const auth = getAuthFromRequest(request);
+    if (!auth) return errorResponse('Unauthorized', 401);
+
+    const body = await request.json();
+    const { action, userId, canWrite } = body;
+
+    if (!action) return errorResponse('action is required');
+
+    const session = await prisma.sharedTerminalSession.findUnique({
+      where: { id: params.id },
+    });
+    if (!session) return errorResponse('Session not found', 404);
+    if (!session.isActive) return errorResponse('Session is no longer active');
+
+    switch (action) {
+      case 'add': {
+        // Only owner can add participants
+        if (session.ownerId !== auth.userId) {
+          return errorResponse('Only the session owner can add participants', 403);
+        }
+        if (!userId) return errorResponse('userId is required');
+
+        await prisma.sharedSessionParticipant.upsert({
+          where: { sessionId_userId: { sessionId: params.id, userId } },
+          update: { canWrite: canWrite ?? false, status: 'invited' },
+          create: {
+            sessionId: params.id,
+            userId,
+            canWrite: canWrite ?? false,
+            status: 'invited',
+          },
+        });
+        break;
+      }
+      case 'update': {
+        // Only owner can update permissions
+        if (session.ownerId !== auth.userId) {
+          return errorResponse('Only the session owner can update permissions', 403);
+        }
+        if (!userId) return errorResponse('userId is required');
+
+        await prisma.sharedSessionParticipant.update({
+          where: { sessionId_userId: { sessionId: params.id, userId } },
+          data: { canWrite: canWrite ?? false },
+        });
+        break;
+      }
+      case 'remove': {
+        // Only owner can remove
+        if (session.ownerId !== auth.userId) {
+          return errorResponse('Only the session owner can remove participants', 403);
+        }
+        if (!userId) return errorResponse('userId is required');
+
+        await prisma.sharedSessionParticipant.update({
+          where: { sessionId_userId: { sessionId: params.id, userId } },
+          data: { status: 'left', leftAt: new Date() },
+        });
+        break;
+      }
+      case 'join': {
+        // Participant joins
+        const participant = await prisma.sharedSessionParticipant.findUnique({
+          where: { sessionId_userId: { sessionId: params.id, userId: auth.userId } },
+        });
+        if (!participant || participant.status === 'left') {
+          return errorResponse('Not invited to this session', 403);
+        }
+        await prisma.sharedSessionParticipant.update({
+          where: { sessionId_userId: { sessionId: params.id, userId: auth.userId } },
+          data: { status: 'joined', joinedAt: new Date() },
+        });
+        break;
+      }
+      case 'leave': {
+        // Participant leaves
+        await prisma.sharedSessionParticipant.update({
+          where: { sessionId_userId: { sessionId: params.id, userId: auth.userId } },
+          data: { status: 'left', leftAt: new Date() },
+        });
+        break;
+      }
+      default:
+        return errorResponse('Invalid action. Use: add, update, remove, join, leave');
+    }
+
+    const response = successResponse({ ok: true });
+    return addCorsHeaders(response);
+  } catch (error) {
+    console.error('Manage participants error:', error);
+    return errorResponse('Failed to manage participants', 500);
+  }
+}

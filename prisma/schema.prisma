@@ -35,6 +35,13 @@ model ZKUser {
   webUser                    User?              @relation(fields: [webUserId], references: [id])
   zkVaults                   ZKVault[]
   zkVaultItems               ZKVaultItem[]
+  // Team collaboration relations
+  presences                  TeamPresence[]
+  chatParticipations         ChatChannelParticipant[]
+  chatMessages               ChatMessage[]
+  chatFiles                  ChatFile[]
+  ownedSharedSessions        SharedTerminalSession[] @relation("sharedSessionOwner")
+  sharedSessionParticipations SharedSessionParticipant[]
 
   @@index([email])
   @@index([webUserId])
@@ -81,6 +88,11 @@ model Organization {
   members      OrganizationUser[]
   auditLogs    ZKAuditLog[]
   vaults       ZKVault[]
+  // Team collaboration relations
+  presences            TeamPresence[]
+  chatChannels         ChatChannel[]
+  chatFiles            ChatFile[]
+  sharedSessions       SharedTerminalSession[]
 }
 
 model OrganizationUser {
@@ -1058,4 +1070,125 @@ model DocumentVector {
 
   @@unique([filename, chunkIndex])
   @@index([filename])
+}
+
+
+// ─── Team Collaboration ─────────────────────────────────────────────────────────
+
+/// Tracks online/offline presence for organization members.
+model TeamPresence {
+  id             String   @id @default(cuid())
+  userId         String
+  organizationId String
+  status         String   @default("offline") // online, away, offline
+  lastHeartbeat  DateTime @default(now())
+  deviceInfo     String?                      // JSON: {deviceName, appVersion, platform}
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  user           ZKUser       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, organizationId])
+  @@index([organizationId, status])
+  @@index([lastHeartbeat])
+}
+
+/// Chat channel — team-wide or direct message between two users.
+model ChatChannel {
+  id             String        @id @default(cuid())
+  organizationId String
+  type           String        @default("team")  // team, dm
+  name           String?                          // Display name (team channels only)
+  createdBy      String?                          // userId who created it
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+  organization   Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  messages       ChatMessage[]
+  participants   ChatChannelParticipant[]
+
+  @@index([organizationId, type])
+}
+
+/// Maps users to chat channels (for DM participant tracking and muting).
+model ChatChannelParticipant {
+  id        String      @id @default(cuid())
+  channelId String
+  userId    String
+  isMuted   Boolean     @default(false)
+  lastRead  DateTime?                     // Last message read timestamp
+  joinedAt  DateTime    @default(now())
+  channel   ChatChannel @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  user      ZKUser      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([channelId, userId])
+  @@index([userId])
+}
+
+/// Individual chat message within a channel.
+model ChatMessage {
+  id        String      @id @default(cuid())
+  channelId String
+  senderId  String
+  content   String                        // Message text (may contain markdown)
+  type      String      @default("text")  // text, file, system
+  fileId    String?                       // Reference to ChatFile if type=file
+  editedAt  DateTime?
+  deletedAt DateTime?
+  createdAt DateTime    @default(now())
+  channel   ChatChannel @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  sender    ZKUser      @relation(fields: [senderId], references: [id], onDelete: Cascade)
+
+  @@index([channelId, createdAt])
+  @@index([senderId])
+}
+
+/// Uploaded file in team chat.
+model ChatFile {
+  id               String   @id @default(cuid())
+  organizationId   String
+  uploaderId       String
+  originalFilename String
+  mimeType         String
+  sizeBytes        Int
+  storagePath      String                     // Server-side file path
+  createdAt        DateTime @default(now())
+  organization     Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  uploader         ZKUser       @relation(fields: [uploaderId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId])
+  @@index([uploaderId])
+}
+
+/// Active shared terminal session.
+model SharedTerminalSession {
+  id           String   @id @default(cuid())
+  ownerId      String                         // User who started sharing
+  organizationId String
+  sessionName  String   @default("")          // Display name (e.g. host@server)
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  endedAt      DateTime?
+  owner        ZKUser       @relation("sharedSessionOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  participants SharedSessionParticipant[]
+
+  @@index([organizationId, isActive])
+  @@index([ownerId])
+}
+
+/// Participant in a shared terminal session.
+model SharedSessionParticipant {
+  id        String   @id @default(cuid())
+  sessionId String
+  userId    String
+  canWrite  Boolean  @default(false)          // false = read-only, true = can type
+  status    String   @default("invited")      // invited, joined, left
+  joinedAt  DateTime?
+  leftAt    DateTime?
+  createdAt DateTime @default(now())
+  session   SharedTerminalSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  user      ZKUser   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([sessionId, userId])
+  @@index([userId])
 }
