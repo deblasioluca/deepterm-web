@@ -307,7 +307,7 @@ function RegisterPageContent() {
               <p className="mt-6 text-center text-text-secondary">
                 Already have an account?{' '}
                 <Link
-                  href="/login"
+                  href={callbackUrl ? `/login?callbackUrl=${encodeURIComponent(callbackUrl)}` : '/login'}
                   className="text-accent-primary hover:text-accent-primary-hover transition-colors font-medium"
                 >
                   Log in
