@@ -400,7 +400,7 @@ export async function callAI(
   let errorMessage: string | undefined;
 
   // Global timeout: 3 min max per callAI invocation regardless of provider
-  const AI_CALL_TIMEOUT_MS = 85 * 1000; // 85s — shorter than SDK 120s so Promise.race always wins
+  const AI_CALL_TIMEOUT_MS = 115 * 1000; // 115s — just under SDK 120s, withRetry already skips on timeout — shorter than SDK 120s so Promise.race always wins
   const timeoutPromise = new Promise<never>((_, reject) =>
     setTimeout(() => reject(new Error(`[AI Client] callAI timed out after ${AI_CALL_TIMEOUT_MS / 1000}s for activity "${activity}"`)), AI_CALL_TIMEOUT_MS)
   );
