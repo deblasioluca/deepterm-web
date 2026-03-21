@@ -158,13 +158,10 @@ async function gracefulShutdown(signal: string) {
   _shuttingDown = true;
   console.warn(`[AgentLoop] ${signal} received -- marking running loops as failed`);
   try {
-    const { PrismaClient } = await import('@prisma/client');
-    const _p = new PrismaClient();
-    await _p.agentLoop.updateMany({
+    await prisma.agentLoop.updateMany({
       where: { status: { in: ['running', 'queued'] } },
       data: { status: 'failed', errorLog: `Process received ${signal}` },
     });
-    await _p.$disconnect();
   } catch (e) { console.error('[AgentLoop] Shutdown cleanup error:', e); }
   process.exit(0);
 }
@@ -226,6 +223,12 @@ async function runBuildGate(params: {
   const deadline = Date.now() + BUILD_GATE_TIMEOUT_MS;
   while (Date.now() < deadline) {
     await delay(BUILD_GATE_POLL_MS);
+    // Keep the agent loop "alive" so stale-loop recovery doesn't kill it
+    // while we legitimately wait for the CI runner to pick up the job.
+    await prisma.agentLoop.update({
+      where: { id: loopId },
+      data: { updatedAt: new Date() },
+    }).catch(() => {/* best effort */});
     try {
       const res = await fetch(
         `${baseUrl}/api/admin/cockpit/lifecycle/events?storyId=${storyId}&stepId=implement&limit=30`,
@@ -868,7 +871,8 @@ export async function runAgentLoop(loopId: string, feedbackContext?: string): Pr
     if (accumulatedFiles.length > 0 && (finalStatus === 'awaiting_review' || finalStatus === 'completed')) {
       const targetRepo = config.targetRepo || 'deblasioluca/deepterm';
       const baseBranch = config.targetBranch || 'main';
-      const baseUrl = process.env.INTERNAL_API_URL || 'http://localhost:3000';
+      // Use localhost for internal server-to-server calls to avoid nginx/reverse-proxy issues.
+      const baseUrl = `http://localhost:${process.env.PORT || 3000}`;
       const apiKey = process.env.AI_DEV_API_KEY || process.env.NODE_RED_API_KEY || '';
       const githubToken = process.env.GITHUB_TOKEN || '';
       const hasSwiftChanges = accumulatedFiles.some(
@@ -965,12 +969,13 @@ export async function runAgentLoop(loopId: string, feedbackContext?: string): Pr
         // Auto-trigger retry-step implement so a fresh AgentLoop starts with error context
         if (loop.storyId) {
           try {
-            const baseUrl = process.env.INTERNAL_API_URL || 'http://localhost:3000';
             const apiKey = process.env.AI_DEV_API_KEY || process.env.NODE_RED_API_KEY || '';
             const lastErrorLog = await prisma.agentLoop.findUnique({
               where: { id: loopId }, select: { errorLog: true },
             });
-            const retryRes = await fetch(`${baseUrl}/api/admin/cockpit/lifecycle`, {
+            // Use localhost for internal server-to-server calls to avoid
+            // going through nginx/reverse-proxy (which can return 403).
+            const retryRes = await fetch(`http://localhost:${process.env.PORT || 3000}/api/admin/cockpit/lifecycle`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey },
               body: JSON.stringify({
@@ -1109,9 +1114,10 @@ export async function runAgentLoop(loopId: string, feedbackContext?: string): Pr
 
           // Dispatch CI workflow via lifecycle API (handles dispatch + event logging)
           try {
-            const baseUrl = process.env.INTERNAL_API_URL || 'http://localhost:3000';
             const apiKey = process.env.AI_DEV_API_KEY || process.env.NODE_RED_API_KEY || '';
-            const ciRes = await fetch(`${baseUrl}/api/admin/cockpit/lifecycle`, {
+            // Use localhost for internal server-to-server calls to avoid
+            // going through nginx/reverse-proxy (which can return 403).
+            const ciRes = await fetch(`http://localhost:${process.env.PORT || 3000}/api/admin/cockpit/lifecycle`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey },
               body: JSON.stringify({ action: 'dispatch-ci', storyId: loop.storyId, stepId: 'test' }),
