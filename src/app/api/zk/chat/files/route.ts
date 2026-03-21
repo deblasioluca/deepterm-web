@@ -4,6 +4,8 @@ import { writeFile, mkdir } from 'fs/promises';
 import path from 'path';
 import {
   getAuthFromRequest,
+  createAuditLog,
+  getClientIP,
   errorResponse,
   successResponse,
   handleCorsPreflightRequest,
@@ -64,6 +66,17 @@ export async function POST(request: NextRequest) {
         sizeBytes: file.size,
         storagePath,
       },
+    });
+
+    await createAuditLog({
+      userId: auth.userId,
+      organizationId: orgId,
+      eventType: 'chat_file_uploaded',
+      targetType: 'chat_file',
+      targetId: chatFile.id,
+      ipAddress: getClientIP(request),
+      userAgent: request.headers.get('user-agent') || undefined,
+      metadata: { filename: file.name, mimeType: file.type, sizeBytes: file.size },
     });
 
     const response = successResponse({

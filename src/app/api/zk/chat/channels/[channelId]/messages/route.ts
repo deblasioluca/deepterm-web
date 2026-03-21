@@ -36,13 +36,20 @@ export async function GET(
 
     if (!channel) return errorResponse('Channel not found', 404);
 
-    // Team channels: verify org membership. DM channels: verify participation.
+    // Team channels: verify org membership + team membership. DM channels: verify participation.
     if (channel.type === 'team') {
       const membership = await prisma.organizationUser.findUnique({
         where: { organizationId_userId: { organizationId: channel.organizationId, userId: auth.userId } },
       });
       if (!membership || membership.status !== 'confirmed') {
         return errorResponse('Access denied', 403);
+      }
+      // If channel is scoped to a team, verify team membership
+      if (channel.teamId) {
+        const teamMember = await prisma.orgTeamMember.findUnique({
+          where: { teamId_userId: { teamId: channel.teamId, userId: auth.userId } },
+        });
+        if (!teamMember) return errorResponse('Access denied', 403);
       }
     } else {
       const isParticipant = channel.participants.some(p => p.userId === auth.userId);
@@ -124,6 +131,12 @@ export async function POST(
       });
       if (!membership || membership.status !== 'confirmed') {
         return errorResponse('Access denied', 403);
+      }
+      if (channel.teamId) {
+        const teamMember = await prisma.orgTeamMember.findUnique({
+          where: { teamId_userId: { teamId: channel.teamId, userId: auth.userId } },
+        });
+        if (!teamMember) return errorResponse('Access denied', 403);
       }
     } else {
       const isParticipant = channel.participants.some(p => p.userId === auth.userId);

@@ -2,6 +2,8 @@ import { NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import {
   getAuthFromRequest,
+  createAuditLog,
+  getClientIP,
   errorResponse,
   successResponse,
   handleCorsPreflightRequest,
@@ -108,6 +110,17 @@ export async function PUT(
       default:
         return errorResponse('Invalid action. Use: add, update, remove, join, leave');
     }
+
+    await createAuditLog({
+      userId: auth.userId,
+      organizationId: session.organizationId,
+      eventType: 'terminal_participant_updated',
+      targetType: 'terminal_session',
+      targetId: id,
+      ipAddress: getClientIP(request),
+      userAgent: request.headers.get('user-agent') || undefined,
+      metadata: { action, targetUserId: userId || auth.userId },
+    });
 
     const response = successResponse({ ok: true });
     return addCorsHeaders(response);

@@ -27,7 +27,15 @@ export type AuditEventType =
   | 'sync_performed'
   | 'token_refreshed'
   | 'token_revoked'
-  | 'bulk_operation';
+  | 'bulk_operation'
+  | 'team_created'
+  | 'team_member_added'
+  | 'team_member_removed'
+  | 'chat_channel_created'
+  | 'chat_file_uploaded'
+  | 'terminal_session_created'
+  | 'terminal_session_ended'
+  | 'terminal_participant_updated';
 
 export type AuditTargetType = 
   | 'user'
@@ -35,7 +43,11 @@ export type AuditTargetType =
   | 'vault_item'
   | 'organization'
   | 'device'
-  | 'token';
+  | 'token'
+  | 'team'
+  | 'chat_channel'
+  | 'chat_file'
+  | 'terminal_session';
 
 export interface AuditLogData {
   userId?: string;

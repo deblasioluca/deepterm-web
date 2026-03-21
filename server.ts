@@ -35,7 +35,7 @@ app.prepare().then(() => {
   // Attach the collaboration WebSocket server
   attachWebSocketServer(server);
 
-  server.listen(port, () => {
+  server.listen(port, hostname, () => {
     console.log(`> Ready on http://${hostname}:${port}`);
     console.log(`> WebSocket collab endpoint: ws://${hostname}:${port}/ws/collab`);
   });

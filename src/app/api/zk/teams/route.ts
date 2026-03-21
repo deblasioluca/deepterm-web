@@ -2,6 +2,8 @@ import { NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import {
   getAuthFromRequest,
+  createAuditLog,
+  getClientIP,
   errorResponse,
   successResponse,
   handleCorsPreflightRequest,
@@ -124,6 +126,16 @@ export async function POST(request: NextRequest) {
           create: { userId: auth.userId, role: 'owner' },
         },
       },
+    });
+
+    await createAuditLog({
+      userId: auth.userId,
+      organizationId: orgId,
+      eventType: 'team_created',
+      targetType: 'team',
+      targetId: team.id,
+      ipAddress: getClientIP(request),
+      userAgent: request.headers.get('user-agent') || undefined,
     });
 
     const response = successResponse({ id: team.id }, 201);

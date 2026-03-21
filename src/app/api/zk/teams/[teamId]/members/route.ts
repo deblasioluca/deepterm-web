@@ -2,6 +2,8 @@ import { NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import {
   getAuthFromRequest,
+  createAuditLog,
+  getClientIP,
   errorResponse,
   successResponse,
   handleCorsPreflightRequest,
@@ -112,6 +114,17 @@ export async function POST(
       data: { teamId, userId, role: memberRole },
     });
 
+    await createAuditLog({
+      userId: auth.userId,
+      organizationId: team.organizationId,
+      eventType: 'team_member_added',
+      targetType: 'team',
+      targetId: teamId,
+      ipAddress: getClientIP(request),
+      userAgent: request.headers.get('user-agent') || undefined,
+      metadata: { addedUserId: userId, role: memberRole },
+    });
+
     const response = successResponse({ id: member.id }, 201);
     return addCorsHeaders(response);
   } catch (error) {
@@ -152,7 +165,7 @@ export async function DELETE(
     // Cannot remove the team owner
     const team = await prisma.orgTeam.findUnique({
       where: { id: teamId },
-      select: { ownerId: true },
+      select: { ownerId: true, organizationId: true },
     });
     if (team && team.ownerId === userId) {
       return errorResponse('Cannot remove the team owner. Transfer ownership first.', 400);
@@ -160,6 +173,17 @@ export async function DELETE(
 
     await prisma.orgTeamMember.delete({
       where: { teamId_userId: { teamId, userId } },
+    });
+
+    await createAuditLog({
+      userId: auth.userId,
+      organizationId: team?.organizationId,
+      eventType: 'team_member_removed',
+      targetType: 'team',
+      targetId: teamId,
+      ipAddress: getClientIP(request),
+      userAgent: request.headers.get('user-agent') || undefined,
+      metadata: { removedUserId: userId },
     });
 
     const response = successResponse({ removed: true });

@@ -2,6 +2,8 @@ import { NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import {
   getAuthFromRequest,
+  createAuditLog,
+  getClientIP,
   errorResponse,
   successResponse,
   handleCorsPreflightRequest,
@@ -95,6 +97,16 @@ export async function DELETE(
     await prisma.sharedSessionParticipant.updateMany({
       where: { sessionId: id, status: { not: 'left' } },
       data: { status: 'left', leftAt: new Date() },
+    });
+
+    await createAuditLog({
+      userId: auth.userId,
+      organizationId: session.organizationId,
+      eventType: 'terminal_session_ended',
+      targetType: 'terminal_session',
+      targetId: id,
+      ipAddress: getClientIP(request),
+      userAgent: request.headers.get('user-agent') || undefined,
     });
 
     const response = successResponse({ ok: true });

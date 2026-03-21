@@ -2,6 +2,8 @@ import { NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import {
   getAuthFromRequest,
+  createAuditLog,
+  getClientIP,
   errorResponse,
   successResponse,
   handleCorsPreflightRequest,
@@ -43,13 +45,23 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    // Get team channels + DM channels the user participates in
+    // Get user's team memberships to scope team-channel visibility
+    const userTeamMemberships = await prisma.orgTeamMember.findMany({
+      where: { userId: auth.userId },
+      select: { teamId: true },
+    });
+    const userTeamIds = userTeamMemberships.map(m => m.teamId);
+
+    // Get team channels the user has access to + DM channels they participate in
     const channels = await prisma.chatChannel.findMany({
       where: {
         organizationId: orgId,
         ...(teamId ? { teamId } : {}),
         OR: [
-          { type: 'team' },
+          // Team channels: either org-wide (no teamId) or in a team the user belongs to
+          { type: 'team', teamId: null },
+          { type: 'team', teamId: { in: userTeamIds } },
+          // DM channels: user is a participant
           { participants: { some: { userId: auth.userId } } },
         ],
       },
@@ -147,6 +159,17 @@ export async function POST(request: NextRequest) {
         createdBy: auth.userId,
         participants: { create: participantData },
       },
+    });
+
+    await createAuditLog({
+      userId: auth.userId,
+      organizationId: orgId,
+      eventType: 'chat_channel_created',
+      targetType: 'chat_channel',
+      targetId: channel.id,
+      ipAddress: getClientIP(request),
+      userAgent: request.headers.get('user-agent') || undefined,
+      metadata: { type, name: type === 'team' ? (name || 'General') : null },
     });
 
     const response = successResponse({ id: channel.id }, 201);

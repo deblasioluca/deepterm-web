@@ -157,6 +157,16 @@ async function handleChat(ws: AuthenticatedSocket, payload: Record<string, unkno
         ws.send(JSON.stringify({ type: 'error', message: 'Access denied to channel' }));
         return;
       }
+      // If channel is scoped to a team, verify team membership
+      if (channel.teamId) {
+        const teamMember = await prisma.orgTeamMember.findUnique({
+          where: { teamId_userId: { teamId: channel.teamId, userId: ws.userId } },
+        });
+        if (!teamMember) {
+          ws.send(JSON.stringify({ type: 'error', message: 'Access denied to channel' }));
+          return;
+        }
+      }
     }
   }
 
