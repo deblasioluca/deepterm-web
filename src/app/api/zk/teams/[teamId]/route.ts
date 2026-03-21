@@ -166,15 +166,15 @@ export async function DELETE(
     // Only the team owner can delete the team
     if (team.ownerId !== auth.userId) {
       // Also allow org owners to delete any team
-      const orgMembership = await prisma.organizationUser.findUnique({
+      const orgMembership = await prisma.organizationUser.findFirst({
         where: {
-          organizationId_userId: {
-            organizationId: team.organizationId,
-            userId: auth.userId,
-          },
+          organizationId: team.organizationId,
+          userId: auth.userId,
+          status: 'confirmed',
+          role: 'owner',
         },
       });
-      if (!orgMembership || orgMembership.role !== 'owner') {
+      if (!orgMembership) {
         return errorResponse('Only the team owner or organization owner can delete a team', 403);
       }
     }
