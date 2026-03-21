@@ -12,7 +12,9 @@ import { startAuthentication, browserSupportsWebAuthn } from '@simplewebauthn/br
 export default function LoginPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const callbackUrl = searchParams.get('callbackUrl');
+  const rawCallbackUrl = searchParams.get('callbackUrl');
+  // Only allow relative paths to prevent open redirect attacks
+  const callbackUrl = rawCallbackUrl?.startsWith('/') ? rawCallbackUrl : null;
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [twoFactorCode, setTwoFactorCode] = useState('');

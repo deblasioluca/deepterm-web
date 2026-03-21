@@ -12,7 +12,9 @@ import { signIn } from 'next-auth/react';
 export default function RegisterPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const callbackUrl = searchParams.get('callbackUrl');
+  const rawCallbackUrl = searchParams.get('callbackUrl');
+  // Only allow relative paths to prevent open redirect attacks
+  const callbackUrl = rawCallbackUrl?.startsWith('/') ? rawCallbackUrl : null;
   const [formData, setFormData] = useState({
     name: '',
     email: '',
