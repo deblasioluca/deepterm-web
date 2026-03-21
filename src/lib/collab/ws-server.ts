@@ -44,11 +44,11 @@ const chatRooms = new Map<string, Set<AuthenticatedSocket>>();
 
 function broadcast(room: Set<AuthenticatedSocket>, message: object, exclude?: AuthenticatedSocket) {
   const data = JSON.stringify(message);
-  for (const client of room) {
+  Array.from(room).forEach(client => {
     if (client !== exclude && client.readyState === WebSocket.OPEN) {
       client.send(data);
     }
-  }
+  });
 }
 
 function joinRoom(map: Map<string, Set<AuthenticatedSocket>>, key: string, ws: AuthenticatedSocket) {
@@ -65,10 +65,10 @@ function leaveRoom(map: Map<string, Set<AuthenticatedSocket>>, key: string, ws: 
 }
 
 function leaveAllRooms(ws: AuthenticatedSocket) {
-  for (const [key, room] of orgRooms) {
+  Array.from(orgRooms.entries()).forEach(([key, room]) => {
     if (room.delete(ws) && room.size === 0) orgRooms.delete(key);
-  }
-  for (const [key, room] of terminalRooms) {
+  });
+  Array.from(terminalRooms.entries()).forEach(([key, room]) => {
     if (room.delete(ws)) {
       broadcast(room, {
         type: 'participant_left',
@@ -77,10 +77,10 @@ function leaveAllRooms(ws: AuthenticatedSocket) {
       });
       if (room.size === 0) terminalRooms.delete(key);
     }
-  }
-  for (const [key, room] of chatRooms) {
+  });
+  Array.from(chatRooms.entries()).forEach(([key, room]) => {
     if (room.delete(ws) && room.size === 0) chatRooms.delete(key);
-  }
+  });
 }
 
 // ── Message Handlers ─────────────────────────────────────────────────────────
@@ -250,7 +250,7 @@ function handleAudioSignal(ws: AuthenticatedSocket, payload: Record<string, unkn
   const room = orgId && typeof orgId === 'string' ? orgRooms.get(orgId) : null;
   if (!room) return;
 
-  for (const client of room) {
+  Array.from(room).forEach(client => {
     if (client.userId === targetUserId && client.readyState === WebSocket.OPEN) {
       client.send(JSON.stringify({
         type: 'audio_signal',
@@ -262,9 +262,9 @@ function handleAudioSignal(ws: AuthenticatedSocket, payload: Record<string, unkn
           signalData,
         },
       }));
-      break;
+      return;
     }
-  }
+  });
 }
 
 // ── Server Setup ─────────────────────────────────────────────────────────────
@@ -274,15 +274,15 @@ export function attachWebSocketServer(server: Server): WebSocketServer {
 
   // Ping/pong keepalive every 30s
   const interval = setInterval(() => {
-    for (const client of wss.clients as Set<AuthenticatedSocket>) {
+    Array.from(wss.clients as Set<AuthenticatedSocket>).forEach(client => {
       if (!client.isAlive) {
         leaveAllRooms(client);
         client.terminate();
-        continue;
+        return;
       }
       client.isAlive = false;
       client.ping();
-    }
+    });
   }, 30_000);
 
   wss.on('close', () => clearInterval(interval));
