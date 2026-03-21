@@ -2,8 +2,8 @@
  * Documentation structure — single source of truth for the sidebar nav,
  * page routing, and content rendering.
  *
- * Updated: 2026-03-01
- * Categories: 14 | Articles: 47
+ * Updated: 2026-03-21
+ * Categories: 19 | Articles: 56
  */
 
 import {
@@ -28,6 +28,10 @@ import {
   ArrowLeftRight,
   Wifi,
   Bot,
+  Cpu,
+  Wrench,
+  LayoutGrid,
+  History,
   type LucideIcon,
 } from 'lucide-react';
 
@@ -65,7 +69,7 @@ export const DOC_CATEGORIES: DocCategory[] = [
 
 <p><strong>Hosts</strong> — each remote machine you connect to is represented as a Host. A host stores its address, port, and the credentials needed to authenticate. You can connect with SSH or Mosh using passwords, SSH keys, Touch ID, or FIDO2 hardware keys.</p>
 
-<p><strong>Modes</strong> — DeepTerm operates in four modes, switchable from the toolbar: <strong>SSH</strong> (terminal), <strong>SFTP</strong> (file manager), <strong>Snippets</strong> (reusable commands), and <strong>Port Forwarding</strong> (SSH tunnels). Each mode is a full-featured tool, not a bolted-on add-on.</p>
+<p><strong>Vault Panel</strong> — the left sidebar organises everything you need: <strong>Hosts</strong>, <strong>SFTP</strong>, <strong>Keychain</strong>, <strong>Port Forwarding</strong>, <strong>Snippets</strong>, <strong>Known Hosts</strong>, and <strong>History</strong>. Each section is a full-featured tool accessible from the sidebar navigation.</p>
 
 <p><strong>Keychain</strong> — a centralized place to manage your SSH keys, identities (username + auth), certificates, Touch ID biometric keys, and FIDO2 hardware keys. Keys and identities can be shared across multiple hosts.</p>
 
@@ -91,6 +95,14 @@ export const DOC_CATEGORIES: DocCategory[] = [
     <div style="background: #161b22; border: 1px solid #30363d; border-radius: 6px; padding: 12px;">
       <span style="color: #58a6ff;">↔️ Port Forwarding</span><br/>
       <span style="color: #8b949e; font-size: 11px;">Local, Remote, SOCKS</span>
+    </div>
+    <div style="background: #161b22; border: 1px solid #30363d; border-radius: 6px; padding: 12px;">
+      <span style="color: #58a6ff;">🤖 AI Chat</span><br/>
+      <span style="color: #8b949e; font-size: 11px;">MCP tools &amp; A2A agents</span>
+    </div>
+    <div style="background: #161b22; border: 1px solid #30363d; border-radius: 6px; padding: 12px;">
+      <span style="color: #58a6ff;">🔧 Workspace</span><br/>
+      <span style="color: #8b949e; font-size: 11px;">Multi-terminal splits</span>
     </div>
   </div>
 </div>
@@ -132,7 +144,7 @@ export const DOC_CATEGORIES: DocCategory[] = [
 <p>Launch DeepTerm and sign in with your DeepTerm account. If you don't have one yet, <a href="/register">create a free account</a>.</p>
 
 <h3>2. Add a Host</h3>
-<p>Click the <strong>+</strong> button in the sidebar and choose <strong>New Host</strong>. Enter the hostname or IP address, port (default 22), and a display name.</p>
+<p>In the vault panel, go to <strong>Hosts</strong> and click the <strong>+</strong> button. Enter the hostname or IP address, port (default 22), and a display name.</p>
 
 <h3>3. Set Credentials</h3>
 <p>Choose an authentication method:</p>
@@ -144,10 +156,10 @@ export const DOC_CATEGORIES: DocCategory[] = [
 </ul>
 
 <h3>4. Connect</h3>
-<p>Double-click the host (or press <kbd>⏎</kbd>) to open a terminal session. You're in!</p>
+<p>Double-click the host (or press <kbd>⏎</kbd>) to open a terminal session. A new connection tab appears in the top tab bar. You can also type a hostname in the quick-connect search field and press <kbd>⏎</kbd> to connect instantly.</p>
 
-<h3>5. Explore Modes</h3>
-<p>Use the toolbar to switch between SSH (terminal), SFTP (files), Snippets (commands), and Port Forwarding (tunnels).</p>
+<h3>5. Explore the Interface</h3>
+<p>Use the vault panel sidebar to navigate between Hosts, SFTP, Keychain, Port Forwarding, Snippets, Known Hosts, and History. Connection tabs appear at the top alongside the Vault tab. Toggle the AI chat panel using the chevron button between the terminal and chat areas.</p>
 `,
       },
     ],
@@ -164,7 +176,7 @@ export const DOC_CATEGORIES: DocCategory[] = [
         description: 'Set up and manage SSH connections.',
         content: `
 <h3>Creating a Connection</h3>
-<p>Open the sidebar and click <strong>+</strong> → <strong>New Host</strong>. Fill in:</p>
+<p>In the vault panel, go to <strong>Hosts</strong> and click <strong>+</strong> to add a new host. Fill in:</p>
 <ul>
   <li><strong>Label</strong> — a human-readable name.</li>
   <li><strong>Hostname / IP</strong> — the address of the remote machine.</li>
@@ -218,17 +230,19 @@ export const DOC_CATEGORIES: DocCategory[] = [
         title: 'Split Terminals',
         description: 'Run multiple sessions side by side.',
         content: `
-<p>DeepTerm supports horizontal and vertical terminal splits so you can monitor multiple servers at once.</p>
+<p>DeepTerm supports vertical terminal splits through the <strong>Workspace</strong> feature, allowing you to view multiple terminal sessions side by side.</p>
 
-<h3>Creating Splits</h3>
+<h3>Using Workspaces</h3>
+<p>When you have multiple connections open, you can add them to a <strong>Workspace</strong> tab that combines multiple terminals into a split view:</p>
 <ul>
-  <li><kbd>⌘D</kbd> — split vertically (side by side).</li>
-  <li><kbd>⌘⇧D</kbd> — split horizontally (top / bottom).</li>
-  <li><kbd>⌘W</kbd> — close the active pane.</li>
-  <li><kbd>⌘⌥←/→/↑/↓</kbd> — move focus between panes.</li>
+  <li>Right-click a connection tab and choose <strong>Add to Workspace</strong> to merge it into the workspace.</li>
+  <li>Terminals in the workspace are displayed vertically side by side.</li>
+  <li>To remove a terminal from the workspace, right-click it and choose <strong>Break Out</strong> — it returns to its own tab.</li>
+  <li>When a terminal is added to the workspace, its individual tab is hidden from the top bar.</li>
 </ul>
 
-<p>Each pane can connect to a different host — or run a local shell. Drag the divider to resize.</p>
+<h3>Workspace vs Individual Tabs</h3>
+<p>Each connection starts as its own tab. Add multiple connections to the workspace when you need to monitor several servers at once. Break them out again when you want a full-screen view of a single session.</p>
 `,
       },
       {
@@ -312,7 +326,7 @@ export const DOC_CATEGORIES: DocCategory[] = [
 <p>DeepTerm includes a full-featured SFTP file manager with a dual-pane interface for browsing local and remote filesystems side by side. Transfer files with drag and drop, manage permissions, and perform all common file operations.</p>
 
 <h3>Opening SFTP</h3>
-<p>Click the <strong>SFTP</strong> button in the toolbar or switch to SFTP mode from the mode selector. Select a host to connect to, and the remote pane will show the server's filesystem.</p>
+<p>In the vault panel sidebar, click <strong>SFTP</strong> (just below Hosts). Select a host to connect to, and the remote pane will show the server's filesystem.</p>
 
 <div style="background: #0d1117; border: 1px solid #30363d; border-radius: 8px; padding: 20px; margin: 16px 0; font-family: monospace; font-size: 12px;">
   <div style="color: #58a6ff; margin-bottom: 12px;">Dual-Pane Layout</div>
@@ -417,7 +431,7 @@ export const DOC_CATEGORIES: DocCategory[] = [
 <p>Snippets are reusable shell commands that you can execute on one or multiple SSH hosts simultaneously. Think of them as your personal command library — organised in folders, tagged for easy search, and ready to run with one click.</p>
 
 <h3>Opening Snippets</h3>
-<p>Click <strong>Snippets</strong> in the toolbar or switch to Snippets mode from the mode selector.</p>
+<p>In the vault panel sidebar, click <strong>Snippets</strong> to access your snippet library.</p>
 
 <div style="background: #0d1117; border: 1px solid #30363d; border-radius: 8px; padding: 20px; margin: 16px 0; font-family: monospace; font-size: 12px;">
   <div style="color: #58a6ff; margin-bottom: 12px;">Snippet Library</div>
@@ -527,7 +541,7 @@ export const DOC_CATEGORIES: DocCategory[] = [
 <p>Port forwarding (SSH tunneling) lets you securely access services through an encrypted SSH connection. DeepTerm supports all three types: Local, Remote, and Dynamic (SOCKS proxy).</p>
 
 <h3>Opening Port Forwarding</h3>
-<p>Click <strong>Port Forwarding</strong> in the toolbar or switch to Port Forward mode. You'll see a list of your configured forwards with their status (active / inactive).</p>
+<p>In the vault panel sidebar, click <strong>Port Forwarding</strong>. You'll see a list of your configured forwards with their status (active / inactive).</p>
 
 <div style="background: #0d1117; border: 1px solid #30363d; border-radius: 8px; padding: 20px; margin: 16px 0; font-family: monospace; font-size: 12px;">
   <div style="color: #58a6ff; margin-bottom: 12px;">Three Forwarding Types</div>
@@ -651,7 +665,7 @@ export const DOC_CATEGORIES: DocCategory[] = [
         description: 'Create, edit, duplicate, and delete hosts.',
         content: `
 <h3>Creating Hosts</h3>
-<p>Use the <strong>+</strong> button or <kbd>⌘N</kbd> to add a new host. Fill in connection details and select credentials from your keychain, then save.</p>
+<p>In the vault panel, go to <strong>Hosts</strong> and use the <strong>+</strong> button or <kbd>⌘N</kbd> to add a new host. Fill in connection details and select credentials from your keychain, then save.</p>
 
 <h3>Editing</h3>
 <p>Right-click a host and choose <strong>Edit</strong>, or select it and press <kbd>⌘E</kbd>. Changes take effect on the next connection.</p>
@@ -672,7 +686,7 @@ export const DOC_CATEGORIES: DocCategory[] = [
         description: 'Organise hosts into folders and nested groups.',
         content: `
 <h3>Creating Groups</h3>
-<p>Click <strong>+</strong> → <strong>New Group</strong> or right-click in the sidebar and choose <strong>New Group</strong>. Name it something descriptive (e.g., "Production", "AWS EU-West").</p>
+<p>In the Hosts section of the vault panel, click <strong>+</strong> → <strong>New Group</strong> or right-click in the host list and choose <strong>New Group</strong>. Name it something descriptive (e.g., "Production", "AWS EU-West").</p>
 
 <h3>Nesting</h3>
 <p>Drag a group into another group to create hierarchy. There's no limit on depth, but 2–3 levels is recommended for clarity.</p>
@@ -692,11 +706,11 @@ export const DOC_CATEGORIES: DocCategory[] = [
 <h3>Global Search</h3>
 <p>Press <kbd>⌘K</kbd> to open the command palette. Type any host name, IP, tag, or group name and DeepTerm will fuzzy-match across everything.</p>
 
-<h3>Sidebar Filter</h3>
-<p>Use the filter bar at the top of the sidebar to narrow by tag, group, or connection status (online / offline).</p>
+<h3>Quick Connect</h3>
+<p>The search field at the top of the vault panel doubles as a quick connect box. Type a hostname or IP address and press <kbd>⏎</kbd> to connect instantly without creating a saved host profile.</p>
 
-<h3>Recent Connections</h3>
-<p>The <strong>Recent</strong> section at the top of the sidebar shows your last 10 connections for quick access.</p>
+<h3>Connection History</h3>
+<p>Click <strong>History</strong> in the vault sidebar to see your recent connections. Double-click any entry to reconnect.</p>
 `,
       },
     ],
@@ -1230,9 +1244,6 @@ Subsystem sftp /usr/lib/openssh/sftp-server</code></pre>
 <table>
   <thead><tr><th>Shortcut</th><th>Action</th></tr></thead>
   <tbody>
-    <tr><td><kbd>⌘D</kbd></td><td>Split vertically</td></tr>
-    <tr><td><kbd>⌘⇧D</kbd></td><td>Split horizontally</td></tr>
-    <tr><td><kbd>⌘⌥←/→/↑/↓</kbd></td><td>Move focus between panes</td></tr>
     <tr><td><kbd>⌘R</kbd></td><td>Reconnect</td></tr>
     <tr><td><kbd>⌘F</kbd></td><td>Find in terminal output</td></tr>
     <tr><td><kbd>⌘C</kbd></td><td>Copy (when text selected) / Send interrupt</td></tr>
@@ -1262,6 +1273,452 @@ Subsystem sftp /usr/lib/openssh/sftp-server</code></pre>
     <tr><td><kbd>⏎</kbd></td><td>Open / enter directory</td></tr>
   </tbody>
 </table>
+`,
+      },
+    ],
+  },
+
+  // ─── AI Chat ────────────────────────────────────────────
+  {
+    label: 'AI Chat',
+    icon: Bot,
+    articles: [
+      {
+        slug: 'ai-chat-overview',
+        title: 'AI Chat Overview',
+        description: 'Use AI assistants alongside your terminal sessions.',
+        content: `
+<p>DeepTerm includes a built-in AI chat panel that runs alongside your terminal. Ask questions, get command suggestions, debug errors, and automate tasks — all without leaving the app.</p>
+
+<h3>Opening the AI Chat</h3>
+<p>Click the chevron button (<strong>‹</strong>) between the terminal and the right edge to toggle the AI chat panel. The toggle is positioned at the top of the divider for easy access.</p>
+
+<h3>How It Works</h3>
+<p>The AI chat connects to your configured LLM provider (OpenAI, Anthropic, Ollama, Devin, or others) and has access to your terminal context. It can:</p>
+<ul>
+  <li>Suggest commands based on what you're trying to do.</li>
+  <li>Explain error messages and propose fixes.</li>
+  <li>Generate scripts and one-liners.</li>
+  <li>Call MCP tools and delegate tasks to A2A agents.</li>
+  <li>Provide context-aware autocomplete suggestions.</li>
+</ul>
+
+<h3>Terminal Context</h3>
+<p>The AI can see your current terminal session context — recent commands, working directory, and environment. This means it gives relevant suggestions, not generic ones.</p>
+
+<div style="background: #0d1117; border: 1px solid #30363d; border-radius: 8px; padding: 20px; margin: 16px 0; font-family: monospace; font-size: 12px;">
+  <div style="color: #58a6ff; margin-bottom: 12px;">AI Chat Panel</div>
+  <div style="display: grid; grid-template-columns: 1fr 300px; gap: 2px; background: #30363d; border-radius: 6px; overflow: hidden;">
+    <div style="background: #0d1117; padding: 16px;">
+      <div style="color: #3fb950; font-weight: 600; margin-bottom: 8px;">Terminal</div>
+      <div style="color: #c9d1d9; font-size: 11px;">
+        <div>$ kubectl get pods</div>
+        <div style="color: #f85149;">Error: connection refused</div>
+      </div>
+    </div>
+    <div style="background: #0d1117; padding: 16px;">
+      <div style="color: #bc8cff; font-weight: 600; margin-bottom: 8px;">AI Chat</div>
+      <div style="color: #8b949e; font-size: 11px;">
+        <div>The connection error suggests your kubeconfig is pointing to an unreachable cluster. Try:</div>
+        <div style="color: #c9d1d9; margin-top: 4px; background: #161b22; padding: 4px 8px; border-radius: 4px;">kubectl config current-context</div>
+      </div>
+    </div>
+  </div>
+</div>
+`,
+      },
+      {
+        slug: 'ai-providers',
+        title: 'LLM Providers',
+        description: 'Configure AI providers: OpenAI, Anthropic, Ollama, Devin, and more.',
+        content: `
+<p>DeepTerm supports multiple LLM providers. Configure them in <strong>Settings → AI Providers</strong>.</p>
+
+<h3>Supported Providers</h3>
+<ul>
+  <li><strong>OpenAI</strong> — GPT-4o, GPT-4, GPT-3.5 Turbo. Requires an API key from <a href="https://platform.openai.com">platform.openai.com</a>.</li>
+  <li><strong>Anthropic</strong> — Claude 4 Sonnet, Claude 4 Opus. Requires an API key from <a href="https://console.anthropic.com">console.anthropic.com</a>.</li>
+  <li><strong>Ollama</strong> — Run models locally (Llama, Mistral, CodeLlama, etc.). Install <a href="https://ollama.com">Ollama</a> and it connects automatically at <code>http://localhost:11434</code>.</li>
+  <li><strong>Devin</strong> — Cognition AI's software engineering agent. Requires a <code>cog_...</code> API key.</li>
+  <li><strong>Custom</strong> — any OpenAI-compatible API endpoint (e.g., Azure OpenAI, Together AI, Groq).</li>
+</ul>
+
+<h3>Configuration</h3>
+<ol>
+  <li>Open <strong>Settings → AI Providers</strong>.</li>
+  <li>Select a provider from the dropdown.</li>
+  <li>Enter your API key.</li>
+  <li>Choose a model (or use the default).</li>
+  <li>Optionally set a custom base URL for self-hosted endpoints.</li>
+</ol>
+
+<h3>Vault Sync</h3>
+<p>Your LLM provider configurations (including API keys) are encrypted and synced through your vault. Set up on one Mac, and it's available on all your devices.</p>
+`,
+      },
+      {
+        slug: 'ai-features',
+        title: 'AI Features',
+        description: 'RAG search, prompt templates, guardrails, diagnostics, and more.',
+        content: `
+<p>Beyond basic chat, DeepTerm includes several advanced AI features:</p>
+
+<h3>RAG over Session History</h3>
+<p>DeepTerm indexes your past terminal sessions so the AI can answer questions like "how did I fix the disk space issue on web-01 last week?" or "what command did I use to restart the Docker service?" Past sessions are searched using text matching and results are injected into the AI context.</p>
+
+<h3>Prompt Templates / Runbooks</h3>
+<p>Create reusable AI prompts that combine terminal commands with AI reasoning. Built-in templates include:</p>
+<ul>
+  <li><strong>Check Disk Health</strong> — runs diagnostics and interprets results.</li>
+  <li><strong>Deploy Application</strong> — guided deployment with safety checks.</li>
+  <li><strong>Security Audit</strong> — scans for common vulnerabilities.</li>
+  <li><strong>Database Backup</strong> — automated backup with verification.</li>
+  <li><strong>Network Diagnostics</strong> — systematic connectivity troubleshooting.</li>
+  <li><strong>Log Analysis</strong> — parses and summarises log files.</li>
+</ul>
+<p>Create your own templates with variables that get filled in at runtime. Templates sync across devices via your vault.</p>
+
+<h3>Context-Aware Autocomplete</h3>
+<p>The AI enhances command autocomplete by considering your current directory, recent commands, available MCP tools, and common patterns for the tools you're using.</p>
+
+<h3>Guardrails / Policy Engine</h3>
+<p>Define safety policies that the AI enforces before executing commands:</p>
+<ul>
+  <li><strong>Block destructive operations</strong> — prevents <code>rm -rf /</code> and similar commands.</li>
+  <li><strong>Require approval</strong> — commands that modify services or databases require confirmation.</li>
+  <li><strong>Production protection</strong> — extra safeguards when connected to production hosts.</li>
+</ul>
+<p>Default policies are included and you can create custom rules.</p>
+
+<h3>Connection Diagnostics</h3>
+<p>When an SSH connection fails, the AI automatically runs diagnostic steps: DNS resolution, port reachability, SSH service check, authentication verification, and network latency measurement. Results are presented as a clear diagnosis report.</p>
+
+<h3>Multi-Host Orchestration</h3>
+<p>The AI can coordinate commands across multiple connected hosts simultaneously — useful for rolling deployments, cluster-wide health checks, or distributed log collection.</p>
+`,
+      },
+    ],
+  },
+
+  // ─── MCP Integration ──────────────────────────────────
+  {
+    label: 'MCP Integration',
+    icon: Wrench,
+    articles: [
+      {
+        slug: 'mcp-overview',
+        title: 'MCP Overview',
+        description: 'Extend AI capabilities with Model Context Protocol servers.',
+        content: `
+<p>The <strong>Model Context Protocol (MCP)</strong> is an open standard that lets AI models call external tools. DeepTerm includes a built-in MCP client that connects to MCP servers, making their tools available to the AI chat.</p>
+
+<h3>What MCP Enables</h3>
+<p>With MCP, the AI can go beyond text generation and actually <em>do things</em>:</p>
+<ul>
+  <li>Read and write files on remote servers.</li>
+  <li>Query databases directly.</li>
+  <li>Interact with GitHub, Docker, Kubernetes, AWS, and more.</li>
+  <li>Execute custom tools you define yourself.</li>
+</ul>
+
+<h3>How It Works</h3>
+<ol>
+  <li>You configure one or more MCP servers in <strong>Settings → MCP Servers</strong>.</li>
+  <li>DeepTerm connects to each server and discovers its available tools.</li>
+  <li>When you chat with the AI, it can call these tools to answer your questions or perform actions.</li>
+  <li>Tool results are displayed inline in the chat.</li>
+</ol>
+
+<div style="background: #0d1117; border: 1px solid #30363d; border-radius: 8px; padding: 20px; margin: 16px 0; font-family: monospace; font-size: 12px;">
+  <div style="color: #58a6ff; margin-bottom: 12px;">MCP Tool Flow</div>
+  <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap; color: #8b949e;">
+    <span style="color: #c9d1d9; background: #161b22; padding: 4px 8px; border-radius: 4px;">You ask a question</span>
+    <span>→</span>
+    <span style="color: #bc8cff; background: #1e0f30; padding: 4px 8px; border-radius: 4px;">AI decides to call a tool</span>
+    <span>→</span>
+    <span style="color: #f0883e; background: #2d1b06; padding: 4px 8px; border-radius: 4px;">MCP server executes</span>
+    <span>→</span>
+    <span style="color: #3fb950; background: #0d2818; padding: 4px 8px; border-radius: 4px;">Result shown in chat</span>
+  </div>
+</div>
+`,
+      },
+      {
+        slug: 'mcp-servers',
+        title: 'Configuring MCP Servers',
+        description: 'Add and manage MCP server connections.',
+        content: `
+<h3>Adding an MCP Server</h3>
+<ol>
+  <li>Open <strong>Settings → MCP Servers</strong>.</li>
+  <li>Click <strong>Add Server</strong>.</li>
+  <li>Enter a name and select the transport type.</li>
+  <li>Fill in the connection details (see below).</li>
+  <li>Click <strong>Save</strong> — DeepTerm connects and discovers available tools.</li>
+</ol>
+
+<h3>Transport Types</h3>
+<p>DeepTerm supports all three MCP transport protocols:</p>
+
+<table>
+  <thead><tr><th>Transport</th><th>Use Case</th><th>Configuration</th></tr></thead>
+  <tbody>
+    <tr>
+      <td><strong>stdio</strong></td>
+      <td>Local servers (runs as a subprocess)</td>
+      <td>Command path + arguments (e.g., <code>npx @modelcontextprotocol/server-filesystem /Users/you</code>)</td>
+    </tr>
+    <tr>
+      <td><strong>SSE</strong></td>
+      <td>Remote servers (Server-Sent Events)</td>
+      <td>URL endpoint (e.g., <code>http://localhost:3001/sse</code>)</td>
+    </tr>
+    <tr>
+      <td><strong>Streamable HTTP</strong></td>
+      <td>Remote servers (HTTP with streaming)</td>
+      <td>URL endpoint + optional headers</td>
+    </tr>
+  </tbody>
+</table>
+
+<h3>Vault Sync</h3>
+<p>MCP server configurations are encrypted and synced through your vault. Configure your servers once and they appear on all your devices.</p>
+`,
+      },
+      {
+        slug: 'mcp-marketplace',
+        title: 'Tool Marketplace',
+        description: 'Browse and install popular MCP servers with one click.',
+        content: `
+<p>DeepTerm includes a built-in catalog of popular MCP servers that you can install with one click. Think of it as an app store for AI tools.</p>
+
+<h3>Available Servers</h3>
+<table>
+  <thead><tr><th>Server</th><th>Category</th><th>What It Does</th></tr></thead>
+  <tbody>
+    <tr><td><strong>Filesystem</strong></td><td>Core</td><td>Read/write local files</td></tr>
+    <tr><td><strong>Git</strong></td><td>Developer</td><td>Git operations (status, diff, commit)</td></tr>
+    <tr><td><strong>GitHub</strong></td><td>Developer</td><td>Issues, PRs, repos</td></tr>
+    <tr><td><strong>Docker</strong></td><td>DevOps</td><td>Container management</td></tr>
+    <tr><td><strong>Kubernetes</strong></td><td>DevOps</td><td>Cluster operations</td></tr>
+    <tr><td><strong>PostgreSQL</strong></td><td>Database</td><td>Query PostgreSQL databases</td></tr>
+    <tr><td><strong>SQLite</strong></td><td>Database</td><td>Query SQLite databases</td></tr>
+    <tr><td><strong>Puppeteer</strong></td><td>Browser</td><td>Web scraping and automation</td></tr>
+    <tr><td><strong>Fetch</strong></td><td>Network</td><td>HTTP requests</td></tr>
+    <tr><td><strong>Memory</strong></td><td>Core</td><td>Persistent key-value storage</td></tr>
+    <tr><td><strong>Slack</strong></td><td>Communication</td><td>Send and read Slack messages</td></tr>
+    <tr><td><strong>AWS</strong></td><td>Cloud</td><td>AWS service management</td></tr>
+  </tbody>
+</table>
+
+<h3>Installing</h3>
+<p>Browse the marketplace, click <strong>Install</strong> on a server, and DeepTerm handles the rest — downloading, configuring the transport, and connecting. Some servers require additional configuration (API keys, database URLs) which you'll be prompted for.</p>
+`,
+      },
+    ],
+  },
+
+  // ─── A2A Protocol ─────────────────────────────────────
+  {
+    label: 'A2A Protocol',
+    icon: Cpu,
+    articles: [
+      {
+        slug: 'a2a-overview',
+        title: 'A2A Overview',
+        description: 'Agent-to-Agent protocol for AI agent collaboration.',
+        content: `
+<p>The <strong>Agent-to-Agent (A2A)</strong> protocol is an open standard for AI agents to communicate with each other. DeepTerm implements A2A alongside MCP, enabling your AI assistant to delegate specialised tasks to external agents.</p>
+
+<h3>MCP vs A2A</h3>
+<table>
+  <thead><tr><th>Feature</th><th>MCP</th><th>A2A</th></tr></thead>
+  <tbody>
+    <tr><td>Purpose</td><td>Tool calling (deterministic)</td><td>Agent delegation (intelligent)</td></tr>
+    <tr><td>Interaction</td><td>Request → Response</td><td>Multi-turn conversation</td></tr>
+    <tr><td>Discovery</td><td>Tool list</td><td>Agent Cards</td></tr>
+    <tr><td>Streaming</td><td>Per-tool</td><td>SSE task updates</td></tr>
+  </tbody>
+</table>
+
+<h3>Use Cases</h3>
+<ul>
+  <li><strong>DevOps orchestration</strong> — delegate deployment tasks to a specialised deployment agent.</li>
+  <li><strong>Security scanning</strong> — hand off vulnerability analysis to a security-focused agent.</li>
+  <li><strong>Monitoring</strong> — let a monitoring agent watch your infrastructure and report back.</li>
+  <li><strong>Code review</strong> — send code changes to a code review agent for analysis.</li>
+</ul>
+
+<h3>How It Works</h3>
+<ol>
+  <li>Configure A2A agents in <strong>Settings → A2A Agents</strong>.</li>
+  <li>DeepTerm discovers each agent's capabilities via its <strong>Agent Card</strong> (a JSON document at <code>/.well-known/agent-card.json</code>).</li>
+  <li>The AI chat can delegate tasks to agents based on their declared skills.</li>
+  <li>Results stream back via Server-Sent Events (SSE) and appear in the chat.</li>
+</ol>
+`,
+      },
+      {
+        slug: 'a2a-agents',
+        title: 'Configuring A2A Agents',
+        description: 'Add, manage, and connect to A2A-compliant agents.',
+        content: `
+<h3>Adding an Agent</h3>
+<ol>
+  <li>Open <strong>Settings → A2A Agents</strong>.</li>
+  <li>Click <strong>Add Agent</strong>.</li>
+  <li>Enter a name and the agent's base URL.</li>
+  <li>Optionally add an API key and custom HTTP headers.</li>
+  <li>Click <strong>Save</strong> — DeepTerm fetches the Agent Card and connects.</li>
+</ol>
+
+<h3>Agent Card Discovery</h3>
+<p>When you add an agent, DeepTerm fetches its Agent Card from <code>{base_url}/.well-known/agent-card.json</code>. The card declares:</p>
+<ul>
+  <li><strong>Name and description</strong> — what the agent does.</li>
+  <li><strong>Skills</strong> — specific capabilities with input/output descriptions.</li>
+  <li><strong>Supported capabilities</strong> — streaming, push notifications, state management.</li>
+  <li><strong>Authentication requirements</strong> — API keys, OAuth, etc.</li>
+</ul>
+
+<h3>Connection States</h3>
+<p>Each agent shows its connection status in the settings panel:</p>
+<ul>
+  <li><span style="color: #3fb950;">●</span> <strong>Connected</strong> — agent is reachable and ready.</li>
+  <li><span style="color: #f0883e;">●</span> <strong>Connecting</strong> — establishing connection.</li>
+  <li><span style="color: #f85149;">●</span> <strong>Error</strong> — connection failed (click to retry).</li>
+  <li><span style="color: #8b949e;">●</span> <strong>Disconnected</strong> — agent is disabled or not configured.</li>
+</ul>
+
+<h3>MCP + A2A Bridge</h3>
+<p>DeepTerm includes a bridge that lets MCP tools and A2A agents work together. An MCP tool can trigger an A2A agent task, and A2A agents can invoke MCP tools — enabling powerful cross-protocol workflows.</p>
+
+<h3>Vault Sync</h3>
+<p>A2A agent configurations (including API keys) are encrypted and synced through your vault, just like MCP servers and LLM providers.</p>
+`,
+      },
+    ],
+  },
+
+  // ─── Workspace & Layout ───────────────────────────────
+  {
+    label: 'Workspace & Layout',
+    icon: LayoutGrid,
+    articles: [
+      {
+        slug: 'layout-overview',
+        title: 'App Layout',
+        description: 'Understanding the DeepTerm interface layout.',
+        content: `
+<p>DeepTerm uses a clean, focused layout designed to keep you productive:</p>
+
+<h3>Top Tab Bar</h3>
+<p>The tab bar sits at the top of the window, next to the macOS traffic light buttons (close/minimize/fullscreen). It contains:</p>
+<ul>
+  <li><strong>Vault tab</strong> — shows the vault panel with sidebar navigation.</li>
+  <li><strong>Connection tabs</strong> — one tab per active SSH connection.</li>
+  <li><strong>Workspace tab</strong> — appears when you combine multiple terminals into a split view.</li>
+  <li><strong>+ button</strong> — quick actions for new connections.</li>
+</ul>
+
+<h3>Vault Panel</h3>
+<p>When the Vault tab is selected, the left sidebar shows navigation for:</p>
+<ul>
+  <li><strong>Hosts</strong> — your saved server profiles.</li>
+  <li><strong>SFTP</strong> — file manager access.</li>
+  <li><strong>Keychain</strong> — SSH keys, identities, certificates.</li>
+  <li><strong>Port Forwarding</strong> — SSH tunnel configurations.</li>
+  <li><strong>Snippets</strong> — reusable command library.</li>
+  <li><strong>Known Hosts</strong> — verified server fingerprints.</li>
+  <li><strong>History</strong> — recent connection log.</li>
+</ul>
+
+<h3>Connection View</h3>
+<p>When you click a connection tab, the vault panel disappears and you get a full-screen terminal. The AI chat panel can be toggled using the chevron button on the right edge.</p>
+
+<h3>Quick Connect</h3>
+<p>The search field at the top of the vault panel doubles as a quick connect box. Type a hostname or IP and press <kbd>⏎</kbd> to connect instantly without creating a saved host profile.</p>
+`,
+      },
+      {
+        slug: 'connection-history',
+        title: 'Connection History',
+        description: 'View and reconnect from your connection history.',
+        content: `
+<p>The <strong>History</strong> section in the vault panel sidebar keeps a log of all your recent connections.</p>
+
+<h3>Viewing History</h3>
+<p>Click <strong>History</strong> in the vault sidebar to see your recent connections, including:</p>
+<ul>
+  <li>Host name and address.</li>
+  <li>Connection time and duration.</li>
+  <li>Connection status (success/failure).</li>
+</ul>
+
+<h3>Reconnecting</h3>
+<p>Double-click any history entry to open a new connection to that host. This is the fastest way to reconnect to a recently used server.</p>
+
+<h3>Deleting History</h3>
+<p>Right-click a history entry and choose <strong>Delete</strong> to remove it. You can also clear all history from the context menu.</p>
+`,
+      },
+      {
+        slug: 'known-hosts',
+        title: 'Known Hosts',
+        description: 'Manage verified server fingerprints.',
+        content: `
+<p>The <strong>Known Hosts</strong> section in the vault panel tracks SSH server fingerprints you've previously verified. This protects against man-in-the-middle attacks.</p>
+
+<h3>First Connection</h3>
+<p>When you connect to a server for the first time, DeepTerm shows the server's fingerprint and asks you to verify it. Once accepted, the fingerprint is saved to your known hosts list.</p>
+
+<h3>Fingerprint Changes</h3>
+<p>If a server's fingerprint changes (e.g., after a reinstall), DeepTerm warns you. You can accept the new fingerprint or abort the connection.</p>
+
+<h3>Managing Known Hosts</h3>
+<p>View and delete known host entries from the vault sidebar. Useful when servers are rebuilt or decommissioned.</p>
+`,
+      },
+    ],
+  },
+
+  // ─── Vault Sync for AI ────────────────────────────────
+  {
+    label: 'Vault Sync',
+    icon: History,
+    articles: [
+      {
+        slug: 'vault-sync-ai',
+        title: 'Syncing AI Configurations',
+        description: 'Sync LLM providers, MCP servers, A2A agents, and more across devices.',
+        content: `
+<p>DeepTerm syncs all your AI-related configurations through the encrypted vault, so you set things up once and they're available on every device.</p>
+
+<h3>What Gets Synced</h3>
+<table>
+  <thead><tr><th>Configuration</th><th>What's Included</th></tr></thead>
+  <tbody>
+    <tr><td><strong>LLM Providers</strong></td><td>API keys, selected models, custom endpoints</td></tr>
+    <tr><td><strong>MCP Servers</strong></td><td>Server URLs, transport type, commands, auth headers</td></tr>
+    <tr><td><strong>A2A Agents</strong></td><td>Agent URLs, API keys, custom HTTP headers</td></tr>
+    <tr><td><strong>Snippets</strong></td><td>Command snippets, folders, tags, usage statistics</td></tr>
+    <tr><td><strong>Port Forwarding</strong></td><td>Tunnel configurations and rules</td></tr>
+    <tr><td><strong>Prompt Templates</strong></td><td>Custom AI runbooks and prompt templates</td></tr>
+  </tbody>
+</table>
+
+<h3>How It Works</h3>
+<p>All configurations are encrypted with AES-256-GCM using your vault's master key before being sent to the server. The server stores only encrypted blobs — it never sees your API keys, passwords, or configuration details.</p>
+
+<h3>Sync Triggers</h3>
+<ul>
+  <li>Automatic sync on app launch.</li>
+  <li>Automatic sync when you save changes.</li>
+  <li>Manual sync from <strong>Settings → Sync → Force Sync</strong>.</li>
+</ul>
+
+<h3>Conflict Resolution</h3>
+<p>If the same configuration is edited on two devices, the most recent change wins (last-write-wins based on timestamp).</p>
 `,
       },
     ],
