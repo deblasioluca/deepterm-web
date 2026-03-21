@@ -2,8 +2,8 @@ module.exports = {
   apps: [
     {
       name: 'deepterm',
-      script: '.next/standalone/server.js',
-      // args removed: standalone/server.js does not accept next CLI args
+      script: 'server.ts',
+      interpreter: './node_modules/.bin/tsx',
       cwd: '/home/macan/deepterm',
       instances: 1, // Use 1 for Raspberry Pi to conserve resources
       exec_mode: 'fork', // Use 'cluster' on more powerful machines
@@ -74,6 +74,10 @@ module.exports = {
         '--max-old-space-size=512', // Limit heap size for Raspberry Pi
         '--dns-result-order=ipv4first', // Prefer IPv4 to avoid IPv6 connectivity issues
       ],
+
+      // Note: server.ts is a custom Next.js server that attaches the
+      // WebSocket collaboration endpoint on the same HTTP port.
+      // It replaces the default .next/standalone/server.js.
     },
     {
       // Daily cleanup job: deletes expired refresh tokens + old rate limit entries
@@ -101,7 +105,7 @@ module.exports = {
       repo: 'git@github.com:username/deepterm.git',
       path: '/home/macan/deepterm-deploy',
       'pre-deploy-local': '',
-      'post-deploy': 'npm install && npm run build && pm2 reload ecosystem.config.js --env production',
+      'post-deploy': 'npm install --legacy-peer-deps && npm run build && pm2 reload ecosystem.config.js --env production',
       'pre-setup': '',
       env: {
         NODE_ENV: 'production',
@@ -114,7 +118,7 @@ module.exports = {
       ref: 'origin/develop',
       repo: 'git@github.com:username/deepterm.git',
       path: '/home/macan/deepterm-staging',
-      'post-deploy': 'npm install && npm run build && pm2 reload ecosystem.config.js --env development',
+      'post-deploy': 'npm install --legacy-peer-deps && npm run build && pm2 reload ecosystem.config.js --env development',
       env: {
         NODE_ENV: 'development',
       },

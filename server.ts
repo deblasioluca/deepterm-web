@@ -38,5 +38,7 @@ app.prepare().then(() => {
   server.listen(port, hostname, () => {
     console.log(`> Ready on http://${hostname}:${port}`);
     console.log(`> WebSocket collab endpoint: ws://${hostname}:${port}/ws/collab`);
+    // Signal PM2 that the server is ready (works with wait_ready: true)
+    if (process.send) process.send('ready');
   });
 });
