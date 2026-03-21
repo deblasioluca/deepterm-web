@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { motion, AnimatePresence } from 'framer-motion';
 import { signIn } from 'next-auth/react';
@@ -11,6 +11,8 @@ import { startAuthentication, browserSupportsWebAuthn } from '@simplewebauthn/br
 
 export default function LoginPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const callbackUrl = searchParams.get('callbackUrl');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [twoFactorCode, setTwoFactorCode] = useState('');
@@ -44,7 +46,7 @@ export default function LoginPage() {
         if (result?.error) {
           setError('Invalid verification code');
         } else {
-          router.push('/dashboard');
+          router.push(callbackUrl || '/dashboard');
           router.refresh();
         }
         return;
@@ -82,7 +84,7 @@ export default function LoginPage() {
       if (result?.error) {
         setError('Invalid email or password');
       } else {
-        router.push('/dashboard');
+        router.push(callbackUrl || '/dashboard');
         router.refresh();
       }
     } catch (err) {
@@ -136,8 +138,8 @@ export default function LoginPage() {
         throw new Error(data.error || 'Passkey verification failed');
       }
 
-      // Success! Redirect to dashboard
-      router.push('/dashboard');
+      // Success! Redirect to callback or dashboard
+      router.push(callbackUrl || '/dashboard');
       router.refresh();
     } catch (err: unknown) {
       if (err instanceof Error) {
@@ -287,7 +289,7 @@ export default function LoginPage() {
                 <p className="mt-6 text-center text-text-secondary">
                   Don&apos;t have an account?{' '}
                   <Link
-                    href="/register"
+                    href={callbackUrl ? `/register?callbackUrl=${encodeURIComponent(callbackUrl)}` : '/register'}
                     className="text-accent-primary hover:text-accent-primary-hover transition-colors font-medium"
                   >
                     Register

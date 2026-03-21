@@ -173,7 +173,7 @@ export default function InviteAcceptPage() {
               ) : (
                 <div className="space-y-3">
                   <p className="text-text-secondary text-sm text-center">
-                    Sign in to accept this invitation
+                    Sign in or create an account to accept this invitation
                   </p>
                   <button
                     onClick={() => signIn(undefined, { callbackUrl: `/invite/${token}` })}
@@ -181,6 +181,12 @@ export default function InviteAcceptPage() {
                   >
                     Sign In
                   </button>
+                  <a
+                    href={`/register?callbackUrl=${encodeURIComponent(`/invite/${token}`)}`}
+                    className="block w-full px-6 py-3 rounded-lg border border-[#7b61ff]/50 text-[#7b61ff] font-semibold text-center hover:bg-[#7b61ff]/10 transition-colors"
+                  >
+                    Create Account
+                  </a>
                 </div>
               )}
             </div>

@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { motion } from 'framer-motion';
 import { Terminal, User, Mail, Lock, AlertCircle, Check, Fingerprint } from 'lucide-react';
@@ -11,6 +11,8 @@ import { signIn } from 'next-auth/react';
 
 export default function RegisterPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const callbackUrl = searchParams.get('callbackUrl');
   const [formData, setFormData] = useState({
     name: '',
     email: '',
@@ -74,7 +76,14 @@ export default function RegisterPage() {
 
       if (signInResult?.error) {
         // Registration succeeded but sign-in failed, redirect to login
-        router.push('/login?registered=true');
+        router.push(callbackUrl ? `/login?registered=true&callbackUrl=${encodeURIComponent(callbackUrl)}` : '/login?registered=true');
+        return;
+      }
+
+      // If there's a callback URL (e.g. from an invite), redirect there directly
+      if (callbackUrl) {
+        router.push(callbackUrl);
+        router.refresh();
         return;
       }
 
@@ -141,7 +150,7 @@ export default function RegisterPage() {
   };
 
   const handleSkipPasskey = () => {
-    router.push('/dashboard');
+    router.push(callbackUrl || '/dashboard');
     router.refresh();
   };
 
