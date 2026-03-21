@@ -1042,16 +1042,24 @@ export async function runAgentLoop(loopId: string, feedbackContext?: string): Pr
       });
       const description = lastIter?.thinking?.slice(0, 1000) || 'Implementation by agent loop';
 
+      // Wrap commitAndOpenPRs in a 60s outer timeout (individual ghFetch=30s but
+      // chained calls can total minutes causing the loop to hang silently).
+      const PR_TIMEOUT_MS = 60_000;
       try {
-        const prResult = await commitAndOpenPRs(
-          loopId,
-          loop.branchName || `agent/${loopId.slice(0, 8)}`,
-          accumulatedFiles,
-          prTitle,
-          description,
-          targetRepo,
-          baseBranch,
-        );
+        const prResult = await Promise.race([
+          commitAndOpenPRs(
+            loopId,
+            loop.branchName || `agent/${loopId.slice(0, 8)}`,
+            accumulatedFiles,
+            prTitle,
+            description,
+            targetRepo,
+            baseBranch,
+          ),
+          new Promise<never>((_, reject) =>
+            setTimeout(() => reject(new Error('commitAndOpenPRs timed out after 60s')), PR_TIMEOUT_MS)
+          ),
+        ]);
 
         // Update loop with PR info
         if (prResult.prUrl) {
