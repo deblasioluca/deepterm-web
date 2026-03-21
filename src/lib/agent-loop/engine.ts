@@ -158,13 +158,10 @@ async function gracefulShutdown(signal: string) {
   _shuttingDown = true;
   console.warn(`[AgentLoop] ${signal} received -- marking running loops as failed`);
   try {
-    const { PrismaClient } = await import('@prisma/client');
-    const _p = new PrismaClient();
-    await _p.agentLoop.updateMany({
+    await prisma.agentLoop.updateMany({
       where: { status: { in: ['running', 'queued'] } },
       data: { status: 'failed', errorLog: `Process received ${signal}` },
     });
-    await _p.$disconnect();
   } catch (e) { console.error('[AgentLoop] Shutdown cleanup error:', e); }
   process.exit(0);
 }
