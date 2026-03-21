@@ -3,7 +3,7 @@
  * page routing, and content rendering.
  *
  * Updated: 2026-03-21
- * Categories: 17 | Articles: 62
+ * Categories: 19 | Articles: 56
  */
 
 import {
