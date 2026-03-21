@@ -1093,11 +1093,13 @@ export async function runAgentLoop(loopId: string, feedbackContext?: string): Pr
 
       } catch (err) {
         console.error(`[AgentLoop] ${loopId} failed to create PR:`, err);
-        // Don't fail the loop — the code was generated, just PR creation failed
-        await prisma.agentLoop.update({
+        // Mark finalStatus as failed so finalize-loop sets correct DB status
+        finalStatus = 'failed';
+        // Fire-and-forget errorLog update so catch block never hangs
+        prisma.agentLoop.update({
           where: { id: loopId },
           data: { errorLog: (loop.errorLog || '') + `\nPR creation failed: ${err instanceof Error ? err.message : 'Unknown'}` },
-        });
+        }).catch(e => console.warn(`[AgentLoop] ${loopId} errorLog update failed:`, e));
       }
       } // end else (buildGatePassed)
     }
