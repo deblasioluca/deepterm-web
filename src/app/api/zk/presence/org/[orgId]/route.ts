@@ -70,7 +70,7 @@ export async function GET(
         role: m.role,
         status,
         lastHeartbeat: presence?.lastHeartbeat?.toISOString() || null,
-        deviceInfo: presence?.deviceInfo ? JSON.parse(presence.deviceInfo) : null,
+        deviceInfo: presence?.deviceInfo ? (() => { try { return JSON.parse(presence.deviceInfo); } catch { return null; } })() : null,
       };
     });
 

@@ -162,22 +162,44 @@ async function handleChat(ws: AuthenticatedSocket, payload: Record<string, unkno
 
   joinRoom(chatRooms, channelId, ws);
 
-  const room = chatRooms.get(channelId);
-  if (room) {
-    broadcast(room, {
-      type: 'chat_message',
-      channel: 'chat',
-      payload: {
-        messageId,
-        channelId,
-        senderId: ws.userId,
-        senderEmail: ws.email,
-        content,
-        type: msgType || 'text',
-        fileId: fileId || null,
-        timestamp: new Date().toISOString(),
-      },
-    }, ws);
+  // Persist message to DB so it appears in REST API history
+  if (content && typeof content === 'string') {
+    try {
+      const dbMessage = await prisma.chatMessage.create({
+        data: {
+          channelId,
+          senderId: ws.userId,
+          content: content as string,
+          type: (msgType as string) || 'text',
+          fileId: (fileId as string) || undefined,
+        },
+      });
+      await prisma.chatChannel.update({
+        where: { id: channelId },
+        data: { updatedAt: new Date() },
+      });
+
+      const room = chatRooms.get(channelId);
+      if (room) {
+        broadcast(room, {
+          type: 'chat_message',
+          channel: 'chat',
+          payload: {
+            messageId: dbMessage.id,
+            channelId,
+            senderId: ws.userId,
+            senderEmail: ws.email,
+            content,
+            type: msgType || 'text',
+            fileId: fileId || null,
+            timestamp: dbMessage.createdAt.toISOString(),
+          },
+        }, ws);
+      }
+    } catch (err) {
+      console.error('Failed to persist chat message:', err);
+      ws.send(JSON.stringify({ type: 'error', message: 'Failed to save message' }));
+    }
   }
 }
 
@@ -234,12 +256,24 @@ async function handleTerminal(ws: AuthenticatedSocket, payload: Record<string, u
       break;
     }
     case 'output': {
-      // Output is sent by session owner — verify ownership before relaying
-      const outSession = await prisma.sharedTerminalSession.findUnique({
-        where: { id: sessionId },
-        select: { ownerId: true },
-      });
-      if (!outSession || outSession.ownerId !== ws.userId) {
+      // Output is sent by session owner — verify ownership before relaying (cached like input)
+      const ownerCacheKey = `owner:${sessionId}`;
+      const ownerCached = ws.terminalPermissions?.get(ownerCacheKey);
+      const ownerNow = Date.now();
+      const OWNER_CACHE_TTL = 30_000;
+      let isOwner = false;
+      if (ownerCached && (ownerNow - ownerCached.cachedAt) < OWNER_CACHE_TTL) {
+        isOwner = ownerCached.canWrite;
+      } else {
+        const outSession = await prisma.sharedTerminalSession.findUnique({
+          where: { id: sessionId },
+          select: { ownerId: true },
+        });
+        isOwner = !!outSession && outSession.ownerId === ws.userId;
+        if (!ws.terminalPermissions) ws.terminalPermissions = new Map();
+        ws.terminalPermissions.set(ownerCacheKey, { canWrite: isOwner, cachedAt: ownerNow });
+      }
+      if (!isOwner) {
         ws.send(JSON.stringify({ type: 'error', message: 'Only the session owner can send output' }));
         return;
       }
@@ -432,10 +466,16 @@ export function attachWebSocketServer(server: Server): WebSocketServer {
             handlePresence(authWs, msg.payload);
             break;
           case 'chat':
-            handleChat(authWs, msg.payload);
+            handleChat(authWs, msg.payload).catch(err => {
+              console.error('Chat handler error:', err);
+              authWs.send(JSON.stringify({ type: 'error', message: 'Internal chat error' }));
+            });
             break;
           case 'terminal':
-            handleTerminal(authWs, msg.payload);
+            handleTerminal(authWs, msg.payload).catch(err => {
+              console.error('Terminal handler error:', err);
+              authWs.send(JSON.stringify({ type: 'error', message: 'Internal terminal error' }));
+            });
             break;
           case 'audio-signal':
             handleAudioSignal(authWs, msg.payload);
