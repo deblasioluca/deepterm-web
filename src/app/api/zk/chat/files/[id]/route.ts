@@ -48,7 +48,7 @@ export async function GET(
       status: 200,
       headers: {
         'Content-Type': chatFile.mimeType,
-        'Content-Disposition': `attachment; filename="${chatFile.originalFilename}"`,
+        'Content-Disposition': `attachment; filename="${chatFile.originalFilename.replace(/[\\"\r\n]/g, '_')}"`,
         'Content-Length': String(chatFile.sizeBytes),
       },
     });

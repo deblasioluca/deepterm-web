@@ -19,8 +19,8 @@ interface AuthenticatedSocket extends WebSocket {
   email: string;
   orgIds: string[];
   isAlive: boolean;
-  /** Cached write permissions per terminal session: sessionId -> canWrite */
-  terminalPermissions: Map<string, boolean>;
+  /** Cached write permissions per terminal session: sessionId -> { canWrite, cachedAt } */
+  terminalPermissions: Map<string, { canWrite: boolean; cachedAt: number }>;
 }
 
 interface WSMessage {
@@ -229,7 +229,15 @@ async function handleTerminal(ws: AuthenticatedSocket, payload: Record<string, u
       break;
     }
     case 'output': {
-      // Output is sent by session owner — relay to all participants
+      // Output is sent by session owner — verify ownership before relaying
+      const outSession = await prisma.sharedTerminalSession.findUnique({
+        where: { id: sessionId },
+        select: { ownerId: true },
+      });
+      if (!outSession || outSession.ownerId !== ws.userId) {
+        ws.send(JSON.stringify({ type: 'error', message: 'Only the session owner can send output' }));
+        return;
+      }
       const outRoom = terminalRooms.get(sessionId);
       if (outRoom) {
         broadcast(outRoom, {
@@ -241,28 +249,36 @@ async function handleTerminal(ws: AuthenticatedSocket, payload: Record<string, u
       break;
     }
     case 'input': {
-      // Verify the sender has write permission before relaying input
-      const hasWrite = ws.terminalPermissions?.get(sessionId);
-      if (!hasWrite) {
+      // Verify the sender has write permission before relaying input.
+      // Cache uses a TTL (30s) so REST-API permission revocations propagate.
+      const cached = ws.terminalPermissions?.get(sessionId);
+      const now = Date.now();
+      const PERM_CACHE_TTL = 30_000; // 30 seconds
+      const hasValidCache = cached && (now - cached.cachedAt) < PERM_CACHE_TTL && cached.canWrite;
+      if (!hasValidCache) {
         // Check if user is session owner (always allowed)
         const sess = await prisma.sharedTerminalSession.findUnique({
           where: { id: sessionId },
           select: { ownerId: true },
         });
-        if (!sess || sess.ownerId !== ws.userId) {
+        let canWrite = false;
+        if (sess && sess.ownerId === ws.userId) {
+          canWrite = true;
+        } else {
           // Check participant canWrite flag
           const participant = await prisma.sharedSessionParticipant.findUnique({
             where: { sessionId_userId: { sessionId, userId: ws.userId } },
             select: { canWrite: true },
           });
-          if (!participant?.canWrite) {
-            ws.send(JSON.stringify({ type: 'error', message: 'Read-only: you cannot send input' }));
-            return;
-          }
+          canWrite = !!participant?.canWrite;
         }
-        // Cache the permission for future calls
+        // Update cache with TTL
         if (!ws.terminalPermissions) ws.terminalPermissions = new Map();
-        ws.terminalPermissions.set(sessionId, true);
+        ws.terminalPermissions.set(sessionId, { canWrite, cachedAt: now });
+        if (!canWrite) {
+          ws.send(JSON.stringify({ type: 'error', message: 'Read-only: you cannot send input' }));
+          return;
+        }
       }
       const inRoom = terminalRooms.get(sessionId);
       if (inRoom) {
@@ -295,7 +311,7 @@ async function handleTerminal(ws: AuthenticatedSocket, payload: Record<string, u
         ws.send(JSON.stringify({ type: 'error', message: 'Only the session owner can change permissions' }));
         return;
       }
-      // Invalidate cached permission for the target user
+      // Invalidate cached permission for the target user so TTL re-check picks up the change
       const targetId = payload.targetUserId as string;
       const pcRoom = terminalRooms.get(sessionId);
       if (pcRoom) {
