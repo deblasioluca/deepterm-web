@@ -2,8 +2,8 @@ module.exports = {
   apps: [
     {
       name: 'deepterm',
-      script: 'node_modules/next/dist/bin/next',
-      args: 'start -H 0.0.0.0',
+      script: '.next/standalone/server.js',
+      // args removed: standalone/server.js does not accept next CLI args
       cwd: '/home/macan/deepterm',
       instances: 1, // Use 1 for Raspberry Pi to conserve resources
       exec_mode: 'fork', // Use 'cluster' on more powerful machines

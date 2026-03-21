@@ -579,6 +579,8 @@ const platforms = [
 | **Ideas API** | `src/app/api/ideas/` |
 | **Issues API (web)** | `src/app/api/issues/` |
 | **Admin feedback API** | `src/app/api/admin/feedback/` |
+| **MCP server library** | `src/lib/mcp/server.ts` |
+| **MCP API route** | `src/app/api/mcp/route.ts` |
 
 ### Internal API — AI Dev Mac
 
@@ -604,6 +606,11 @@ Desktop/Mobile App ──→ ZK JWT (Authorization: Bearer header)
 Admin Panel ──→ Admin Session (admin-session cookie, intranet-only)
                   └─→ src/lib/admin-session.ts
                   └─→ prisma.adminUser
+
+MCP Server ──→ ZK JWT (Authorization: Bearer header)
+                 └─→ src/lib/zk/middleware.ts (getAuthFromRequest)
+                 └─→ src/lib/mcp/server.ts (13 read-only tools)
+                 └─→ prisma.zkUser, prisma.zkVault, prisma.zkVaultItem (metadata only)
 ```
 
 ### Data Flow: ZK Vault Login

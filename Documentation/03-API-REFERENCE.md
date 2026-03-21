@@ -1564,3 +1564,36 @@ Retry-After: 900
 | `canceled` | Subscription has been canceled |
 | `incomplete` | Initial payment pending |
 | `free` | No subscription (Starter plan) |
+
+---
+
+## MCP Server (Model Context Protocol)
+
+The MCP server enables LLM clients (Claude Desktop, Cursor, VS Code Copilot) to query user account data via the Model Context Protocol.
+
+**Endpoint:** `POST https://deepterm.net/api/mcp`
+**Auth:** `Authorization: Bearer <ZK_JWT_ACCESS_TOKEN>`
+**Transport:** Streamable HTTP (JSON-RPC over HTTP)
+**Mode:** Stateless — each request creates a fresh server instance scoped to the authenticated user
+
+### Available Tools
+
+| Tool | Description |
+|------|-------------|
+| `get_profile` | Account profile, subscription, team, devices |
+| `list_vaults` | Vaults with item counts by type |
+| `vault_summary` | Item metadata for a vault (no encrypted data) |
+| `get_subscription` | Plan, billing period, payment method |
+| `list_invoices` | Billing invoices |
+| `list_payment_events` | Purchases, renewals, cancellations |
+| `list_issues` | Bug reports / support tickets |
+| `get_issue` | Single issue with updates/attachments |
+| `list_ideas` | Feature voting board |
+| `list_notifications` | User notifications |
+| `list_announcements` | Product announcements |
+| `list_subscription_plans` | Available plans/pricing |
+| `list_devices` | Registered devices |
+
+> **Security:** Read-only. Never returns encrypted data, master password hashes, or crypto keys.
+
+See [Documentation/10-MCP-SERVER.md](10-MCP-SERVER.md) for full setup instructions and tool reference.
