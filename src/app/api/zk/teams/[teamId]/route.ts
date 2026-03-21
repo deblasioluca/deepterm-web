@@ -201,7 +201,7 @@ export async function DELETE(
       metadata: { teamName: team.name },
     });
 
-    return new NextResponse(null, { status: 204 });
+    return addCorsHeaders(new NextResponse(null, { status: 204 }));
   } catch (error) {
     console.error('Delete team error:', error);
     return errorResponse('Failed to delete team', 500);

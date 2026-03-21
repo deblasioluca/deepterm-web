@@ -35,7 +35,9 @@ export type AuditEventType =
   | 'chat_file_uploaded'
   | 'terminal_session_created'
   | 'terminal_session_ended'
-  | 'terminal_participant_updated';
+  | 'terminal_participant_updated'
+  | 'team_updated'
+  | 'team_deleted';
 
 export type AuditTargetType = 
   | 'user'
