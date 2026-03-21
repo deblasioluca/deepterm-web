@@ -124,6 +124,12 @@ async function withRetry<T>(fn: () => Promise<T>, maxRetries = 4, label = ''): P
     try {
       return await fn();
     } catch (err) {
+      // Never retry timeout/abort errors -- propagate immediately so Promise.race wins
+      const isTimeoutErr = err instanceof Error && (
+        err.message.includes("timed out") || err.message.includes("timeout") ||
+        err.name === "AbortError" || (err as any).status === 408
+      );
+      if (isTimeoutErr) throw err;
       if (attempt < maxRetries && isRateLimitError(err)) {
         const delay = delays[Math.min(attempt, delays.length - 1)];
         console.warn(`[AI Client] Rate limit hit${label ? ` for ${label}` : ''}, retrying in ${delay / 1000}s (attempt ${attempt + 1}/${maxRetries})`);
@@ -255,6 +261,103 @@ async function callGoogle(
   };
 }
 
+async function callDevin(
+  config: ResolvedConfig, systemPrompt: string, messages: AIMessage[]
+): Promise<AIResponse> {
+  // Combine system prompt + messages into a single prompt for Devin
+  const parts: string[] = [];
+  if (systemPrompt) parts.push(`Instructions:\n${systemPrompt}`);
+  for (const m of messages) {
+    parts.push(`${m.role === 'user' ? 'User' : 'Assistant'}:\n${m.content}`);
+  }
+  const prompt = parts.join('\n\n');
+
+  const baseUrl = config.baseUrl || 'https://api.devin.ai';
+
+  // Create a session via Devin v1 API
+  const createRes = await fetch(`${baseUrl}/v1/sessions`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${config.apiKey}`,
+    },
+    body: JSON.stringify({ prompt }),
+  });
+
+  if (!createRes.ok) {
+    const text = await createRes.text();
+    throw new Error(`Devin API error ${createRes.status}: ${text}`);
+  }
+
+  const session = await createRes.json();
+  const sessionId: string = session.session_id;
+
+  // Poll for completion — 5s intervals, max ~2.5 min (within the 3-min global timeout)
+  const MAX_POLLS = 30;
+  const POLL_INTERVAL = 5000;
+
+  for (let i = 0; i < MAX_POLLS; i++) {
+    await sleep(POLL_INTERVAL);
+
+    const pollRes = await fetch(`${baseUrl}/v1/sessions/${sessionId}`, {
+      headers: { Authorization: `Bearer ${config.apiKey}` },
+    });
+
+    if (!pollRes.ok) {
+      throw new Error(`Devin poll error ${pollRes.status}: ${await pollRes.text()}`);
+    }
+
+    const status = await pollRes.json();
+    const sessionStatus: string = status.status_enum || '';
+
+    if (sessionStatus === 'expired') {
+      throw new Error('Devin session expired');
+    }
+    if (sessionStatus === 'blocked') {
+      throw new Error('Devin session is blocked — may need user input');
+    }
+
+    // Session completed
+    if (sessionStatus === 'finished') {
+      // Try structured output first
+      if (status.structured_output?.response) {
+        return {
+          content: status.structured_output.response,
+          model: config.modelId,
+          provider: 'devin',
+          inputTokens: 0,
+          outputTokens: 0,
+        };
+      }
+
+      // Fallback: last message from the session's inline messages array
+      const sessionMsgs = status.messages || [];
+      if (sessionMsgs.length > 0) {
+        const lastMsg = sessionMsgs[sessionMsgs.length - 1];
+        if (lastMsg?.message) {
+          return {
+            content: lastMsg.message,
+            model: config.modelId,
+            provider: 'devin',
+            inputTokens: 0,
+            outputTokens: 0,
+          };
+        }
+      }
+
+      return {
+        content: `Devin session completed. View at: https://app.devin.ai/sessions/${sessionId}`,
+        model: config.modelId,
+        provider: 'devin',
+        inputTokens: 0,
+        outputTokens: 0,
+      };
+    }
+  }
+
+  throw new Error(`Devin session timed out after ${MAX_POLLS * POLL_INTERVAL / 1000}s (session: ${sessionId})`);
+}
+
 // ── Public API ───────────────────────────────────
 
 /**
@@ -285,6 +388,8 @@ export async function callAI(
         return callOpenAICompatible(config, finalPrompt, messages, config.providerSlug);
       case 'google':
         return callGoogle(config, finalPrompt, messages);
+      case 'devin':
+        return callDevin(config, finalPrompt, messages);
       default:
         throw new Error(`Unsupported AI provider: ${config.providerSlug}`);
     }
@@ -295,7 +400,7 @@ export async function callAI(
   let errorMessage: string | undefined;
 
   // Global timeout: 3 min max per callAI invocation regardless of provider
-  const AI_CALL_TIMEOUT_MS = 3 * 60 * 1000;
+  const AI_CALL_TIMEOUT_MS = 115 * 1000; // 115s — just under SDK 120s, withRetry already skips on timeout — shorter than SDK 120s so Promise.race always wins
   const timeoutPromise = new Promise<never>((_, reject) =>
     setTimeout(() => reject(new Error(`[AI Client] callAI timed out after ${AI_CALL_TIMEOUT_MS / 1000}s for activity "${activity}"`)), AI_CALL_TIMEOUT_MS)
   );

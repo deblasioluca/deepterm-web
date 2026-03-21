@@ -151,6 +151,28 @@ async function commitAndOpenPRs(
 const ITERATION_DELAY_MS = 5_000; // Delay between iterations to avoid rate limits
 const MAX_CONTEXT_CHARS = 400_000; // Max chars for conversation context
 const MAX_CONSECUTIVE_ERRORS = 3; // Stop early after this many consecutive errors
+// Graceful shutdown: mark running loops as failed when PM2 restarts
+let _shuttingDown = false;
+async function gracefulShutdown(signal: string) {
+  if (_shuttingDown) return;
+  _shuttingDown = true;
+  console.warn(`[AgentLoop] ${signal} received -- marking running loops as failed`);
+  try {
+    const { PrismaClient } = await import('@prisma/client');
+    const _p = new PrismaClient();
+    await _p.agentLoop.updateMany({
+      where: { status: { in: ['running', 'queued'] } },
+      data: { status: 'failed', errorLog: `Process received ${signal}` },
+    });
+    await _p.$disconnect();
+  } catch (e) { console.error('[AgentLoop] Shutdown cleanup error:', e); }
+  process.exit(0);
+}
+process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+process.on('SIGINT',  () => gracefulShutdown('SIGINT'));
+process.on('uncaughtException', (err) => console.error('[AgentLoop] Uncaught:', err));
+process.on('unhandledRejection', (reason) => console.error('[AgentLoop] Unhandled rejection:', reason));
+
 const BUILD_GATE_TIMEOUT_MS = 10 * 60 * 1000; // 10 min max wait for build gate
 const BUILD_GATE_POLL_MS = 15_000;             // Poll every 15s
 const MAX_BUILD_GATE_ATTEMPTS = 3;             // Max fix-and-retry cycles before giving up
@@ -286,6 +308,18 @@ function extractFileKeywords(title: string, description: string): string[] {
     tooltip:["toolbar","button","mainwindow"], clipboard:["connection","host","detail"],
     version:["preferences","general","about","settings"], command:["command","palette"],
     palette:["command","palette"], shortcut:["shortcut","command","keyboard"],
+    // Extended domain mappings
+    fingerprint:["hostdetailview","hostinfoview","connectiondetailview","hostinfopanel"],
+    detail:["hostdetailview","hostinfoview","connectiondetailview"],
+    details:["hostdetailview","connectiondetailview","hostinfoview"],
+    panel:["hostdetailview","hostinfoview","connectiondetailview","hostinfoPanel"],
+    info:["hostinfoview","hostdetailview","connectiondetailview"],
+    port:["host","connection","hostdetailview"], username:["host","credential","authview"],
+    key:["credential","biometrickeystore","authview"], vault:["vault","zkservice","biometrickeystore"],
+    sync:["syncengine","syncscheduler","syncentity"], credential:["credentialstore","authview"],
+    sidebar:["sidebarsection","connectionssidebar","groupssidebar"],
+    group:["group","groupsview","connectiongroup"], icon:["host","connection","iconview"],
+    menu:["mainmenu","contextmenu","toolbar"], status:["statusbar","connectionstatus"],
   };
   const mapped: string[] = [];
   for (const word of titleWords) { const hits = domainMap[word]; if (hits) mapped.push(...hits); }
@@ -984,16 +1018,24 @@ export async function runAgentLoop(loopId: string, feedbackContext?: string): Pr
       });
       const description = lastIter?.thinking?.slice(0, 1000) || 'Implementation by agent loop';
 
+      // Wrap commitAndOpenPRs in a 60s outer timeout (individual ghFetch=30s but
+      // chained calls can total minutes causing the loop to hang silently).
+      const PR_TIMEOUT_MS = 60_000;
       try {
-        const prResult = await commitAndOpenPRs(
-          loopId,
-          loop.branchName || `agent/${loopId.slice(0, 8)}`,
-          accumulatedFiles,
-          prTitle,
-          description,
-          targetRepo,
-          baseBranch,
-        );
+        const prResult = await Promise.race([
+          commitAndOpenPRs(
+            loopId,
+            loop.branchName || `agent/${loopId.slice(0, 8)}`,
+            accumulatedFiles,
+            prTitle,
+            description,
+            targetRepo,
+            baseBranch,
+          ),
+          new Promise<never>((_, reject) =>
+            setTimeout(() => reject(new Error('commitAndOpenPRs timed out after 60s')), PR_TIMEOUT_MS)
+          ),
+        ]);
 
         // Update loop with PR info
         if (prResult.prUrl) {
@@ -1027,11 +1069,13 @@ export async function runAgentLoop(loopId: string, feedbackContext?: string): Pr
 
       } catch (err) {
         console.error(`[AgentLoop] ${loopId} failed to create PR:`, err);
-        // Don't fail the loop — the code was generated, just PR creation failed
-        await prisma.agentLoop.update({
+        // Mark finalStatus as failed so finalize-loop sets correct DB status
+        finalStatus = 'failed';
+        // Fire-and-forget errorLog update so catch block never hangs
+        prisma.agentLoop.update({
           where: { id: loopId },
           data: { errorLog: (loop.errorLog || '') + `\nPR creation failed: ${err instanceof Error ? err.message : 'Unknown'}` },
-        });
+        }).catch(e => console.warn(`[AgentLoop] ${loopId} errorLog update failed:`, e));
       }
       } // end else (buildGatePassed)
     }

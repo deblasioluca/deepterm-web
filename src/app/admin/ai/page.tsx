@@ -15,6 +15,7 @@ import {
   Shield,
   Zap,
   Globe,
+  Bot,
   X,
 } from 'lucide-react';
 import { useAdminAI } from '@/components/admin/AdminAIContext';
@@ -109,6 +110,12 @@ const PROVIDER_PRESETS: Record<string, { name: string; models: { modelId: string
     models: [
       { modelId: 'llama-3.3-70b-versatile', displayName: 'Llama 3.3 70B', contextWindow: 128000 },
       { modelId: 'mixtral-8x7b-32768', displayName: 'Mixtral 8x7B', contextWindow: 32768 },
+    ],
+  },
+  devin: {
+    name: 'Devin',
+    models: [
+      { modelId: 'devin', displayName: 'Devin Agent', contextWindow: 128000 },
     ],
   },
 };
@@ -363,6 +370,7 @@ function ProvidersSection({ providers, onRefresh }: { providers: Provider[]; onR
               {p.slug === 'anthropic' ? <Brain className="w-4 h-4 text-orange-400" /> :
                p.slug === 'openai' ? <Zap className="w-4 h-4 text-green-400" /> :
                p.slug === 'google' ? <Globe className="w-4 h-4 text-blue-400" /> :
+               p.slug === 'devin' ? <Bot className="w-4 h-4 text-violet-400" /> :
                <Shield className="w-4 h-4 text-zinc-400" />}
             </div>
             <div className="flex-1">

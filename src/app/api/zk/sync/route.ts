@@ -187,18 +187,39 @@ export async function GET(request: NextRequest) {
       },
     });
 
+    // Sync logging — type breakdown for diagnostics
+    const typeCounts: Record<string, number> = {};
+    const activeItems = items.filter(i => !i.deletedAt);
+    const deletedItems = items.filter(i => i.deletedAt);
+    for (const item of activeItems) {
+      const label = item.type === 0 ? 'host' : item.type === 1 ? 'identity' : item.type === 11 ? 'snippet' : item.type === 12 ? 'group' : `type${item.type ?? 'null'}`;
+      typeCounts[label] = (typeCounts[label] || 0) + 1;
+    }
+    const clientIP = getClientIP(request);
+    const userAgent = request.headers.get('user-agent') || 'unknown';
+    console.log(
+      `[Sync] user=${user.email} mode=${sinceDate ? 'delta' : 'full'} ` +
+      `since=${sinceParam || 'none'} excludeDeleted=${excludeDeleted} ` +
+      `vaults=${vaults.length} items=${activeItems.length}+${deletedItems.length}del ` +
+      `breakdown=${JSON.stringify(typeCounts)} ` +
+      `ip=${clientIP} ua=${userAgent.slice(0, 80)}`
+    );
+
     // Audit log
     await createAuditLog({
       userId: auth.userId,
       eventType: 'sync_performed',
       targetType: 'user',
       targetId: auth.userId,
-      ipAddress: getClientIP(request),
-      userAgent: request.headers.get('user-agent') || undefined,
+      ipAddress: clientIP,
+      userAgent: userAgent,
       metadata: {
         deltaSync: !!sinceDate,
         vaultCount: vaults.length,
         itemCount: items.length,
+        activeItems: activeItems.length,
+        deletedItems: deletedItems.length,
+        typeCounts,
       },
     });
 
