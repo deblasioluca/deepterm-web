@@ -1685,7 +1685,7 @@ Subsystem sftp /usr/lib/openssh/sftp-server</code></pre>
   // ─── Vault Sync for AI ────────────────────────────────
   {
     label: 'Vault Sync',
-    icon: RefreshCw,
+    icon: History,
     articles: [
       {
         slug: 'vault-sync-ai',
