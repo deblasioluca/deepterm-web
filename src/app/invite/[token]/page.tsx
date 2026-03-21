@@ -183,7 +183,7 @@ export default function InviteAcceptPage() {
                   </button>
                   <a
                     href={`/register?callbackUrl=${encodeURIComponent(`/invite/${token}`)}`}
-                    className="block w-full px-6 py-3 rounded-lg border border-[#7b61ff]/50 text-[#7b61ff] font-semibold text-center hover:bg-[#7b61ff]/10 transition-colors"
+                    className="block w-full px-6 py-3 rounded-lg border border-accent-primary/50 text-accent-primary font-semibold text-center hover:bg-accent-primary/10 transition-colors"
                   >
                     Create Account
                   </a>

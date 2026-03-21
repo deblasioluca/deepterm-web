@@ -14,7 +14,7 @@ function LoginPageContent() {
   const searchParams = useSearchParams();
   const rawCallbackUrl = searchParams.get('callbackUrl');
   // Only allow relative paths to prevent open redirect attacks
-  const callbackUrl = rawCallbackUrl?.startsWith('/') ? rawCallbackUrl : null;
+  const callbackUrl = rawCallbackUrl?.startsWith('/') && !rawCallbackUrl.startsWith('//') ? rawCallbackUrl : null;
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [twoFactorCode, setTwoFactorCode] = useState('');
@@ -103,8 +103,8 @@ function LoginPageContent() {
     setError('');
   };
 
-  const handleGitHubLogin = () => signIn('github', { callbackUrl: '/dashboard' });
-  const handleAppleLogin  = () => signIn('apple',  { callbackUrl: '/dashboard' });
+  const handleGitHubLogin = () => signIn('github', { callbackUrl: callbackUrl || '/dashboard' });
+  const handleAppleLogin  = () => signIn('apple',  { callbackUrl: callbackUrl || '/dashboard' });
 
   const handlePasskeyLogin = async () => {
     setError('');

@@ -14,7 +14,7 @@ function RegisterPageContent() {
   const searchParams = useSearchParams();
   const rawCallbackUrl = searchParams.get('callbackUrl');
   // Only allow relative paths to prevent open redirect attacks
-  const callbackUrl = rawCallbackUrl?.startsWith('/') ? rawCallbackUrl : null;
+  const callbackUrl = rawCallbackUrl?.startsWith('/') && !rawCallbackUrl.startsWith('//') ? rawCallbackUrl : null;
   const [formData, setFormData] = useState({
     name: '',
     email: '',
@@ -160,8 +160,8 @@ function RegisterPageContent() {
     setFormData((prev) => ({ ...prev, [field]: value }));
   };
 
-  const handleGitHubSignUp = () => signIn('github', { callbackUrl: '/dashboard' });
-  const handleAppleSignUp  = () => signIn('apple',  { callbackUrl: '/dashboard' });
+  const handleGitHubSignUp = () => signIn('github', { callbackUrl: callbackUrl || '/dashboard' });
+  const handleAppleSignUp  = () => signIn('apple',  { callbackUrl: callbackUrl || '/dashboard' });
 
   return (
     <div className="min-h-screen flex items-center justify-center px-4 py-12 relative overflow-hidden">
