@@ -153,6 +153,17 @@ export const AI_ACTIVITIES: Record<string, AIActivityDef> = {
     defaultMaxTokens: 8192,
   },
 
+  // Agent Loop Context Summarization
+  'agent-loop.summarize': {
+    key: 'agent-loop.summarize',
+    label: 'Agent Loop Summarize',
+    description: 'Context compression for long-running agent loops to avoid context overflow',
+    category: 'agent',
+    defaultModel: 'claude-sonnet-4-6',
+    defaultTemperature: 0.3,
+    defaultMaxTokens: 400,
+  },
+
   // Agent Loop Iteration
   'agent-loop.iterate': {
     key: 'agent-loop.iterate',

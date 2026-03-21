@@ -135,7 +135,7 @@ When an idea is approved by the admin (via the admin feedback panel), it can be 
    - Full markdown body: Summary, Motivation, Proposed Implementation (with actual file paths), Acceptance Criteria, Technical Notes
 5. **Duplicate detection:** Searches open GitHub issues for similar titles before creating.
 6. **Creates GitHub issue** via the GitHub API.
-7. **Links back:** Updates `Idea.githubIssueNumber` and `Idea.githubIssueUrl` in the database.
+7. **Links back:** Updates `Idea.githubIssueNumber` in the database.
 
 ### Source Files
 
@@ -376,7 +376,7 @@ This avoids hitting API rate limits when 3-4 agents each make calls across 4 pha
 
 ### 6e. Database Model
 
-`Deliberation` → `DeliberationProposal` (one per agent) → `DeliberationDebateEntry` (per agent per round) → `DeliberationVote` (one per agent).
+`Deliberation` → `DeliberationProposal` (one per agent) → `DeliberationDebate` (per agent per round) → `DeliberationVote` (one per agent).
 
 The final synthesis is stored in `Deliberation.summary` when status transitions to `decided`.
 
@@ -384,7 +384,7 @@ The final synthesis is stored in `Deliberation.summary` when status transitions 
 
 | File | Purpose |
 |------|---------|
-| `src/lib/deliberation/engine.ts` | `runDeliberation()` — full phase orchestration |
+| `src/lib/deliberation/engine.ts` | `startDeliberation()`, `advanceDeliberation()`, `runFullDeliberation()` — phase orchestration |
 | `src/lib/deliberation/agents.ts` | Agent definitions and system prompts |
 | `src/app/api/admin/cockpit/deliberation/route.ts` | API for triggering and managing deliberations |
 
@@ -438,7 +438,7 @@ Before committing, the agent can optionally run a build gate verification:
 
 - **Max iterations:** Configurable per loop (default: 10). Prevents infinite loops.
 - **Checkpoints:** Iterations can be marked as checkpoints, saving a snapshot of accumulated files and context summary. Used for `resume-from-checkpoint` recovery.
-- **Stale loop recovery:** `recoverStaleLoops()` runs on API startup and detects loops that were killed by PM2 restarts (status = `running` but no heartbeat for >5 minutes).
+- **Stale loop recovery:** `recoverStaleLoops()` runs fire-and-forget on every lifecycle GET request and detects loops that were killed by PM2 restarts (status = `running` but no heartbeat for >5 minutes).
 
 ### Source Files
 
@@ -675,7 +675,11 @@ Every AI call in the pipeline goes through `callAI(activityKey, ...)` which rout
 | `deliberation.management-summary` | deliberation | Claude Sonnet | Executive summary |
 | `reports.generate` | reports | Claude Sonnet | Auto-generate implementation reports from PRs |
 | `issues.create-from-review` | issues | Claude Sonnet | Extract issues from architecture reviews |
-| `agent-loop.implement` | agent | Claude Opus | Agent loop coding iterations |
+| `agent-loop.iterate` | agent | Claude Sonnet | Agent loop think/act/observe iterations |
+| `agent-loop.implement` | agent | Claude Sonnet | Agent loop build-gate fix iterations |
+| `agent-loop.summarize` | agent | Claude Sonnet | Context compression for long-running loops |
+| `pr.code-review` | ci | Claude Opus | AI code review on pull requests |
+| `admin.chat` | agent | Claude Opus | Admin panel AI assistant |
 
 ### 13b. Model Routing
 
@@ -701,7 +705,12 @@ Every AI call logs token usage to `AIUsageLog`:
 |-------|-------------|---------|
 | Agent PR created | `/deepterm/agent-pr` | "🤖 PR #N opened for story: {title}" |
 | Loop-back | `/deepterm/lifecycle-loop` | "🔄 Loop: {from} → {to} ({count}/{max}): {reason}" |
-| CI failure | `/deepterm/ci-failure` | "❌ CI failed for story: {title}" |
+| Build result | `/deepterm/build-status` | Build success/failure event with details |
+| New issue/idea | `/deepterm/triage` | New submission notification |
+| Release | `/deepterm/release` | New release published |
+| Security alert | `/deepterm/security` | Security event notification |
+| Idea popular | `/deepterm/idea-popular` | Idea reached vote threshold |
+| Payment | `/deepterm/payment` | Payment/subscription event |
 
 ### GitHub PR Comments
 
@@ -726,7 +735,8 @@ All lifecycle transitions are recorded as `LifecycleEvent` records:
   storyId: string,
   stepId: 'triage' | 'plan' | 'deliberation' | 'implement' | 'test' | 'review' | 'deploy' | 'release',
   event: 'started' | 'progress' | 'heartbeat' | 'completed' | 'failed' | 'timeout'
-        | 'cancelled' | 'skipped' | 'retried' | 'reset' | 'loop-back',
+        | 'cancelled' | 'skipped' | 'retried' | 'reset' | 'loop-back'
+        | 'build-gate-pass' | 'build-gate-fail',
   detail: string | null,  // JSON metadata
   actor: 'system' | 'human' | 'ci' | 'agent',
   createdAt: DateTime,
@@ -825,7 +835,7 @@ Here is a concrete example of a feature flowing through the entire pipeline:
 Automated steps (deliberation, implement, test) emit heartbeat events periodically. The Cockpit UI monitors these:
 
 - **Warning threshold:** 90 seconds without heartbeat → orange warning banner.
-- **Stale detection:** On API startup, `recoverStaleLoops()` finds agent loops that were running but haven't sent a heartbeat in 5+ minutes (e.g., killed by PM2 restart) and marks them as failed.
+- **Stale detection:** On every lifecycle GET request (fire-and-forget), `recoverStaleLoops()` finds agent loops that were running but haven't been updated in 5+ minutes (e.g., killed by PM2 restart) and marks them as failed.
 
 ---
 

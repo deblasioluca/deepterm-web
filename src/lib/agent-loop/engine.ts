@@ -482,38 +482,6 @@ async function buildTaskContext(loop: {
     }
   }
 
-
-  // ── Inject target file contents (Issue #7/8 fix) ──
-  if (loop.storyId) {
-    const storyForFiles = await prisma.story.findUnique({
-      where: { id: loop.storyId },
-      select: { title: true, description: true },
-    });
-    if (storyForFiles) {
-      const ghTok = process.env.GITHUB_TOKEN;
-      if (ghTok && repoCtx) {
-        const kws = extractFileKeywords(storyForFiles.title, storyForFiles.description);
-        const excl = extractExcludedFiles(storyForFiles.description);
-        const tPaths = matchTargetFiles(kws, excl, repoCtx, 5);
-        if (tPaths.length > 0) {
-          const fileContents = await fetchTargetFileContents(tPaths, "deblasioluca/deepterm", "main", ghTok);
-          if (fileContents.length > 0) {
-            const fileSection = fileContents
-              .map(f => `### ${f.path}\n\`\`\`swift\n${f.content}\n\`\`\``)
-              .join("\n\n");
-            parts.push(
-              `## Existing File Contents — READ BEFORE MODIFYING\n` +
-              `**CRITICAL: These are the CURRENT file contents. Make MINIMAL targeted changes. ` +
-              `Do NOT rewrite the entire file. Find the exact insertion point and add only what is needed.**\n\n` +
-              fileSection
-            );
-            console.log(`[TaskContext] Injected ${fileContents.length} target files: ${fileContents.map(f => f.path.split("/").pop()).join(", ")}`);
-          }
-        }
-      }
-    }
-  }
-
   return parts.join('\n\n');
 }
 
