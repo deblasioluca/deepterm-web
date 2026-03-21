@@ -13,8 +13,8 @@ export async function OPTIONS() {
 }
 
 /**
- * GET /api/zk/terminal/share?orgId=xxx
- * List active shared terminal sessions for an organization.
+ * GET /api/zk/terminal/share?orgId=xxx&teamId=yyy
+ * List active shared terminal sessions for an organization (optionally scoped to a team).
  */
 export async function GET(request: NextRequest) {
   try {
@@ -22,6 +22,7 @@ export async function GET(request: NextRequest) {
     if (!auth) return errorResponse('Unauthorized', 401);
 
     const orgId = request.nextUrl.searchParams.get('orgId');
+    const teamId = request.nextUrl.searchParams.get('teamId');
     if (!orgId) return errorResponse('orgId query parameter required');
 
     // Verify membership
@@ -32,8 +33,18 @@ export async function GET(request: NextRequest) {
       return errorResponse('Not a member of this organization', 403);
     }
 
+    // If team-scoped, verify team membership
+    if (teamId) {
+      const teamMember = await prisma.orgTeamMember.findUnique({
+        where: { teamId_userId: { teamId, userId: auth.userId } },
+      });
+      if (!teamMember) {
+        return errorResponse('Not a member of this team', 403);
+      }
+    }
+
     const sessions = await prisma.sharedTerminalSession.findMany({
-      where: { organizationId: orgId, isActive: true },
+      where: { organizationId: orgId, ...(teamId ? { teamId } : {}), isActive: true },
       include: {
         owner: { select: { id: true, email: true } },
         participants: {
@@ -69,7 +80,7 @@ export async function GET(request: NextRequest) {
 /**
  * POST /api/zk/terminal/share
  * Create a new shared terminal session.
- * Body: { orgId, sessionName, participantIds?: [{userId, canWrite}] }
+ * Body: { orgId, teamId?, sessionName, participantIds?: [{userId, canWrite}] }
  */
 export async function POST(request: NextRequest) {
   try {
@@ -77,7 +88,7 @@ export async function POST(request: NextRequest) {
     if (!auth) return errorResponse('Unauthorized', 401);
 
     const body = await request.json();
-    const { orgId, sessionName, participantIds } = body;
+    const { orgId, teamId, sessionName, participantIds } = body;
 
     if (!orgId) return errorResponse('orgId is required');
 
@@ -93,6 +104,7 @@ export async function POST(request: NextRequest) {
       data: {
         ownerId: auth.userId,
         organizationId: orgId,
+        teamId: teamId || null,
         sessionName: sessionName || '',
         participants: participantIds?.length ? {
           create: participantIds.map((p: { userId: string; canWrite?: boolean }) => ({

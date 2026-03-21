@@ -42,6 +42,7 @@ model ZKUser {
   chatFiles                  ChatFile[]
   ownedSharedSessions        SharedTerminalSession[] @relation("sharedSessionOwner")
   sharedSessionParticipations SharedSessionParticipant[]
+  orgTeamMemberships         OrgTeamMember[]
 
   @@index([email])
   @@index([webUserId])
@@ -89,6 +90,7 @@ model Organization {
   auditLogs    ZKAuditLog[]
   vaults       ZKVault[]
   // Team collaboration relations
+  orgTeams             OrgTeam[]
   presences            TeamPresence[]
   chatChannels         ChatChannel[]
   chatFiles            ChatFile[]
@@ -109,6 +111,43 @@ model OrganizationUser {
 
   @@unique([organizationId, userId])
   @@index([organizationId])
+  @@index([userId])
+}
+
+/// Sub-group within an Organization. Users can belong to multiple teams.
+/// Federation (cross-team chat / terminal sharing) is controlled by the team owner.
+model OrgTeam {
+  id             String          @id @default(cuid())
+  organizationId String
+  name           String
+  description    String?
+  ownerId        String          // userId of the team owner
+  isDefault      Boolean         @default(false)  // Auto-created "General" team
+  allowFederation Boolean        @default(false)  // Owner can open cross-team communication
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+  organization   Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  members        OrgTeamMember[]
+  chatChannels   ChatChannel[]   @relation("teamChatChannels")
+  sharedSessions SharedTerminalSession[] @relation("teamSharedSessions")
+
+  @@unique([organizationId, name])
+  @@index([organizationId])
+  @@index([ownerId])
+}
+
+/// Membership of a user in an OrgTeam.
+model OrgTeamMember {
+  id        String   @id @default(cuid())
+  teamId    String
+  userId    String
+  role      String   @default("member")  // owner, admin, member
+  joinedAt  DateTime @default(now())
+  team      OrgTeam  @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  user      ZKUser   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([teamId, userId])
+  @@index([teamId])
   @@index([userId])
 }
 
@@ -1097,16 +1136,19 @@ model TeamPresence {
 model ChatChannel {
   id             String        @id @default(cuid())
   organizationId String
+  teamId         String?                          // Optional: scope to a specific team
   type           String        @default("team")  // team, dm
   name           String?                          // Display name (team channels only)
   createdBy      String?                          // userId who created it
   createdAt      DateTime      @default(now())
   updatedAt      DateTime      @updatedAt
   organization   Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  team           OrgTeam?      @relation("teamChatChannels", fields: [teamId], references: [id], onDelete: SetNull)
   messages       ChatMessage[]
   participants   ChatChannelParticipant[]
 
   @@index([organizationId, type])
+  @@index([teamId])
 }
 
 /// Maps users to chat channels (for DM participant tracking and muting).
@@ -1164,16 +1206,19 @@ model SharedTerminalSession {
   id           String   @id @default(cuid())
   ownerId      String                         // User who started sharing
   organizationId String
+  teamId       String?                        // Optional: scope to a specific team
   sessionName  String   @default("")          // Display name (e.g. host@server)
   isActive     Boolean  @default(true)
   createdAt    DateTime @default(now())
   endedAt      DateTime?
   owner        ZKUser       @relation("sharedSessionOwner", fields: [ownerId], references: [id], onDelete: Cascade)
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  team         OrgTeam?     @relation("teamSharedSessions", fields: [teamId], references: [id], onDelete: SetNull)
   participants SharedSessionParticipant[]
 
   @@index([organizationId, isActive])
   @@index([ownerId])
+  @@index([teamId])
 }
 
 /// Participant in a shared terminal session.

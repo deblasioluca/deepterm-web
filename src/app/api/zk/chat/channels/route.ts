@@ -13,8 +13,8 @@ export async function OPTIONS() {
 }
 
 /**
- * GET /api/zk/chat/channels?orgId=xxx
- * List chat channels for an organization that the user participates in.
+ * GET /api/zk/chat/channels?orgId=xxx&teamId=yyy
+ * List chat channels for an organization (optionally scoped to a team).
  */
 export async function GET(request: NextRequest) {
   try {
@@ -22,6 +22,7 @@ export async function GET(request: NextRequest) {
     if (!auth) return errorResponse('Unauthorized', 401);
 
     const orgId = request.nextUrl.searchParams.get('orgId');
+    const teamId = request.nextUrl.searchParams.get('teamId');
     if (!orgId) return errorResponse('orgId query parameter required');
 
     // Verify membership
@@ -32,10 +33,21 @@ export async function GET(request: NextRequest) {
       return errorResponse('Not a member of this organization', 403);
     }
 
+    // If team-scoped, verify team membership
+    if (teamId) {
+      const teamMember = await prisma.orgTeamMember.findUnique({
+        where: { teamId_userId: { teamId, userId: auth.userId } },
+      });
+      if (!teamMember) {
+        return errorResponse('Not a member of this team', 403);
+      }
+    }
+
     // Get team channels + DM channels the user participates in
     const channels = await prisma.chatChannel.findMany({
       where: {
         organizationId: orgId,
+        ...(teamId ? { teamId } : {}),
         OR: [
           { type: 'team' },
           { participants: { some: { userId: auth.userId } } },
@@ -55,6 +67,7 @@ export async function GET(request: NextRequest) {
       type: ch.type,
       name: ch.name,
       organizationId: ch.organizationId,
+      teamId: ch.teamId || null,
       participants: ch.participants.map(p => ({
         userId: p.userId,
         email: p.user.email,
@@ -77,7 +90,7 @@ export async function GET(request: NextRequest) {
 /**
  * POST /api/zk/chat/channels
  * Create a new chat channel (team or DM).
- * Body: { orgId, type: "team"|"dm", name?, participantIds?: string[] }
+ * Body: { orgId, teamId?, type: "team"|"dm", name?, participantIds?: string[] }
  */
 export async function POST(request: NextRequest) {
   try {
@@ -85,7 +98,7 @@ export async function POST(request: NextRequest) {
     if (!auth) return errorResponse('Unauthorized', 401);
 
     const body = await request.json();
-    const { orgId, type, name, participantIds } = body;
+    const { orgId, teamId, type, name, participantIds } = body;
 
     if (!orgId) return errorResponse('orgId is required');
     if (!type || !['team', 'dm'].includes(type)) {
@@ -119,15 +132,16 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Create the channel
+    // Create the channel (filter out creator's own ID to avoid unique constraint violation)
     const participantData = [
       { userId: auth.userId },
-      ...(participantIds || []).map((id: string) => ({ userId: id })),
+      ...(participantIds || []).filter((id: string) => id !== auth.userId).map((id: string) => ({ userId: id })),
     ];
 
     const channel = await prisma.chatChannel.create({
       data: {
         organizationId: orgId,
+        teamId: teamId || null,
         type,
         name: type === 'team' ? (name || 'General') : null,
         createdBy: auth.userId,

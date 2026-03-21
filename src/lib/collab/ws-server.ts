@@ -10,9 +10,7 @@ import { WebSocketServer, WebSocket } from 'ws';
 import { IncomingMessage } from 'http';
 import { Server } from 'http';
 import { verifyAccessToken } from '../zk/jwt';
-import { PrismaClient } from '@prisma/client';
-
-const prisma = new PrismaClient();
+import { prisma } from '../prisma';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -21,6 +19,8 @@ interface AuthenticatedSocket extends WebSocket {
   email: string;
   orgIds: string[];
   isAlive: boolean;
+  /** Cached write permissions per terminal session: sessionId -> canWrite */
+  terminalPermissions: Map<string, boolean>;
 }
 
 interface WSMessage {
@@ -40,7 +40,30 @@ const terminalRooms = new Map<string, Set<AuthenticatedSocket>>();
 /** channelId -> Set<AuthenticatedSocket> */
 const chatRooms = new Map<string, Set<AuthenticatedSocket>>();
 
+/** Global reference to the WSS instance for multi-device helpers */
+let wssInstance: WebSocketServer | null = null;
+
 // ── Helpers ──────────────────────────────────────────────────────────────────
+
+/** Find all active sockets for a given userId (multi-device support). */
+function socketsForUser(userId: string): AuthenticatedSocket[] {
+  if (!wssInstance) return [];
+  const result: AuthenticatedSocket[] = [];
+  Array.from(wssInstance.clients as Set<AuthenticatedSocket>).forEach(client => {
+    if (client.userId === userId && client.readyState === WebSocket.OPEN) {
+      result.push(client);
+    }
+  });
+  return result;
+}
+
+/** Check if a user still has at least one other open connection. */
+function hasOtherConnections(userId: string, exclude: AuthenticatedSocket): boolean {
+  if (!wssInstance) return false;
+  return Array.from(wssInstance.clients as Set<AuthenticatedSocket>).some(client =>
+    client !== exclude && client.userId === userId && client.readyState === WebSocket.OPEN
+  );
+}
 
 function broadcast(room: Set<AuthenticatedSocket>, message: object, exclude?: AuthenticatedSocket) {
   const data = JSON.stringify(message);
@@ -205,12 +228,46 @@ async function handleTerminal(ws: AuthenticatedSocket, payload: Record<string, u
       }
       break;
     }
-    case 'output':
+    case 'output': {
+      // Output is sent by session owner — relay to all participants
+      const outRoom = terminalRooms.get(sessionId);
+      if (outRoom) {
+        broadcast(outRoom, {
+          type: 'terminal_output',
+          channel: 'terminal',
+          payload: { sessionId, userId: ws.userId, data: termData },
+        }, ws);
+      }
+      break;
+    }
     case 'input': {
-      const room = terminalRooms.get(sessionId);
-      if (room) {
-        broadcast(room, {
-          type: `terminal_${action}`,
+      // Verify the sender has write permission before relaying input
+      const hasWrite = ws.terminalPermissions?.get(sessionId);
+      if (!hasWrite) {
+        // Check if user is session owner (always allowed)
+        const sess = await prisma.sharedTerminalSession.findUnique({
+          where: { id: sessionId },
+          select: { ownerId: true },
+        });
+        if (!sess || sess.ownerId !== ws.userId) {
+          // Check participant canWrite flag
+          const participant = await prisma.sharedSessionParticipant.findUnique({
+            where: { sessionId_userId: { sessionId, userId: ws.userId } },
+            select: { canWrite: true },
+          });
+          if (!participant?.canWrite) {
+            ws.send(JSON.stringify({ type: 'error', message: 'Read-only: you cannot send input' }));
+            return;
+          }
+        }
+        // Cache the permission for future calls
+        if (!ws.terminalPermissions) ws.terminalPermissions = new Map();
+        ws.terminalPermissions.set(sessionId, true);
+      }
+      const inRoom = terminalRooms.get(sessionId);
+      if (inRoom) {
+        broadcast(inRoom, {
+          type: 'terminal_input',
           channel: 'terminal',
           payload: { sessionId, userId: ws.userId, data: termData },
         }, ws);
@@ -229,12 +286,28 @@ async function handleTerminal(ws: AuthenticatedSocket, payload: Record<string, u
       break;
     }
     case 'permission_change': {
-      const room = terminalRooms.get(sessionId);
-      if (room) {
-        broadcast(room, {
+      // Only the session owner can change permissions
+      const permSession = await prisma.sharedTerminalSession.findUnique({
+        where: { id: sessionId },
+        select: { ownerId: true },
+      });
+      if (!permSession || permSession.ownerId !== ws.userId) {
+        ws.send(JSON.stringify({ type: 'error', message: 'Only the session owner can change permissions' }));
+        return;
+      }
+      // Invalidate cached permission for the target user
+      const targetId = payload.targetUserId as string;
+      const pcRoom = terminalRooms.get(sessionId);
+      if (pcRoom) {
+        Array.from(pcRoom).forEach(client => {
+          if (client.userId === targetId && client.terminalPermissions) {
+            client.terminalPermissions.delete(sessionId);
+          }
+        });
+        broadcast(pcRoom, {
           type: 'permission_change',
           channel: 'terminal',
-          payload: { sessionId, targetUserId: payload.targetUserId, canWrite: payload.canWrite },
+          payload: { sessionId, targetUserId: targetId, canWrite: payload.canWrite },
         });
       }
       break;
@@ -271,6 +344,7 @@ function handleAudioSignal(ws: AuthenticatedSocket, payload: Record<string, unkn
 
 export function attachWebSocketServer(server: Server): WebSocketServer {
   const wss = new WebSocketServer({ server, path: '/ws/collab' });
+  wssInstance = wss;
 
   // Ping/pong keepalive every 30s
   const interval = setInterval(() => {
@@ -309,6 +383,7 @@ export function attachWebSocketServer(server: Server): WebSocketServer {
     authWs.email = payload.email;
     authWs.orgIds = payload.orgIds || [];
     authWs.isAlive = true;
+    authWs.terminalPermissions = new Map();
 
     // Auto-join org rooms
     for (const orgId of authWs.orgIds) {
@@ -348,20 +423,23 @@ export function attachWebSocketServer(server: Server): WebSocketServer {
     });
 
     authWs.on('close', () => {
-      // Broadcast offline status
-      for (const orgId of authWs.orgIds) {
-        const room = orgRooms.get(orgId);
-        if (room) {
-          broadcast(room, {
-            type: 'presence_update',
-            channel: 'presence',
-            payload: {
-              userId: authWs.userId,
-              email: authWs.email,
-              status: 'offline',
-              orgId,
-            },
-          }, authWs);
+      // Only broadcast offline if this was the user's last connection (multi-device)
+      const stillOnline = hasOtherConnections(authWs.userId, authWs);
+      if (!stillOnline) {
+        for (const orgId of authWs.orgIds) {
+          const room = orgRooms.get(orgId);
+          if (room) {
+            broadcast(room, {
+              type: 'presence_update',
+              channel: 'presence',
+              payload: {
+                userId: authWs.userId,
+                email: authWs.email,
+                status: 'offline',
+                orgId,
+              },
+            }, authWs);
+          }
         }
       }
       leaveAllRooms(authWs);
