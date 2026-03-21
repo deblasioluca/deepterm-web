@@ -217,14 +217,15 @@ async function handleTerminal(ws: AuthenticatedSocket, payload: Record<string, u
       break;
     }
     case 'leave': {
-      leaveRoom(terminalRooms, sessionId, ws);
       const room = terminalRooms.get(sessionId);
-      if (room) {
+      if (room && room.has(ws)) {
+        room.delete(ws);
         broadcast(room, {
           type: 'participant_left',
           channel: 'terminal',
           payload: { userId: ws.userId, sessionId },
         });
+        if (room.size === 0) terminalRooms.delete(sessionId);
       }
       break;
     }
@@ -292,7 +293,7 @@ async function handleTerminal(ws: AuthenticatedSocket, payload: Record<string, u
     }
     case 'resize': {
       const room = terminalRooms.get(sessionId);
-      if (room) {
+      if (room && room.has(ws)) {
         broadcast(room, {
           type: 'terminal_resize',
           channel: 'terminal',
