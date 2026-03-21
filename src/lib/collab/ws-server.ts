@@ -191,7 +191,7 @@ async function handleTerminal(ws: AuthenticatedSocket, payload: Record<string, u
       // Verify user is owner or invited participant before joining
       const session = await prisma.sharedTerminalSession.findUnique({
         where: { id: sessionId },
-        include: { participants: { select: { userId: true, status: true } } },
+        include: { participants: { select: { userId: true, status: true, canWrite: true } } },
       });
       if (!session || !session.isActive) {
         ws.send(JSON.stringify({ type: 'error', message: 'Session not found or inactive' }));
@@ -205,13 +205,17 @@ async function handleTerminal(ws: AuthenticatedSocket, payload: Record<string, u
         ws.send(JSON.stringify({ type: 'error', message: 'Not authorized to join this session' }));
         return;
       }
+      // Determine actual canWrite from DB, not client-supplied payload
+      const actualCanWrite = isOwner
+        ? true
+        : (session.participants.find(p => p.userId === ws.userId)?.canWrite ?? false);
       joinRoom(terminalRooms, sessionId, ws);
       const room = terminalRooms.get(sessionId);
       if (room) {
         broadcast(room, {
           type: 'participant_joined',
           channel: 'terminal',
-          payload: { userId: ws.userId, email: ws.email, sessionId, canWrite },
+          payload: { userId: ws.userId, email: ws.email, sessionId, canWrite: actualCanWrite },
         }, ws);
       }
       break;
@@ -255,8 +259,13 @@ async function handleTerminal(ws: AuthenticatedSocket, payload: Record<string, u
       const cached = ws.terminalPermissions?.get(sessionId);
       const now = Date.now();
       const PERM_CACHE_TTL = 30_000; // 30 seconds
-      const hasValidCache = cached && (now - cached.cachedAt) < PERM_CACHE_TTL && cached.canWrite;
-      if (!hasValidCache) {
+      const hasValidCache = cached && (now - cached.cachedAt) < PERM_CACHE_TTL;
+      if (hasValidCache) {
+        if (!cached.canWrite) {
+          ws.send(JSON.stringify({ type: 'error', message: 'Read-only: you cannot send input' }));
+          return;
+        }
+      } else {
         // Check if user is session owner (always allowed)
         const sess = await prisma.sharedTerminalSession.findUnique({
           where: { id: sessionId },
@@ -338,7 +347,7 @@ function handleAudioSignal(ws: AuthenticatedSocket, payload: Record<string, unkn
   if (!targetUserId || typeof targetUserId !== 'string') return;
 
   const room = orgId && typeof orgId === 'string' ? orgRooms.get(orgId) : null;
-  if (!room) return;
+  if (!room || !ws.orgIds.includes(orgId as string)) return;
 
   Array.from(room).forEach(client => {
     if (client.userId === targetUserId && client.readyState === WebSocket.OPEN) {
