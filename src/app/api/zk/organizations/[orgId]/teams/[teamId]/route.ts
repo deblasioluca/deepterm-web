@@ -6,6 +6,8 @@ import {
   successResponse,
   handleCorsPreflightRequest,
   addCorsHeaders,
+  createAuditLog,
+  getClientIP,
 } from '@/lib/zk';
 
 export async function OPTIONS() {
@@ -42,6 +44,16 @@ export async function DELETE(
     if (team.isDefault) return errorResponse('Cannot delete the default team', 400);
 
     await prisma.orgTeam.delete({ where: { id: teamId } });
+
+    await createAuditLog({
+      userId: auth.userId,
+      organizationId: orgId,
+      eventType: 'team_deleted',
+      targetType: 'team',
+      targetId: teamId,
+      ipAddress: getClientIP(request),
+      userAgent: request.headers.get('user-agent') || undefined,
+    });
 
     const response = successResponse({ deleted: true });
     return addCorsHeaders(response);

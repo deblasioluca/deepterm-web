@@ -56,8 +56,10 @@ export default function CollaborationPage() {
 
     let ws: WebSocket | null = null;
     let reconnectTimer: ReturnType<typeof setTimeout>;
+    let cancelled = false;
 
     async function connect() {
+      if (cancelled) return;
       try {
         // Get ws-token
         const tokenRes = await fetch('/api/terminal/ws-token', {
@@ -65,14 +67,16 @@ export default function CollaborationPage() {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ orgId: selectedOrgId }),
         });
-        if (!tokenRes.ok) return;
+        if (!tokenRes.ok || cancelled) return;
         const { token } = await tokenRes.json();
 
+        if (cancelled) return;
         const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
         const wsUrl = `${protocol}//${window.location.host}/ws/collab?token=${token}`;
         ws = new WebSocket(wsUrl);
 
         ws.onopen = () => {
+          if (cancelled) { ws?.close(); return; }
           setWsConnected(true);
           wsRef.current = ws;
         };
@@ -80,23 +84,27 @@ export default function CollaborationPage() {
         ws.onclose = () => {
           setWsConnected(false);
           wsRef.current = null;
-          // Reconnect after 5 seconds
-          reconnectTimer = setTimeout(connect, 5000);
+          if (!cancelled) {
+            reconnectTimer = setTimeout(connect, 5000);
+          }
         };
 
         ws.onerror = () => {
           ws?.close();
         };
       } catch {
-        reconnectTimer = setTimeout(connect, 5000);
+        if (!cancelled) {
+          reconnectTimer = setTimeout(connect, 5000);
+        }
       }
     }
 
     connect();
 
     return () => {
+      cancelled = true;
       clearTimeout(reconnectTimer);
-      if (ws && ws.readyState === WebSocket.OPEN) {
+      if (ws) {
         ws.close();
       }
       wsRef.current = null;

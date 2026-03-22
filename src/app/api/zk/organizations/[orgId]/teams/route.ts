@@ -6,6 +6,8 @@ import {
   successResponse,
   handleCorsPreflightRequest,
   addCorsHeaders,
+  createAuditLog,
+  getClientIP,
 } from '@/lib/zk';
 
 export async function OPTIONS() {
@@ -103,6 +105,16 @@ export async function POST(
     // Auto-add creator as team member with owner role
     await prisma.orgTeamMember.create({
       data: { teamId: team.id, userId: auth.userId, role: 'owner' },
+    });
+
+    await createAuditLog({
+      userId: auth.userId,
+      organizationId: orgId,
+      eventType: 'team_created',
+      targetType: 'team',
+      targetId: team.id,
+      ipAddress: getClientIP(request),
+      userAgent: request.headers.get('user-agent') || undefined,
     });
 
     const response = successResponse({
