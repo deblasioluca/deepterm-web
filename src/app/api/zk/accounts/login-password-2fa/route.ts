@@ -47,7 +47,6 @@ export async function POST(request: NextRequest) {
     // Find web user
     const webUser = await prisma.user.findUnique({
       where: { email: normalizedEmail },
-      include: { team: true },
     });
 
     if (!webUser || !webUser.passwordHash) {
@@ -221,11 +220,7 @@ export async function POST(request: NextRequest) {
         name: device.name,
         type: device.deviceType,
       } : null,
-      subscription: webUser.team ? {
-        plan: webUser.team.plan,
-        status: webUser.team.subscriptionStatus,
-        teamName: webUser.team.name,
-      } : null,
+      subscription: null, // Subscription info now fetched via /api/zk/accounts/license
       usedBackupCode,
     });
   } catch (error) {

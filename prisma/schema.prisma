@@ -86,9 +86,23 @@ model Organization {
   maxVaults    Int                @default(10)
   createdAt    DateTime           @default(now())
   updatedAt    DateTime           @updatedAt
+  // Billing / Stripe fields (migrated from legacy Team model)
+  ssoEnabled           Boolean          @default(false)
+  ssoDomain            String?
+  ssoProvider          String?
+  stripeCustomerId     String?          @unique
+  stripeSubscriptionId String?          @unique
+  subscriptionStatus   String?
+  currentPeriodStart   DateTime?
+  currentPeriodEnd     DateTime?
+  cancelAtPeriodEnd    Boolean          @default(false)
+  seats                Int              @default(1)
+  // Relations
   members      OrganizationUser[]
   auditLogs    ZKAuditLog[]
   vaults       ZKVault[]
+  invoices             Invoice[]
+  paymentMethods       PaymentMethod[]
   // Team collaboration relations
   orgTeams             OrgTeam[]
   presences            TeamPresence[]
@@ -234,7 +248,6 @@ model User {
   image                         String?
   avatarUrl                     String?
   role                          String    @default("member")
-  teamId                        String?
   twoFactorEnabled              Boolean   @default(false)
   twoFactorSecret               String?
   twoFactorBackupCodes          String?
@@ -251,7 +264,6 @@ model User {
   issues                        Issue[]
   passkeys                      Passkey[]
   sessions                      Session[]
-  team                          Team?     @relation(fields: [teamId], references: [id])
   votes                         Vote[]
   notifications                 UserNotification[]
   zkUser                        ZKUser?
@@ -293,47 +305,29 @@ model Passkey {
   @@index([userId])
 }
 
-model Team {
-  id                   String           @id @default(cuid())
-  name                 String
-  plan                 String           @default("starter")
-  ssoEnabled           Boolean          @default(false)
-  ssoDomain            String?
-  ssoProvider          String?
-  createdAt            DateTime         @default(now())
-  stripeCustomerId     String?          @unique
-  stripeSubscriptionId String?          @unique
-  subscriptionStatus   String?
-  currentPeriodStart   DateTime?
-  currentPeriodEnd     DateTime?
-  cancelAtPeriodEnd    Boolean          @default(false)
-  seats                Int              @default(1)
-  invoices             Invoice[]
-  paymentMethods       PaymentMethod[]
-  invitations          TeamInvitation[]
-  members              User[]
-}
 
 model Invoice {
-  id               String   @id @default(cuid())
-  teamId           String
-  stripeInvoiceId  String   @unique
+  id               String       @id @default(cuid())
+  organizationId   String
+  stripeInvoiceId  String       @unique
   amountPaid       Int
   amountDue        Int
-  currency         String   @default("usd")
+  currency         String       @default("usd")
   status           String
   invoicePdf       String?
   hostedInvoiceUrl String?
   periodStart      DateTime
   periodEnd        DateTime
-  createdAt        DateTime @default(now())
-  team             Team     @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  createdAt        DateTime     @default(now())
+  organization     Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId])
 }
 
 model PaymentMethod {
-  id                    String   @id @default(cuid())
-  teamId                String
-  stripePaymentMethodId String   @unique
+  id                    String       @id @default(cuid())
+  organizationId        String
+  stripePaymentMethodId String       @unique
   type                  String
   brand                 String?
   last4                 String?
@@ -344,12 +338,12 @@ model PaymentMethod {
   fingerprint           String?
   country               String?
   funding               String?
-  isDefault             Boolean  @default(false)
-  createdAt             DateTime @default(now())
-  updatedAt             DateTime @updatedAt
-  team                  Team     @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  isDefault             Boolean      @default(false)
+  createdAt             DateTime     @default(now())
+  updatedAt             DateTime     @updatedAt
+  organization          Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 
-  @@index([teamId])
+  @@index([organizationId])
 }
 
 model AdminUser {
@@ -543,21 +537,6 @@ model UserNotification {
   @@index([userId, createdAt])
 }
 
-model TeamInvitation {
-  id          String   @id @default(cuid())
-  email       String
-  teamId      String
-  role        String   @default("member")
-  token       String   @unique
-  invitedById String
-  status      String   @default("pending")
-  expiresAt   DateTime
-  createdAt   DateTime @default(now())
-  team        Team     @relation(fields: [teamId], references: [id], onDelete: Cascade)
-
-  @@index([email])
-  @@index([teamId])
-}
 
 model Issue {
   id                 String            @id @default(cuid())

@@ -20,10 +20,11 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { plan, billingPeriod = 'yearly', seats = 1 } = body as {
+    const { plan, billingPeriod = 'yearly', seats = 1, organizationId } = body as {
       plan: PlanType;
       billingPeriod: 'monthly' | 'yearly';
       seats: number;
+      organizationId?: string;
     };
 
     if (!plan || !['pro', 'team'].includes(plan)) {
@@ -35,7 +36,7 @@ export async function POST(request: NextRequest) {
 
     const user = await prisma.user.findUnique({
       where: { id: session.user.id },
-      include: { team: true },
+      include: { zkUser: true },
     });
 
     if (!user) {
@@ -45,24 +46,35 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Get or create team
-    let team = user.team;
-    if (!team) {
-      team = await prisma.team.create({
-        data: {
-          name: `${user.name}'s Team`,
-          members: {
-            connect: { id: user.id },
-          },
-        },
+    // Find the organization to bill
+    let org;
+    if (organizationId) {
+      org = await prisma.organization.findUnique({ where: { id: organizationId } });
+    } else if (user.zkUser) {
+      const membership = await prisma.organizationUser.findFirst({
+        where: { userId: user.zkUser.id, status: 'active' },
+        include: { organization: true },
       });
+      org = membership?.organization;
+    }
+
+    if (!org) {
+      const newOrg = await prisma.organization.create({
+        data: { name: `${user.name}'s Organization`, plan: 'free' },
+      });
+      if (user.zkUser) {
+        await prisma.organizationUser.create({
+          data: { organizationId: newOrg.id, userId: user.zkUser.id, role: 'owner', status: 'active' },
+        });
+      }
+      org = newOrg;
     }
 
     // Get or create Stripe customer
     const customer = await getOrCreateStripeCustomer(
-      team.id,
+      org.id,
       user.email,
-      team.name
+      org.name
     );
 
     // Prefer live offerings from DB (admin-controlled + deploy)
@@ -103,7 +115,7 @@ export async function POST(request: NextRequest) {
     const checkoutSession = await createCheckoutSession(
       customer.id,
       priceId,
-      team.id,
+      org.id,
       seats,
       `${baseUrl}/dashboard/billing?success=true`,
       `${baseUrl}/dashboard/billing?canceled=true`

@@ -11,7 +11,7 @@ export async function GET(request: NextRequest) {
 
     const skip = (page - 1) * limit;
 
-    const where: any = {
+    const where: Record<string, unknown> = {
       plan: { not: 'starter' },
     };
 
@@ -24,7 +24,7 @@ export async function GET(request: NextRequest) {
     }
 
     const [teams, total] = await Promise.all([
-      prisma.team.findMany({
+      prisma.organization.findMany({
         where,
         skip,
         take: limit,
@@ -33,11 +33,11 @@ export async function GET(request: NextRequest) {
           _count: { select: { members: true } },
         },
       }),
-      prisma.team.count({ where }),
+      prisma.organization.count({ where }),
     ]);
 
     // Calculate stats
-    const allPaidTeams = await prisma.team.findMany({
+    const allPaidTeams = await prisma.organization.findMany({
       where: { plan: { not: 'starter' } },
       select: { plan: true, seats: true, subscriptionStatus: true },
     });

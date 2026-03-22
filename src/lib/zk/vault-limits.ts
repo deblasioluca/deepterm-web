@@ -23,34 +23,37 @@ interface VaultLimitCheck {
  * Returns the check result — caller decides what to do.
  */
 export async function checkVaultItemLimit(userId: string): Promise<VaultLimitCheck> {
-  // Get user with team/plan info
+  // Get user and look up organization for plan info
   const zkUser = await prisma.zKUser.findUnique({
     where: { id: userId },
-    include: {
-      webUser: {
-        select: {
-          team: {
-            select: {
-              plan: true,
-              subscriptionStatus: true,
-            },
-          },
-        },
-      },
-    },
   });
 
+  if (!zkUser) {
+    return {
+      allowed: false,
+      remaining: 0,
+      currentCount: 0,
+      maxVaultItems: 0,
+      plan: 'starter',
+    };
+  }
+
+  // Look up user's organization for billing/plan info
+  const membership = await prisma.organizationUser.findFirst({
+    where: { userId, status: 'active' },
+    include: { organization: true },
+  });
+  const org = membership?.organization;
+
   // Determine effective plan
-  const isActive = zkUser?.webUser?.team?.subscriptionStatus === 'active'
-    || zkUser?.webUser?.team?.subscriptionStatus === 'trialing';
+  const isActive = org?.subscriptionStatus === 'active'
+    || org?.subscriptionStatus === 'trialing';
   const plan = isActive
-    ? (zkUser?.webUser?.team?.plan || 'starter')
+    ? (org?.plan || 'starter')
     : 'starter';
 
-  // DEBUG: Log plan resolution (remove after debugging)
   console.log('[vault-limits] userId:', userId,
-    'webUser:', zkUser?.webUser ? 'yes' : 'no',
-    'team:', zkUser?.webUser?.team ? JSON.stringify(zkUser.webUser.team) : 'none',
+    'org:', org ? JSON.stringify({ plan: org.plan, status: org.subscriptionStatus }) : 'none',
     'isActive:', isActive, 'plan:', plan);
 
   const limits = getLimitsForPlan(plan);

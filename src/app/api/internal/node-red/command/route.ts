@@ -119,18 +119,18 @@ export async function POST(request: NextRequest) {
 
       case 'licenses': {
         // Count subscriptions by type/status
-        const [totalUsers, teamCount, activeTeams] = await Promise.all([
+        const [totalUsers, orgCount, activeOrgs] = await Promise.all([
           prisma.user.count(),
-          prisma.team.count(),
-          prisma.team.count({ where: { subscriptionStatus: 'active' } }),
+          prisma.organization.count(),
+          prisma.organization.count({ where: { subscriptionStatus: 'active' } }),
         ]);
 
         summary = `🔑 *License Summary*\n`;
         summary += `━━━━━━━━━━━━━━━━━━\n`;
         summary += `👤 Total users: ${totalUsers}\n`;
-        summary += `👥 Teams: ${teamCount} (${activeTeams} active)\n`;
-        summary += `🆓 Starter: ${teamCount - activeTeams}\n`;
-        summary += `⭐ Paid: ${activeTeams}`;
+        summary += `👥 Organizations: ${orgCount} (${activeOrgs} active)\n`;
+        summary += `🆓 Starter: ${orgCount - activeOrgs}\n`;
+        summary += `⭐ Paid: ${activeOrgs}`;
         break;
       }
     }

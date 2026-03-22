@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 
-// GET - List all teams with pagination
+// GET - List all organizations with pagination
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
@@ -14,7 +14,7 @@ export async function GET(request: NextRequest) {
 
     const skip = (page - 1) * limit;
 
-    const where: any = {};
+    const where: Record<string, unknown> = {};
     
     if (search) {
       where.name = { contains: search };
@@ -25,7 +25,7 @@ export async function GET(request: NextRequest) {
     }
 
     const [teams, total] = await Promise.all([
-      prisma.team.findMany({
+      prisma.organization.findMany({
         where,
         skip,
         take: limit,
@@ -36,7 +36,7 @@ export async function GET(request: NextRequest) {
           },
         },
       }),
-      prisma.team.count({ where }),
+      prisma.organization.count({ where }),
     ]);
 
     return NextResponse.json({
@@ -67,7 +67,7 @@ export async function GET(request: NextRequest) {
   }
 }
 
-// POST - Create a new team
+// POST - Create a new organization
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
@@ -75,12 +75,12 @@ export async function POST(request: NextRequest) {
 
     if (!name) {
       return NextResponse.json(
-        { error: 'Team name is required' },
+        { error: 'Organization name is required' },
         { status: 400 }
       );
     }
 
-    const team = await prisma.team.create({
+    const team = await prisma.organization.create({
       data: {
         name,
         plan: plan || 'starter',
@@ -90,9 +90,9 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json(team);
   } catch (error) {
-    console.error('Failed to create team:', error);
+    console.error('Failed to create organization:', error);
     return NextResponse.json(
-      { error: 'Failed to create team' },
+      { error: 'Failed to create organization' },
       { status: 500 }
     );
   }

@@ -41,7 +41,6 @@ export function createMcpServer(userId: string, userEmail: string) {
               id: true, name: true, email: true, plan: true,
               subscriptionSource: true, subscriptionExpiresAt: true,
               twoFactorEnabled: true, createdAt: true,
-              team: { select: { id: true, name: true, plan: true, seats: true, subscriptionStatus: true, currentPeriodEnd: true } },
             },
           },
         },
@@ -69,7 +68,7 @@ export function createMcpServer(userId: string, userEmail: string) {
           twoFactorEnabled: user.webUser.twoFactorEnabled,
           createdAt: user.webUser.createdAt,
         } : null,
-        team: user.webUser?.team ?? null,
+        organization: null as Record<string, unknown> | null,
         devices: user.devices,
       };
 
@@ -171,17 +170,6 @@ export function createMcpServer(userId: string, userEmail: string) {
           webUser: {
             select: {
               plan: true, subscriptionSource: true, subscriptionExpiresAt: true,
-              team: {
-                select: {
-                  plan: true, subscriptionStatus: true, seats: true,
-                  currentPeriodStart: true, currentPeriodEnd: true, cancelAtPeriodEnd: true,
-                  paymentMethods: {
-                    where: { isDefault: true },
-                    select: { type: true, brand: true, last4: true, expMonth: true, expYear: true },
-                    take: 1,
-                  },
-                },
-              },
             },
           },
           appleProductId: true, appleExpiresDate: true, applePurchaseDate: true,
@@ -198,15 +186,32 @@ export function createMcpServer(userId: string, userEmail: string) {
         sub.plan = zkUser.webUser.plan;
         sub.source = zkUser.webUser.subscriptionSource;
         sub.expiresAt = zkUser.webUser.subscriptionExpiresAt;
-        if (zkUser.webUser.team) {
-          const t = zkUser.webUser.team;
-          sub.team = {
-            plan: t.plan, status: t.subscriptionStatus, seats: t.seats,
-            periodStart: t.currentPeriodStart, periodEnd: t.currentPeriodEnd,
-            cancelAtPeriodEnd: t.cancelAtPeriodEnd,
-            paymentMethod: t.paymentMethods[0] ?? null,
-          };
-        }
+      }
+
+      // Look up organization for billing info
+      const membership = await prisma.organizationUser.findFirst({
+        where: { userId, status: 'active' },
+        include: {
+          organization: {
+            include: {
+              paymentMethods: {
+                where: { isDefault: true },
+                select: { type: true, brand: true, last4: true, expMonth: true, expYear: true },
+                take: 1,
+              },
+            },
+          },
+        },
+      });
+
+      if (membership?.organization) {
+        const org = membership.organization;
+        sub.organization = {
+          plan: org.plan, status: org.subscriptionStatus, seats: org.seats,
+          periodStart: org.currentPeriodStart, periodEnd: org.currentPeriodEnd,
+          cancelAtPeriodEnd: org.cancelAtPeriodEnd,
+          paymentMethod: org.paymentMethods[0] ?? null,
+        };
       }
 
       if (zkUser.appleProductId) {
@@ -231,18 +236,17 @@ export function createMcpServer(userId: string, userEmail: string) {
       },
     },
     async ({ limit }) => {
-      const zkUser = await prisma.zKUser.findUnique({
-        where: { id: userId },
-        select: { webUser: { select: { team: { select: { id: true } } } } },
+      const membership = await prisma.organizationUser.findFirst({
+        where: { userId, status: 'active' },
+        select: { organizationId: true },
       });
 
-      const teamId = zkUser?.webUser?.team?.id;
-      if (!teamId) {
-        return { content: [{ type: 'text' as const, text: 'No team/billing account found.' }] };
+      if (!membership) {
+        return { content: [{ type: 'text' as const, text: 'No organization/billing account found.' }] };
       }
 
       const invoices = await prisma.invoice.findMany({
-        where: { teamId },
+        where: { organizationId: membership.organizationId },
         orderBy: { createdAt: 'desc' },
         take: limit,
         select: {

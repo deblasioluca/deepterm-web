@@ -23,53 +23,63 @@ export async function PATCH(
       );
     }
 
-    // Get the current user and check permissions
+    // Get the current user and find their organization
     const currentUser = await prisma.user.findUnique({
       where: { id: session.user.id },
+      include: { zkUser: true },
     });
 
-    if (!currentUser?.teamId) {
-      return NextResponse.json({ error: 'You are not part of a team' }, { status: 400 });
+    if (!currentUser?.zkUser) {
+      return NextResponse.json({ error: 'You are not part of an organization' }, { status: 400 });
     }
 
-    if (currentUser.role !== 'owner') {
+    const currentMembership = await prisma.organizationUser.findFirst({
+      where: { userId: currentUser.zkUser.id, status: 'active' },
+    });
+
+    if (!currentMembership) {
+      return NextResponse.json({ error: 'You are not part of an organization' }, { status: 400 });
+    }
+
+    if (currentMembership.role !== 'owner') {
       return NextResponse.json(
-        { error: 'Only team owners can change member roles' },
+        { error: 'Only organization owners can change member roles' },
         { status: 403 }
       );
     }
 
-    // Get the member to update
-    const member = await prisma.user.findUnique({
+    // Get the member to update (memberId is the OrganizationUser id)
+    const member = await prisma.organizationUser.findUnique({
       where: { id: memberId },
+      include: { user: true },
     });
 
-    if (!member || member.teamId !== currentUser.teamId) {
+    if (!member || member.organizationId !== currentMembership.organizationId) {
       return NextResponse.json({ error: 'Member not found' }, { status: 404 });
     }
 
     if (member.role === 'owner') {
       return NextResponse.json(
-        { error: 'Cannot change the role of the team owner' },
+        { error: 'Cannot change the role of the organization owner' },
         { status: 400 }
       );
     }
 
     // Update the role
-    const updatedMember = await prisma.user.update({
+    const updatedMember = await prisma.organizationUser.update({
       where: { id: memberId },
       data: { role },
-      select: {
-        id: true,
-        name: true,
-        email: true,
-        role: true,
-      },
+      include: { user: true },
     });
 
     return NextResponse.json({
       success: true,
-      member: updatedMember,
+      member: {
+        id: updatedMember.id,
+        name: updatedMember.user?.email || 'Unknown',
+        email: updatedMember.user?.email || '',
+        role: updatedMember.role,
+      },
     });
   } catch (error) {
     console.error('Failed to update member:', error);
@@ -80,7 +90,7 @@ export async function PATCH(
   }
 }
 
-// DELETE - Remove member from team
+// DELETE - Remove member from organization
 export async function DELETE(
   request: NextRequest,
   { params }: { params: { id: string } }
@@ -93,20 +103,29 @@ export async function DELETE(
 
     const memberId = params.id;
 
-    // Get the current user and check permissions
+    // Get the current user and find their organization
     const currentUser = await prisma.user.findUnique({
       where: { id: session.user.id },
+      include: { zkUser: true },
     });
 
-    if (!currentUser?.teamId) {
-      return NextResponse.json({ error: 'You are not part of a team' }, { status: 400 });
+    if (!currentUser?.zkUser) {
+      return NextResponse.json({ error: 'You are not part of an organization' }, { status: 400 });
+    }
+
+    const currentMembership = await prisma.organizationUser.findFirst({
+      where: { userId: currentUser.zkUser.id, status: 'active' },
+    });
+
+    if (!currentMembership) {
+      return NextResponse.json({ error: 'You are not part of an organization' }, { status: 400 });
     }
 
     // Check if user can remove members (owner or admin, or removing self)
     const canRemove =
-      currentUser.role === 'owner' ||
-      currentUser.role === 'admin' ||
-      currentUser.id === memberId;
+      currentMembership.role === 'owner' ||
+      currentMembership.role === 'admin' ||
+      currentMembership.id === memberId;
 
     if (!canRemove) {
       return NextResponse.json(
@@ -116,28 +135,25 @@ export async function DELETE(
     }
 
     // Get the member to remove
-    const member = await prisma.user.findUnique({
+    const member = await prisma.organizationUser.findUnique({
       where: { id: memberId },
     });
 
-    if (!member || member.teamId !== currentUser.teamId) {
+    if (!member || member.organizationId !== currentMembership.organizationId) {
       return NextResponse.json({ error: 'Member not found' }, { status: 404 });
     }
 
     if (member.role === 'owner') {
       return NextResponse.json(
-        { error: 'Cannot remove the team owner' },
+        { error: 'Cannot remove the organization owner' },
         { status: 400 }
       );
     }
 
-    // Remove member from team (don't delete user, just unlink from team)
-    await prisma.user.update({
+    // Remove member from organization (set status to 'removed')
+    await prisma.organizationUser.update({
       where: { id: memberId },
-      data: {
-        teamId: null,
-        role: 'member', // Reset role
-      },
+      data: { status: 'removed' },
     });
 
     return NextResponse.json({ success: true });

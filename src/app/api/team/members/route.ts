@@ -4,7 +4,7 @@ import { prisma } from '@/lib/prisma';
 import { sendTeamInvitationEmail } from '@/lib/email';
 import crypto from 'crypto';
 
-// GET - List team members and pending invitations
+// GET - List organization members and pending invitations
 export async function GET() {
   try {
     const session = await auth();
@@ -12,14 +12,12 @@ export async function GET() {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    // Get the user's team
     const user = await prisma.user.findUnique({
       where: { id: session.user.id },
-      include: { team: true },
+      include: { zkUser: true },
     });
 
-    if (!user?.teamId) {
-      // User has no team - return empty with user as potential owner
+    if (!user?.zkUser) {
       return NextResponse.json({
         members: [{
           id: user?.id,
@@ -34,60 +32,73 @@ export async function GET() {
       });
     }
 
-    // Get team members
-    const members = await prisma.user.findMany({
-      where: { teamId: user.teamId },
-      select: {
-        id: true,
-        name: true,
-        email: true,
-        role: true,
-        createdAt: true,
+    // Find user's organization membership
+    const membership = await prisma.organizationUser.findFirst({
+      where: { userId: user.zkUser.id, status: 'active' },
+      include: {
+        organization: {
+          include: {
+            members: {
+              where: { status: 'active' },
+              include: { user: true },
+              orderBy: { createdAt: 'asc' },
+            },
+          },
+        },
       },
-      orderBy: { createdAt: 'asc' },
     });
 
-    // Get pending invitations
-    const invitations = await prisma.teamInvitation.findMany({
+    if (!membership?.organization) {
+      return NextResponse.json({
+        members: [{
+          id: user.id,
+          name: user.name,
+          email: user.email,
+          role: 'owner',
+          status: 'active',
+          joinedAt: user.createdAt,
+        }],
+        invitations: [],
+        isOwner: true,
+      });
+    }
+
+    const org = membership.organization;
+
+    // Get pending invitations from OrganizationUser with status 'pending'
+    const pendingInvites = await prisma.organizationUser.findMany({
       where: {
-        teamId: user.teamId,
+        organizationId: org.id,
         status: 'pending',
-        expiresAt: { gt: new Date() },
       },
-      select: {
-        id: true,
-        email: true,
-        role: true,
-        createdAt: true,
-        expiresAt: true,
-      },
+      include: { user: true },
       orderBy: { createdAt: 'desc' },
     });
 
-    const isOwner = user.role === 'owner';
-    const isAdmin = user.role === 'admin' || isOwner;
+    const isOwner = membership.role === 'owner';
+    const isAdmin = membership.role === 'admin' || isOwner;
 
     return NextResponse.json({
-      members: members.map((m) => ({
+      members: org.members.map((m) => ({
         id: m.id,
-        name: m.name,
-        email: m.email,
+        name: m.user?.email || 'Unknown',
+        email: m.user?.email || '',
         role: m.role,
         status: 'active',
         joinedAt: m.createdAt,
       })),
-      invitations: invitations.map((i) => ({
+      invitations: pendingInvites.map((i) => ({
         id: i.id,
-        email: i.email,
+        email: i.user?.email || i.invitedEmail || '',
         role: i.role,
         status: 'pending',
         createdAt: i.createdAt,
-        expiresAt: i.expiresAt,
+        expiresAt: null,
       })),
       isOwner,
       isAdmin,
-      teamId: user.teamId,
-      teamName: user.team?.name,
+      teamId: org.id,
+      teamName: org.name,
     });
   } catch (error) {
     console.error('Failed to fetch team members:', error);
@@ -98,7 +109,7 @@ export async function GET() {
   }
 }
 
-// POST - Invite a new team member
+// POST - Invite a new member to the organization
 export async function POST(request: NextRequest) {
   try {
     const session = await auth();
@@ -115,99 +126,89 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Get the user and check permissions
     const user = await prisma.user.findUnique({
       where: { id: session.user.id },
-      include: { team: true },
+      include: { zkUser: true },
     });
 
-    if (!user) {
+    if (!user?.zkUser) {
       return NextResponse.json({ error: 'User not found' }, { status: 404 });
     }
 
+    // Find user's organization membership
+    const membership = await prisma.organizationUser.findFirst({
+      where: { userId: user.zkUser.id, status: 'active' },
+      include: { organization: true },
+    });
+
+    if (!membership?.organization) {
+      return NextResponse.json({ error: 'No organization found' }, { status: 404 });
+    }
+
     // Check if user can invite (must be owner or admin)
-    if (user.role !== 'owner' && user.role !== 'admin') {
+    if (membership.role !== 'owner' && membership.role !== 'admin') {
       return NextResponse.json(
         { error: 'Only owners and admins can invite members' },
         { status: 403 }
       );
     }
 
-    let teamId = user.teamId;
-
-    // If user has no team, create one
-    if (!teamId) {
-      const team = await prisma.team.create({
-        data: {
-          name: `${user.name}'s Team`,
-          plan: 'starter',
-        },
-      });
-      teamId = team.id;
-
-      // Update user to be owner of the team
-      await prisma.user.update({
-        where: { id: user.id },
-        data: { teamId: team.id, role: 'owner' },
-      });
-    }
+    const org = membership.organization;
 
     // Check if email is already a member
-    const existingMember = await prisma.user.findFirst({
-      where: {
-        email,
-        teamId,
-      },
+    const existingZkUser = await prisma.zKUser.findFirst({
+      where: { email },
     });
 
-    if (existingMember) {
-      return NextResponse.json(
-        { error: 'This user is already a team member' },
-        { status: 400 }
-      );
+    if (existingZkUser) {
+      const existingMembership = await prisma.organizationUser.findFirst({
+        where: {
+          organizationId: org.id,
+          userId: existingZkUser.id,
+          status: { in: ['active', 'pending'] },
+        },
+      });
+
+      if (existingMembership) {
+        const msg = existingMembership.status === 'active'
+          ? 'This user is already an organization member'
+          : 'An invitation has already been sent to this email';
+        return NextResponse.json({ error: msg }, { status: 400 });
+      }
     }
 
-    // Check if there's already a pending invitation
-    const existingInvitation = await prisma.teamInvitation.findFirst({
-      where: {
-        email,
-        teamId,
-        status: 'pending',
-        expiresAt: { gt: new Date() },
-      },
-    });
-
-    if (existingInvitation) {
-      return NextResponse.json(
-        { error: 'An invitation has already been sent to this email' },
-        { status: 400 }
-      );
-    }
-
-    // Create invitation
+    // Create invitation token
     const token = crypto.randomBytes(32).toString('hex');
-    const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 days
 
-    const invitation = await prisma.teamInvitation.create({
-      data: {
-        email,
-        teamId,
-        role: role || 'member',
-        token,
-        invitedById: user.id,
-        expiresAt,
-      },
-    });
-
-    // Get team name for the email
-    const team = await prisma.team.findUnique({
-      where: { id: teamId },
-    });
+    // Create a pending OrganizationUser record so the token can be found on acceptance
+    if (existingZkUser) {
+      await prisma.organizationUser.create({
+        data: {
+          organizationId: org.id,
+          userId: existingZkUser.id,
+          role: role || 'member',
+          status: 'pending',
+          token,
+          invitedEmail: email,
+        },
+      });
+    } else {
+      // User doesn't have a ZK account yet — store invitation with invitedEmail
+      await prisma.organizationUser.create({
+        data: {
+          organizationId: org.id,
+          role: role || 'member',
+          status: 'pending',
+          token,
+          invitedEmail: email,
+        },
+      });
+    }
 
     // Send invitation email
     await sendTeamInvitationEmail({
       email,
-      teamName: team?.name || 'the team',
+      teamName: org.name,
       inviterName: user.name || 'A team member',
       token,
     });
@@ -215,12 +216,10 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       success: true,
       invitation: {
-        id: invitation.id,
-        email: invitation.email,
-        role: invitation.role,
+        email,
+        role: role || 'member',
         status: 'pending',
-        createdAt: invitation.createdAt,
-        expiresAt: invitation.expiresAt,
+        createdAt: new Date(),
       },
     });
   } catch (error) {

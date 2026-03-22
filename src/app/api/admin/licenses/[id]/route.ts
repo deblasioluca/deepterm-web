@@ -50,43 +50,65 @@ export async function GET(
     const type = searchParams.get('type') || 'team';
 
     if (type === 'team') {
-      const team = await prisma.team.findUnique({
+      const org = await prisma.organization.findUnique({
         where: { id },
         include: {
           members: {
-            select: {
-              id: true,
-              name: true,
-              email: true,
-              role: true,
-              createdAt: true,
+            where: { status: 'active' },
+            include: {
+              user: {
+                select: {
+                  id: true,
+                  email: true,
+                },
+              },
             },
           },
         },
       });
 
-      if (!team) {
-        return NextResponse.json({ error: 'Team not found' }, { status: 404 });
+      if (!org) {
+        return NextResponse.json({ error: 'Organization not found' }, { status: 404 });
       }
 
-      return NextResponse.json({ license: team });
+      return NextResponse.json({
+        license: {
+          ...org,
+          members: org.members.map((m) => ({
+            id: m.id,
+            name: m.user?.email || 'Unknown',
+            email: m.user?.email || '',
+            role: m.role,
+            createdAt: m.createdAt,
+          })),
+        },
+      });
     } else {
-      const user = await prisma.user.findUnique({
+      const zkUser = await prisma.zKUser.findUnique({
         where: { id },
         select: {
           id: true,
-          name: true,
           email: true,
           createdAt: true,
-          team: true,
         },
       });
 
-      if (!user) {
+      if (!zkUser) {
         return NextResponse.json({ error: 'User not found' }, { status: 404 });
       }
 
-      return NextResponse.json({ license: user });
+      // Check if user has an organization
+      const membership = await prisma.organizationUser.findFirst({
+        where: { userId: zkUser.id, status: 'active' },
+        include: { organization: true },
+      });
+
+      return NextResponse.json({
+        license: {
+          ...zkUser,
+          organization: membership?.organization || null,
+        },
+      });
     }
   } catch (error) {
     console.error('Failed to fetch license:', error);
@@ -112,12 +134,12 @@ export async function PATCH(
     const { type, plan, seats, status, expiresAt, ssoEnabled } = await request.json();
 
     if (type === 'team') {
-      const team = await prisma.team.findUnique({
+      const org = await prisma.organization.findUnique({
         where: { id },
       });
 
-      if (!team) {
-        return NextResponse.json({ error: 'Team not found' }, { status: 404 });
+      if (!org) {
+        return NextResponse.json({ error: 'Organization not found' }, { status: 404 });
       }
 
       const updateData: Record<string, unknown> = {};
@@ -128,7 +150,7 @@ export async function PATCH(
       if (expiresAt !== undefined) updateData.currentPeriodEnd = expiresAt ? new Date(expiresAt) : null;
       if (ssoEnabled !== undefined) updateData.ssoEnabled = ssoEnabled;
 
-      const updatedTeam = await prisma.team.update({
+      const updatedOrg = await prisma.organization.update({
         where: { id },
         data: updateData,
       });
@@ -138,7 +160,7 @@ export async function PATCH(
         data: {
           adminId: admin.id,
           action: 'license.updated',
-          entityType: 'team',
+          entityType: 'organization',
           entityId: id,
           metadata: JSON.stringify(updateData),
         },
@@ -146,23 +168,27 @@ export async function PATCH(
 
       return NextResponse.json({
         success: true,
-        license: updatedTeam,
+        license: updatedOrg,
       });
     } else if (type === 'user') {
-      // For individual users, create a team if upgrading from free
-      const user = await prisma.user.findUnique({
+      // For individual users, create an organization if upgrading from free
+      const zkUser = await prisma.zKUser.findUnique({
         where: { id },
       });
 
-      if (!user) {
+      if (!zkUser) {
         return NextResponse.json({ error: 'User not found' }, { status: 404 });
       }
 
-      if (!user.teamId && plan && plan !== 'free') {
-        // Create a new team for this user
-        const team = await prisma.team.create({
+      const existingMembership = await prisma.organizationUser.findFirst({
+        where: { userId: zkUser.id, status: 'active' },
+      });
+
+      if (!existingMembership && plan && plan !== 'free' && plan !== 'starter') {
+        // Create a new organization for this user
+        const org = await prisma.organization.create({
           data: {
-            name: `${user.name}'s Team`,
+            name: `${zkUser.email}'s Organization`,
             plan,
             seats: seats || 1,
             subscriptionStatus: status || 'active',
@@ -171,9 +197,13 @@ export async function PATCH(
           },
         });
 
-        await prisma.user.update({
-          where: { id },
-          data: { teamId: team.id, role: 'owner' },
+        await prisma.organizationUser.create({
+          data: {
+            organizationId: org.id,
+            userId: zkUser.id,
+            role: 'owner',
+            status: 'active',
+          },
         });
 
         // Log audit
@@ -183,17 +213,17 @@ export async function PATCH(
             action: 'license.upgraded',
             entityType: 'user',
             entityId: id,
-            metadata: JSON.stringify({ teamId: team.id, plan }),
+            metadata: JSON.stringify({ organizationId: org.id, plan }),
           },
         });
 
         return NextResponse.json({
           success: true,
-          license: team,
-          message: 'Created new team for user',
+          license: org,
+          message: 'Created new organization for user',
         });
-      } else if (user.teamId) {
-        // Update the user's team
+      } else if (existingMembership) {
+        // Update the user's organization
         const updateData: Record<string, unknown> = {};
         
         if (plan !== undefined) updateData.plan = plan;
@@ -202,8 +232,8 @@ export async function PATCH(
         if (expiresAt !== undefined) updateData.currentPeriodEnd = expiresAt ? new Date(expiresAt) : null;
         if (ssoEnabled !== undefined) updateData.ssoEnabled = ssoEnabled;
 
-        const updatedTeam = await prisma.team.update({
-          where: { id: user.teamId },
+        const updatedOrg = await prisma.organization.update({
+          where: { id: existingMembership.organizationId },
           data: updateData,
         });
 
@@ -212,15 +242,15 @@ export async function PATCH(
           data: {
             adminId: admin.id,
             action: 'license.updated',
-            entityType: 'team',
-            entityId: user.teamId,
+            entityType: 'organization',
+            entityId: existingMembership.organizationId,
             metadata: JSON.stringify(updateData),
           },
         });
 
         return NextResponse.json({
           success: true,
-          license: updatedTeam,
+          license: updatedOrg,
         });
       }
 
@@ -243,7 +273,7 @@ export async function PATCH(
   }
 }
 
-// DELETE - Revoke/downgrade license (remove from team or cancel subscription)
+// DELETE - Revoke/downgrade license (remove organization or cancel subscription)
 export async function DELETE(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -259,23 +289,22 @@ export async function DELETE(
     const type = searchParams.get('type') || 'team';
 
     if (type === 'team') {
-      const team = await prisma.team.findUnique({
+      const org = await prisma.organization.findUnique({
         where: { id },
-        include: { members: true },
+        include: { _count: { select: { members: true } } },
       });
 
-      if (!team) {
-        return NextResponse.json({ error: 'Team not found' }, { status: 404 });
+      if (!org) {
+        return NextResponse.json({ error: 'Organization not found' }, { status: 404 });
       }
 
-      // Remove all members from team
-      await prisma.user.updateMany({
-        where: { teamId: id },
-        data: { teamId: null, role: 'member' },
+      // Remove all members from organization
+      await prisma.organizationUser.deleteMany({
+        where: { organizationId: id },
       });
 
-      // Delete the team
-      await prisma.team.delete({
+      // Delete the organization
+      await prisma.organization.delete({
         where: { id },
       });
 
@@ -284,15 +313,15 @@ export async function DELETE(
         data: {
           adminId: admin.id,
           action: 'license.revoked',
-          entityType: 'team',
+          entityType: 'organization',
           entityId: id,
-          metadata: JSON.stringify({ memberCount: team.members.length }),
+          metadata: JSON.stringify({ memberCount: org._count.members }),
         },
       });
 
       return NextResponse.json({
         success: true,
-        message: 'Team license revoked and team deleted',
+        message: 'Organization license revoked and organization deleted',
       });
     }
 

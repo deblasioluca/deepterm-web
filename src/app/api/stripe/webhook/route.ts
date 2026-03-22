@@ -112,35 +112,52 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
     session.subscription as string
   );
 
-  // teamId lives on subscription_data.metadata (from /api/stripe/checkout)
-  // or may be absent (from /api/checkout which uses email-based lookup)
-  let teamId = session.metadata?.teamId || subscription.metadata?.teamId;
+  // organizationId lives on subscription_data.metadata (from /api/stripe/checkout)
+  let orgId = session.metadata?.organizationId || subscription.metadata?.organizationId;
 
   const email = session.customer_email || session.metadata?.email || '';
   const plan = await getPlanFromPriceId(subscription.items.data[0].price.id);
 
-  // If no teamId, look up user by email and create/get a team
-  if (!teamId && email) {
-    const user = await prisma.user.findFirst({ where: { email } });
-    if (user) {
-      if (user.teamId) {
-        teamId = user.teamId;
-      } else {
-        // Create a team for this user
-        const team = await prisma.team.create({
+  // If no orgId, look up organization by Stripe customer ID or create one
+  if (!orgId) {
+    const existingOrg = await prisma.organization.findFirst({
+      where: { stripeCustomerId: session.customer as string },
+    });
+    if (existingOrg) {
+      orgId = existingOrg.id;
+    } else if (email) {
+      // Try to find user's organization
+      const zkUser = await prisma.zKUser.findFirst({ where: { email } });
+      if (zkUser) {
+        const membership = await prisma.organizationUser.findFirst({
+          where: { userId: zkUser.id, status: 'active' },
+        });
+        if (membership) {
+          orgId = membership.organizationId;
+        }
+      }
+      // Last resort: create a new organization and link the user as owner
+      if (!orgId) {
+        const newOrg = await prisma.organization.create({
           data: {
-            name: `${user.name || email}'s Team`,
+            name: `${email}'s Organization`,
             stripeCustomerId: session.customer as string,
-            members: { connect: { id: user.id } },
           },
         });
-        teamId = team.id;
+        orgId = newOrg.id;
+        // Link the ZK user as owner if they exist
+        const zkUserForOrg = await prisma.zKUser.findFirst({ where: { email } });
+        if (zkUserForOrg) {
+          await prisma.organizationUser.create({
+            data: { organizationId: newOrg.id, userId: zkUserForOrg.id, role: 'owner', status: 'active' },
+          });
+        }
       }
     }
   }
 
-  if (!teamId) {
-    console.error('[Stripe Webhook] No teamId and no user found for:', email);
+  if (!orgId) {
+    console.error('[Stripe Webhook] No organizationId and no user found for:', email);
     return;
   }
 
@@ -148,8 +165,8 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
   const periodStart = (subscription as any).current_period_start;
   const periodEnd = (subscription as any).current_period_end;
 
-  await prisma.team.update({
-    where: { id: teamId },
+  await prisma.organization.update({
+    where: { id: orgId },
     data: {
       stripeCustomerId: session.customer as string,
       stripeSubscriptionId: subscription.id,
@@ -162,8 +179,8 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
     },
   });
 
-  // Sync plan to all team members
-  await syncTeamMemberPlans(teamId, plan, session.customer as string, subscription.id);
+  // Sync plan to all organization members
+  await syncOrgMemberPlans(orgId, plan, session.customer as string, subscription.id);
 
   // Notify Node-RED → WhatsApp (fire-and-forget)
   notifyPayment({
@@ -173,16 +190,16 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
     amount: session.amount_total || 0,
   });
 
-  console.log(`[Stripe Webhook] checkout.session.completed: team=${teamId} plan=${plan} email=${email}`);
+  console.log(`[Stripe Webhook] checkout.session.completed: org=${orgId} plan=${plan} email=${email}`);
 }
 
 async function handleSubscriptionUpdated(subscription: Stripe.Subscription) {
-  const team = await prisma.team.findFirst({
+  const org = await prisma.organization.findFirst({
     where: { stripeCustomerId: subscription.customer as string },
   });
 
-  if (!team) {
-    console.error('Team not found for subscription:', subscription.id);
+  if (!org) {
+    console.error('Organization not found for subscription:', subscription.id);
     return;
   }
 
@@ -192,8 +209,8 @@ async function handleSubscriptionUpdated(subscription: Stripe.Subscription) {
 
   const plan = await getPlanFromPriceId(subscription.items.data[0].price.id);
 
-  await prisma.team.update({
-    where: { id: team.id },
+  await prisma.organization.update({
+    where: { id: org.id },
     data: {
       stripeSubscriptionId: subscription.id,
       subscriptionStatus: subscription.status,
@@ -205,38 +222,38 @@ async function handleSubscriptionUpdated(subscription: Stripe.Subscription) {
     },
   });
 
-  // Sync plan to all team members
-  await syncTeamMemberPlans(team.id, plan, subscription.customer as string, subscription.id);
+  // Sync plan to all organization members
+  await syncOrgMemberPlans(org.id, plan, subscription.customer as string, subscription.id);
 }
 
 async function handleSubscriptionDeleted(subscription: Stripe.Subscription) {
-  const team = await prisma.team.findFirst({
+  const org = await prisma.organization.findFirst({
     where: { stripeSubscriptionId: subscription.id },
   });
 
-  if (!team) {
+  if (!org) {
     return;
   }
 
-  await prisma.team.update({
-    where: { id: team.id },
+  await prisma.organization.update({
+    where: { id: org.id },
     data: {
       subscriptionStatus: 'canceled',
-      plan: 'starter',
+      plan: 'free',
       stripeSubscriptionId: null,
       currentPeriodEnd: null,
       cancelAtPeriodEnd: false,
     },
   });
 
-  // Reset team members to free plan
-  await syncTeamMemberPlans(team.id, 'free', null, null);
+  // Reset organization members to free plan
+  await syncOrgMemberPlans(org.id, 'free', null, null);
 
   // Notify Node-RED → WhatsApp (fire-and-forget)
   notifyPayment({
     event: 'subscription-cancelled',
     email: (subscription.customer as string) || '',
-    plan: 'starter',
+    plan: 'free',
     details: `Subscription ${subscription.id} cancelled`,
   });
 }
@@ -247,11 +264,11 @@ async function handleInvoicePaid(invoice: Stripe.Invoice) {
     return;
   }
 
-  const team = await prisma.team.findFirst({
+  const org = await prisma.organization.findFirst({
     where: { stripeCustomerId: invoice.customer as string },
   });
 
-  if (!team) {
+  if (!org) {
     return;
   }
 
@@ -267,7 +284,7 @@ async function handleInvoicePaid(invoice: Stripe.Invoice) {
       amountPaid: invoice.amount_paid,
     },
     create: {
-      teamId: team.id,
+      organizationId: org.id,
       stripeInvoiceId: invoice.id,
       amountPaid: invoice.amount_paid,
       amountDue: invoice.amount_due,
@@ -282,17 +299,17 @@ async function handleInvoicePaid(invoice: Stripe.Invoice) {
 }
 
 async function handleInvoicePaymentFailed(invoice: Stripe.Invoice) {
-  const team = await prisma.team.findFirst({
+  const org = await prisma.organization.findFirst({
     where: { stripeCustomerId: invoice.customer as string },
   });
 
-  if (!team) {
+  if (!org) {
     return;
   }
 
   // Update subscription status
-  await prisma.team.update({
-    where: { id: team.id },
+  await prisma.organization.update({
+    where: { id: org.id },
     data: {
       subscriptionStatus: 'past_due',
     },
@@ -309,11 +326,11 @@ async function handleInvoicePaymentFailed(invoice: Stripe.Invoice) {
 
 async function handleCustomerUpdated(customer: Stripe.Customer) {
   // Handle customer updates (e.g., default payment method changed)
-  const team = await prisma.team.findFirst({
+  const org = await prisma.organization.findFirst({
     where: { stripeCustomerId: customer.id },
   });
 
-  if (!team) {
+  if (!org) {
     return;
   }
 
@@ -323,21 +340,21 @@ async function handleCustomerUpdated(customer: Stripe.Customer) {
       customer.invoice_settings.default_payment_method as string
     );
 
-    await syncPaymentMethod(paymentMethod, team.id, true);
+    await syncPaymentMethod(paymentMethod, org.id, true);
   }
 }
 
 async function handleSetupIntentSucceeded(setupIntent: Stripe.SetupIntent) {
-  const teamId = setupIntent.metadata?.teamId;
-  if (!teamId || !setupIntent.payment_method) {
+  const orgId = setupIntent.metadata?.organizationId;
+  if (!orgId || !setupIntent.payment_method) {
     return;
   }
 
-  const team = await prisma.team.findUnique({
-    where: { id: teamId },
+  const org = await prisma.organization.findUnique({
+    where: { id: orgId },
   });
 
-  if (!team) {
+  if (!org) {
     return;
   }
 
@@ -347,16 +364,16 @@ async function handleSetupIntentSucceeded(setupIntent: Stripe.SetupIntent) {
 
   // Check if this is the first payment method
   const existingMethods = await prisma.paymentMethod.count({
-    where: { teamId: team.id },
+    where: { organizationId: org.id },
   });
 
   const isDefault = existingMethods === 0;
 
-  await syncPaymentMethod(paymentMethod, team.id, isDefault);
+  await syncPaymentMethod(paymentMethod, org.id, isDefault);
 
   // If it's the default, update customer's invoice settings
-  if (isDefault && team.stripeCustomerId) {
-    await stripe.customers.update(team.stripeCustomerId, {
+  if (isDefault && org.stripeCustomerId) {
+    await stripe.customers.update(org.stripeCustomerId, {
       invoice_settings: {
         default_payment_method: paymentMethod.id,
       },
@@ -369,11 +386,11 @@ async function handlePaymentMethodAttached(paymentMethod: Stripe.PaymentMethod) 
     return;
   }
 
-  const team = await prisma.team.findFirst({
+  const org = await prisma.organization.findFirst({
     where: { stripeCustomerId: paymentMethod.customer as string },
   });
 
-  if (!team) {
+  if (!org) {
     return;
   }
 
@@ -388,10 +405,10 @@ async function handlePaymentMethodAttached(paymentMethod: Stripe.PaymentMethod) 
 
   // Check if this is the first payment method
   const existingMethods = await prisma.paymentMethod.count({
-    where: { teamId: team.id },
+    where: { organizationId: org.id },
   });
 
-  await syncPaymentMethod(paymentMethod, team.id, existingMethods === 0);
+  await syncPaymentMethod(paymentMethod, org.id, existingMethods === 0);
 }
 
 async function handlePaymentMethodDetached(paymentMethod: Stripe.PaymentMethod) {
@@ -402,7 +419,7 @@ async function handlePaymentMethodDetached(paymentMethod: Stripe.PaymentMethod) 
 
 async function syncPaymentMethod(
   paymentMethod: Stripe.PaymentMethod,
-  teamId: string,
+  organizationId: string,
   isDefault: boolean
 ) {
   const pmData = extractPaymentMethodData(paymentMethod);
@@ -410,7 +427,7 @@ async function syncPaymentMethod(
   if (isDefault) {
     // Set all existing methods to non-default
     await prisma.paymentMethod.updateMany({
-      where: { teamId },
+      where: { organizationId },
       data: { isDefault: false },
     });
   }
@@ -422,7 +439,7 @@ async function syncPaymentMethod(
       isDefault,
     },
     create: {
-      teamId,
+      organizationId,
       stripePaymentMethodId: paymentMethod.id,
       ...pmData,
       isDefault,
@@ -495,23 +512,33 @@ function extractPaymentMethodData(paymentMethod: Stripe.PaymentMethod) {
   }
 }
 
-async function syncTeamMemberPlans(
-  teamId: string,
+async function syncOrgMemberPlans(
+  organizationId: string,
   plan: string,
   stripeCustomerId: string | null,
   stripeSubscriptionId: string | null
 ) {
   try {
-    await prisma.user.updateMany({
-      where: { teamId },
-      data: {
-        plan,
-        stripeCustomerId,
-        stripeSubscriptionId,
-      },
+    // Find all web User IDs linked to this organization's ZK users
+    const orgMembers = await prisma.organizationUser.findMany({
+      where: { organizationId, status: 'active' },
+      include: { user: { include: { webUser: true } } },
     });
+    const webUserIds = orgMembers
+      .map((m) => m.user?.webUser?.id)
+      .filter((id): id is string => !!id);
+
+    if (webUserIds.length > 0) {
+      await prisma.user.updateMany({
+        where: { id: { in: webUserIds } },
+        data: {
+          plan,
+          stripeSubscriptionId,
+        },
+      });
+    }
   } catch (err) {
-    console.error('[Stripe Webhook] Failed to sync team member plans:', err);
+    console.error('[Stripe Webhook] Failed to sync org member plans:', err);
   }
 }
 

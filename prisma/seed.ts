@@ -29,8 +29,8 @@ async function main() {
 
   console.log('Created admin user:', superAdmin.email);
 
-  // Create team
-  const team = await prisma.team.create({
+  // Create organization (replaces legacy Team model)
+  const org = await prisma.organization.create({
     data: {
       name: 'DeepTerm Engineering',
       plan: 'team',
@@ -38,7 +38,7 @@ async function main() {
     },
   });
 
-  console.log('✅ Created team:', team.name);
+  console.log('✅ Created organization:', org.name);
 
   // Create users
   const passwordHash = await bcrypt.hash('password123', 10);
@@ -49,7 +49,6 @@ async function main() {
       email: 'alice@deepterm.net',
       passwordHash,
       role: 'owner',
-      teamId: team.id,
     },
   });
 
@@ -59,7 +58,6 @@ async function main() {
       email: 'bob@deepterm.net',
       passwordHash,
       role: 'admin',
-      teamId: team.id,
     },
   });
 
@@ -69,9 +67,30 @@ async function main() {
       email: 'carol@deepterm.net',
       passwordHash,
       role: 'member',
-      teamId: team.id,
     },
   });
+
+  // Create ZK users and link them to the organization
+  for (const webUser of [alice, bob, carol]) {
+    const zkUser = await prisma.zKUser.create({
+      data: {
+        email: webUser.email,
+        masterPasswordHash: '',
+        protectedSymmetricKey: '',
+        publicKey: '',
+        encryptedPrivateKey: '',
+        webUserId: webUser.id,
+      },
+    });
+    await prisma.organizationUser.create({
+      data: {
+        organizationId: org.id,
+        userId: zkUser.id,
+        role: webUser === alice ? 'owner' : webUser === bob ? 'admin' : 'member',
+        status: 'active',
+      },
+    });
+  }
 
   console.log('✅ Created users:', alice.name, bob.name, carol.name);
 

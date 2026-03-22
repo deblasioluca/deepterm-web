@@ -41,14 +41,12 @@ export async function POST(request: NextRequest) {
       if (zkUser.webUserId) {
         user = await prisma.user.findUnique({
           where: { id: zkUser.webUserId },
-          include: { team: true },
         });
       }
 
       if (!user) {
         user = await prisma.user.findUnique({
           where: { email: zkUser.email },
-          include: { team: true },
         });
       }
 
@@ -68,9 +66,6 @@ export async function POST(request: NextRequest) {
       // Find user by email
       user = await prisma.user.findUnique({
         where: { email },
-        include: {
-          team: true,
-        },
       });
 
       if (!user) {
@@ -124,7 +119,18 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    const license = determineLicenseStatus(user);
+    // Look up the user's organization for billing/subscription status
+    const zkUserForOrg = await prisma.zKUser.findFirst({ where: { email: user.email } });
+    let org = null;
+    if (zkUserForOrg) {
+      const membership = await prisma.organizationUser.findFirst({
+        where: { userId: zkUserForOrg.id, status: 'active' },
+        include: { organization: true },
+      });
+      org = membership?.organization ?? null;
+    }
+
+    const license = determineLicenseStatus(user, org);
 
     return NextResponse.json({
       success: true,

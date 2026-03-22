@@ -24,25 +24,36 @@ export async function GET() {
 
     const user = await prisma.user.findUnique({
       where: { id: session.user.id },
+      include: { zkUser: true },
+    });
+
+    if (!user?.zkUser) {
+      return NextResponse.json({
+        subscription: null,
+        plan: 'free',
+        seats: 0,
+        usedSeats: 0,
+      });
+    }
+
+    // Find user's organization
+    const membership = await prisma.organizationUser.findFirst({
+      where: { userId: user.zkUser.id, status: 'active' },
       include: {
-        team: {
+        organization: {
           include: {
-            members: {
-              select: { id: true, name: true, email: true, role: true },
-            },
-            invoices: {
-              orderBy: { createdAt: 'desc' },
-              take: 10,
-            },
+            members: { where: { status: 'active' }, include: { user: true } },
+            invoices: { orderBy: { createdAt: 'desc' }, take: 10 },
           },
         },
       },
     });
 
-    if (!user?.team) {
+    const org = membership?.organization;
+    if (!org) {
       return NextResponse.json({
         subscription: null,
-        plan: 'starter',
+        plan: 'free',
         seats: 0,
         usedSeats: 0,
       });
@@ -50,21 +61,26 @@ export async function GET() {
 
     // Get default payment method
     const paymentMethod = await prisma.paymentMethod.findFirst({
-      where: { teamId: user.team.id, isDefault: true },
+      where: { organizationId: org.id, isDefault: true },
     });
 
     return NextResponse.json({
       subscription: {
-        status: user.team.subscriptionStatus,
-        currentPeriodEnd: user.team.currentPeriodEnd,
-        currentPeriodStart: user.team.currentPeriodStart,
-        cancelAtPeriodEnd: user.team.cancelAtPeriodEnd,
+        status: org.subscriptionStatus,
+        currentPeriodEnd: org.currentPeriodEnd,
+        currentPeriodStart: org.currentPeriodStart,
+        cancelAtPeriodEnd: org.cancelAtPeriodEnd,
       },
-      plan: user.team.plan,
-      seats: user.team.seats,
-      usedSeats: user.team.members.length,
-      members: user.team.members,
-      invoices: user.team.invoices,
+      plan: org.plan,
+      seats: org.seats,
+      usedSeats: org.members.length,
+      members: org.members.map((m) => ({
+        id: m.id,
+        name: m.user?.email || 'Unknown',
+        email: m.user?.email || '',
+        role: m.role,
+      })),
+      invoices: org.invoices,
       paymentMethod: paymentMethod
         ? {
             brand: paymentMethod.brand,
@@ -105,37 +121,46 @@ export async function PATCH(request: NextRequest) {
 
     const user = await prisma.user.findUnique({
       where: { id: session.user.id },
-      include: { 
-        team: {
-          include: {
-            members: true,
-          },
-        },
-      },
+      include: { zkUser: true },
     });
 
-    if (!user?.team?.stripeSubscriptionId) {
+    if (!user?.zkUser) {
       return NextResponse.json(
         { error: 'No active subscription' },
         { status: 404 }
       );
     }
 
+    // Find user's organization
+    const membership = await prisma.organizationUser.findFirst({
+      where: { userId: user.zkUser.id, status: 'active' },
+      include: { organization: { include: { members: { where: { status: 'active' } } } } },
+    });
+
+    if (!membership?.organization?.stripeSubscriptionId) {
+      return NextResponse.json(
+        { error: 'No active subscription' },
+        { status: 404 }
+      );
+    }
+
+    const org = membership.organization;
+    // stripeSubscriptionId is guaranteed non-null by the guard above
+    const subscriptionId = org.stripeSubscriptionId as string;
+
     // Check if user is owner/admin
-    if (!['owner', 'admin'].includes(user.role)) {
+    if (!['owner', 'admin'].includes(membership.role)) {
       return NextResponse.json(
         { error: 'Insufficient permissions' },
         { status: 403 }
       );
     }
 
-    const subscriptionId = user.team.stripeSubscriptionId;
-
     switch (action) {
       case 'cancel': {
         await cancelSubscription(subscriptionId, false);
-        await prisma.team.update({
-          where: { id: user.team.id },
+        await prisma.organization.update({
+          where: { id: org.id },
           data: { cancelAtPeriodEnd: true },
         });
         return NextResponse.json({ success: true, message: 'Subscription will be canceled at period end' });
@@ -143,8 +168,8 @@ export async function PATCH(request: NextRequest) {
 
       case 'resume': {
         await resumeSubscription(subscriptionId);
-        await prisma.team.update({
-          where: { id: user.team.id },
+        await prisma.organization.update({
+          where: { id: org.id },
           data: { cancelAtPeriodEnd: false },
         });
         return NextResponse.json({ success: true, message: 'Subscription resumed' });
@@ -157,16 +182,16 @@ export async function PATCH(request: NextRequest) {
             { status: 400 }
           );
         }
-        const minSeats = user.team.members?.length || 1;
+        const minSeats = org.members?.length || 1;
         if (seats < minSeats) {
           return NextResponse.json(
-            { error: `Cannot reduce seats below current team size (${minSeats})` },
+            { error: `Cannot reduce seats below current member count (${minSeats})` },
             { status: 400 }
           );
         }
         await updateSubscriptionSeats(subscriptionId, seats);
-        await prisma.team.update({
-          where: { id: user.team.id },
+        await prisma.organization.update({
+          where: { id: org.id },
           data: { seats },
         });
         return NextResponse.json({ success: true, message: 'Seats updated' });
@@ -213,8 +238,8 @@ export async function PATCH(request: NextRequest) {
         }
 
         await changeSubscriptionPlan(subscriptionId, priceId);
-        await prisma.team.update({
-          where: { id: user.team.id },
+        await prisma.organization.update({
+          where: { id: org.id },
           data: { plan },
         });
         return NextResponse.json({ success: true, message: 'Plan updated' });

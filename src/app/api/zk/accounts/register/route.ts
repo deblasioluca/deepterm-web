@@ -70,20 +70,7 @@ export async function POST(request: NextRequest) {
     // Check if there's an existing web User with this email (for account linking)
     const existingWebUser = await prisma.user.findUnique({
       where: { email: email.toLowerCase() },
-      include: { team: true },
     });
-
-    // If web user exists but has no team, create one
-    let teamId = existingWebUser?.teamId;
-    if (existingWebUser && !teamId) {
-      const team = await prisma.team.create({
-        data: {
-          name: `${existingWebUser.name}'s Team`,
-          members: { connect: { id: existingWebUser.id } },
-        },
-      });
-      teamId = team.id;
-    }
 
     // Create the ZK user with link to web user if exists
     const user = await prisma.zKUser.create({
@@ -113,14 +100,6 @@ export async function POST(request: NextRequest) {
           role: 'owner',
         },
       });
-      
-      // Create team for the new user
-      const team = await prisma.team.create({
-        data: {
-          name: `${newWebUser.name}'s Team`,
-          members: { connect: { id: newWebUser.id } },
-        },
-      });
 
       // Update ZK user with web user link
       await prisma.zKUser.update({
@@ -128,6 +107,25 @@ export async function POST(request: NextRequest) {
         data: { webUserId: newWebUser.id },
       });
     }
+
+    // Create a default organization for the user
+    const org = await prisma.organization.create({
+      data: {
+        name: `${existingWebUser?.name || email.split('@')[0]}'s Organization`,
+        plan: 'starter',
+        seats: 1,
+      },
+    });
+
+    // Add user as organization owner
+    await prisma.organizationUser.create({
+      data: {
+        organizationId: org.id,
+        userId: user.id,
+        role: 'owner',
+        status: 'active',
+      },
+    });
 
     // Create a default personal vault
     const defaultVault = await prisma.zKVault.create({
