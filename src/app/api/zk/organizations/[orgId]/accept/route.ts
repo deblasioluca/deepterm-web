@@ -46,11 +46,12 @@ export async function POST(
       return errorResponse('No pending invitation found for this organization', 404);
     }
 
-    // Update status to confirmed
+    // Update status to confirmed and clear the invitation token
     await prisma.organizationUser.update({
       where: { id: membership.id },
       data: {
         status: OrganizationUserStatus.CONFIRMED,
+        token: null,
       },
     });
 

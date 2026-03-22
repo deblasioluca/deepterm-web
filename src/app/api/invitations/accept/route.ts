@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth as getSession } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
-import { OrganizationUserStatus } from '@/lib/zk';
+import { OrganizationUserStatus, createAuditLog, getClientIP } from '@/lib/zk';
 
 /**
  * GET /api/invitations/accept?token=...
@@ -151,16 +151,16 @@ export async function POST(request: NextRequest) {
 
     if (existingMembership) {
       // Already has a record — delete the duplicate invitation and keep the existing one
-      await prisma.organizationUser.delete({
-        where: { id: invitation.id },
-      });
-      // If existing record is not confirmed, confirm it now
-      if (existingMembership.status !== 'confirmed') {
-        await prisma.organizationUser.update({
-          where: { id: existingMembership.id },
-          data: { status: OrganizationUserStatus.CONFIRMED, token: null },
-        });
-      }
+      // Use a transaction to ensure atomicity
+      await prisma.$transaction([
+        prisma.organizationUser.delete({ where: { id: invitation.id } }),
+        ...(existingMembership.status !== 'confirmed'
+          ? [prisma.organizationUser.update({
+              where: { id: existingMembership.id },
+              data: { status: OrganizationUserStatus.CONFIRMED, token: null },
+            })]
+          : []),
+      ]);
       return NextResponse.json({
         success: true,
         message: `You are already a member of ${invitation.organization.name}`,
@@ -204,6 +204,17 @@ export async function POST(request: NextRequest) {
         });
       }
     }
+
+    // Audit log for invitation acceptance
+    await createAuditLog({
+      userId: zkUser.id,
+      organizationId: invitation.organizationId,
+      eventType: 'invitation_accepted',
+      targetType: 'user',
+      targetId: zkUser.id,
+      ipAddress: getClientIP(request),
+      userAgent: request.headers.get('user-agent') || undefined,
+    });
 
     return NextResponse.json({
       success: true,
