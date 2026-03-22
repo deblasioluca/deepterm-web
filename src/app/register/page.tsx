@@ -1,7 +1,7 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { useState, useEffect, Suspense } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { motion } from 'framer-motion';
 import { Terminal, User, Mail, Lock, AlertCircle, Check, Fingerprint } from 'lucide-react';
@@ -9,8 +9,12 @@ import { Button, Card, Input } from '@/components/ui';
 import { startRegistration, browserSupportsWebAuthn } from '@simplewebauthn/browser';
 import { signIn } from 'next-auth/react';
 
-export default function RegisterPage() {
+function RegisterPageContent() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const rawCallbackUrl = searchParams.get('callbackUrl');
+  // Only allow relative paths to prevent open redirect attacks
+  const callbackUrl = rawCallbackUrl?.startsWith('/') && !rawCallbackUrl.startsWith('//') ? rawCallbackUrl : null;
   const [formData, setFormData] = useState({
     name: '',
     email: '',
@@ -74,7 +78,14 @@ export default function RegisterPage() {
 
       if (signInResult?.error) {
         // Registration succeeded but sign-in failed, redirect to login
-        router.push('/login?registered=true');
+        router.push(callbackUrl ? `/login?registered=true&callbackUrl=${encodeURIComponent(callbackUrl)}` : '/login?registered=true');
+        return;
+      }
+
+      // If there's a callback URL (e.g. from an invite), redirect there directly
+      if (callbackUrl) {
+        router.push(callbackUrl);
+        router.refresh();
         return;
       }
 
@@ -141,7 +152,7 @@ export default function RegisterPage() {
   };
 
   const handleSkipPasskey = () => {
-    router.push('/dashboard');
+    router.push(callbackUrl || '/dashboard');
     router.refresh();
   };
 
@@ -149,8 +160,8 @@ export default function RegisterPage() {
     setFormData((prev) => ({ ...prev, [field]: value }));
   };
 
-  const handleGitHubSignUp = () => signIn('github', { callbackUrl: '/dashboard' });
-  const handleAppleSignUp  = () => signIn('apple',  { callbackUrl: '/dashboard' });
+  const handleGitHubSignUp = () => signIn('github', { callbackUrl: callbackUrl || '/dashboard' });
+  const handleAppleSignUp  = () => signIn('apple',  { callbackUrl: callbackUrl || '/dashboard' });
 
   return (
     <div className="min-h-screen flex items-center justify-center px-4 py-12 relative overflow-hidden">
@@ -296,7 +307,7 @@ export default function RegisterPage() {
               <p className="mt-6 text-center text-text-secondary">
                 Already have an account?{' '}
                 <Link
-                  href="/login"
+                  href={callbackUrl ? `/login?callbackUrl=${encodeURIComponent(callbackUrl)}` : '/login'}
                   className="text-accent-primary hover:text-accent-primary-hover transition-colors font-medium"
                 >
                   Log in
@@ -375,5 +386,13 @@ export default function RegisterPage() {
         </Card>
       </motion.div>
     </div>
+  );
+}
+
+export default function RegisterPage() {
+  return (
+    <Suspense>
+      <RegisterPageContent />
+    </Suspense>
   );
 }
