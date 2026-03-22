@@ -79,6 +79,9 @@ export default function TerminalPage() {
               .map((o: { id: string; name: string }) => ({ id: o.id, name: o.name }));
           }
         } catch {
+          // ignore
+        }
+        if (orgDetails.length === 0) {
           // Fall back to orgIds from token
           orgDetails = (data.orgIds || []).map((id: string) => ({ id, name: id.substring(0, 8) + '...' }));
         }

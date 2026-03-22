@@ -61,6 +61,10 @@ export async function POST(
       if (!callerMembership) {
         return errorResponse('Only org owners/admins can confirm other members', 403);
       }
+      // Ensure the member has a linked user account before confirming
+      if (!member.userId) {
+        return errorResponse('Cannot confirm membership: user has not registered yet', 400);
+      }
     }
 
     // Check if already confirmed
