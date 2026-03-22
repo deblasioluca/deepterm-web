@@ -66,6 +66,7 @@ export async function POST(
       where: { id: memberId },
       data: {
         status: OrganizationUserStatus.CONFIRMED,
+        confirmedAt: new Date(),
         encryptedOrgKey: encryptedOrgKey || member.encryptedOrgKey,
       },
     });

@@ -70,6 +70,8 @@ export async function GET(
         publicKey: m.user?.publicKey ?? null,
         role: m.role,
         status: m.status,
+        invitedAt: m.createdAt.toISOString(),
+        confirmedAt: m.confirmedAt ? m.confirmedAt.toISOString() : null,
         createdAt: m.createdAt.toISOString(),
         updatedAt: m.updatedAt.toISOString(),
       }))
