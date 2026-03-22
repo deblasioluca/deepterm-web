@@ -33,11 +33,11 @@ export function AudioCallUI({ orgId }: AudioCallUIProps) {
   const fetchData = useCallback(async () => {
     setLoading(true);
     try {
-      // Fetch current user
-      const sessionRes = await fetch('/api/auth/session');
-      if (sessionRes.ok) {
-        const session = await sessionRes.json();
-        setCurrentUserId(session?.user?.id || '');
+      // Fetch ws-token to get ZKUser id (correct identity for org member comparisons)
+      const tokenRes = await fetch('/api/terminal/ws-token', { method: 'POST' });
+      if (tokenRes.ok) {
+        const tokenData = await tokenRes.json();
+        setCurrentUserId(tokenData?.userId || '');
       }
 
       // Fetch org members

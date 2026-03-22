@@ -89,7 +89,7 @@ export async function POST(
       organizationId: orgId,
       eventType: 'user_confirmed',
       targetType: 'user',
-      targetId: auth.userId,
+      targetId: member.userId || memberId,
       ipAddress: getClientIP(request),
       userAgent: request.headers.get('user-agent') || undefined,
     });

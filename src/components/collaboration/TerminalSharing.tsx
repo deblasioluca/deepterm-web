@@ -49,11 +49,24 @@ export function TerminalSharing({ orgId }: TerminalSharingProps) {
   const fetchData = useCallback(async () => {
     setLoading(true);
     try {
-      // Fetch current user
-      const sessionRes = await fetch('/api/auth/session');
-      if (sessionRes.ok) {
-        const session = await sessionRes.json();
-        setCurrentUserId(session?.user?.id || '');
+      // Fetch ws-token to get ZKUser id (correct identity for org member comparisons)
+      const tokenRes = await fetch('/api/terminal/ws-token', { method: 'POST' });
+      if (tokenRes.ok) {
+        const tokenData = await tokenRes.json();
+        setCurrentUserId(tokenData?.userId || '');
+
+        // Fetch active shared sessions using the token
+        try {
+          const sessionsRes = await fetch(`/api/zk/terminal/share?orgId=${orgId}`, {
+            headers: { 'Authorization': `Bearer ${tokenData.token}` },
+          });
+          if (sessionsRes.ok) {
+            const sessionsData = await sessionsRes.json();
+            setSessions(Array.isArray(sessionsData) ? sessionsData : []);
+          }
+        } catch {
+          // sessions fetch is optional
+        }
       }
 
       // Fetch org members
@@ -70,23 +83,6 @@ export function TerminalSharing({ orgId }: TerminalSharingProps) {
               status: m.status,
             }))
         );
-      }
-
-      // Fetch active shared sessions
-      try {
-        const tokenRes = await fetch('/api/terminal/ws-token', { method: 'POST' });
-        if (tokenRes.ok) {
-          const tokenData = await tokenRes.json();
-          const sessionsRes = await fetch(`/api/zk/terminal/share?orgId=${orgId}`, {
-            headers: { 'Authorization': `Bearer ${tokenData.token}` },
-          });
-          if (sessionsRes.ok) {
-            const sessionsData = await sessionsRes.json();
-            setSessions(Array.isArray(sessionsData) ? sessionsData : []);
-          }
-        }
-      } catch {
-        // sessions fetch is optional
       }
     } catch {
       // silent
