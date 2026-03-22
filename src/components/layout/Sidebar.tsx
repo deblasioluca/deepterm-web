@@ -6,7 +6,7 @@ import { signOut } from 'next-auth/react';
 import { cn } from '@/lib/utils';
 import {
   User,
-  Users,
+  Building2,
   Lock,
   Key,
   CreditCard,
@@ -56,7 +56,7 @@ export function Sidebar() {
 
   const sidebarLinks = [
     { label: messages.sidebar.account, href: '/dashboard', icon: User },
-    { label: messages.sidebar.team, href: '/dashboard/team', icon: Users },
+    { label: messages.sidebar.organization, href: '/dashboard/organization', icon: Building2 },
     { label: messages.sidebar.collaboration, href: '/dashboard/collaboration', icon: Radio },
     { label: messages.sidebar.vaults, href: '/dashboard/vaults', icon: Lock },
     { label: messages.sidebar.samlSso, href: '/dashboard/sso', icon: Key },
