@@ -23,6 +23,7 @@ import {
   Smartphone,
   Fingerprint,
   Bell,
+  Radio,
   Volume2,
 } from 'lucide-react';
 import { useState, useEffect, useCallback } from 'react';
@@ -56,6 +57,7 @@ export function Sidebar() {
   const sidebarLinks = [
     { label: messages.sidebar.account, href: '/dashboard', icon: User },
     { label: messages.sidebar.team, href: '/dashboard/team', icon: Users },
+    { label: messages.sidebar.collaboration, href: '/dashboard/collaboration', icon: Radio },
     { label: messages.sidebar.vaults, href: '/dashboard/vaults', icon: Lock },
     { label: messages.sidebar.samlSso, href: '/dashboard/sso', icon: Key },
     { label: messages.sidebar.twoFactorAuth, href: '/dashboard/2fa', icon: Smartphone },
