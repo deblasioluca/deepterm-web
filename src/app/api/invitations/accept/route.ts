@@ -157,7 +157,7 @@ export async function POST(request: NextRequest) {
         ...(existingMembership.status !== 'confirmed'
           ? [prisma.organizationUser.update({
               where: { id: existingMembership.id },
-              data: { status: OrganizationUserStatus.CONFIRMED, token: null },
+              data: { status: OrganizationUserStatus.CONFIRMED, confirmedAt: new Date(), token: null },
             })]
           : []),
       ]);
@@ -174,6 +174,7 @@ export async function POST(request: NextRequest) {
       data: {
         userId: zkUser.id,
         status: OrganizationUserStatus.CONFIRMED,
+        confirmedAt: new Date(),
         token: null, // Clear the token after acceptance
       },
     });
