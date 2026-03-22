@@ -67,6 +67,13 @@ export function AudioChannel({
 
   // Create a peer connection for a remote participant
   const createPeerConnection = useCallback((remoteUserId: string, remoteEmail: string): PeerConnection => {
+    // Close any existing connection for this peer (glare/reconnect)
+    const existing = peerConnectionsRef.current.get(remoteUserId);
+    if (existing) {
+      existing.pc.close();
+      existing.audioEl.srcObject = null;
+    }
+
     const pc = new RTCPeerConnection(ICE_SERVERS);
     const audioEl = new Audio();
     audioEl.autoplay = true;

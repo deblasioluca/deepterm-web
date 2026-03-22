@@ -415,19 +415,24 @@ function handleAudioSignal(ws: AuthenticatedSocket, payload: Record<string, unkn
       const existingRoom = audioRooms.get(roomKey);
       const currentCount = existingRoom ? existingRoom.size : 0;
 
-      // Check if user already in room (e.g. reconnect)
-      if (existingRoom && Array.from(existingRoom).some(c => c.userId === ws.userId)) {
-        ws.send(JSON.stringify({
-          type: 'audio_room_state',
-          channel: 'audio-signal',
-          payload: {
-            roomId: roomKey,
-            participants: Array.from(existingRoom).map(c => ({ userId: c.userId, email: c.email })),
-            participantCount: existingRoom.size,
-            maxParticipants: MAX_AUDIO_PARTICIPANTS,
-          },
-        }));
-        return;
+      // Handle reconnect / multi-tab: remove old socket for same userId, then re-add
+      if (existingRoom) {
+        const oldSocket = Array.from(existingRoom).find(c => c.userId === ws.userId);
+        if (oldSocket) {
+          existingRoom.delete(oldSocket);
+          // Notify others that the old socket left (will be replaced by new join below)
+          broadcast(existingRoom, {
+            type: 'audio_peer_left',
+            channel: 'audio-signal',
+            payload: {
+              roomId: roomKey,
+              userId: ws.userId,
+              email: ws.email,
+              participantCount: existingRoom.size,
+              maxParticipants: MAX_AUDIO_PARTICIPANTS,
+            },
+          });
+        }
       }
 
       if (currentCount >= MAX_AUDIO_PARTICIPANTS) {

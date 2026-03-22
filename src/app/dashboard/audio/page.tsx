@@ -59,8 +59,8 @@ export default function AudioPage() {
           }
         }
         setOrgs(orgDetails);
-        if (orgDetails.length > 0 && !selectedOrgId) {
-          setSelectedOrgId(orgDetails[0].id);
+        if (orgDetails.length > 0) {
+          setSelectedOrgId(prev => prev ?? orgDetails[0].id);
         }
       }
     } catch (err) {
@@ -69,7 +69,7 @@ export default function AudioPage() {
     } finally {
       setLoading(false);
     }
-  }, [selectedOrgId]);
+  }, []);
 
   useEffect(() => {
     if (session?.user) {
