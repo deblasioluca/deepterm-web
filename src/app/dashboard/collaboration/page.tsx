@@ -369,7 +369,7 @@ function ChannelSidebar({
         const res = await fetch(`/api/zk/chat/channels?orgId=${orgId}`);
         if (res.ok) {
           const data = await res.json();
-          const chs = data.channels || [];
+          const chs = Array.isArray(data) ? data : (data.channels || []);
           setChannels(chs);
           if (chs.length > 0 && !selectedChannelId) {
             onSelectChannel(chs[0].id);
@@ -467,7 +467,7 @@ function ChatPanel({
         const res = await fetch(`/api/zk/chat/channels?orgId=${orgId}`);
         if (res.ok) {
           const data = await res.json();
-          const chs = data.channels || [];
+          const chs = Array.isArray(data) ? data : (data.channels || []);
           setChannels(chs);
           if (chs.length > 0 && !selectedChannelId) {
             onSelectChannel(chs[0].id);
@@ -492,7 +492,7 @@ function ChatPanel({
         );
         if (res.ok) {
           const data = await res.json();
-          setMessages(data.messages || []);
+          setMessages(Array.isArray(data) ? data : (data.messages || []));
         }
       } catch {
         // silent
@@ -954,7 +954,7 @@ function ParticipantsSidebar({ orgId }: { orgId: string }) {
         const res = await fetch(`/api/zk/presence/org/${orgId}`);
         if (res.ok) {
           const data = await res.json();
-          setMembers(data.members || []);
+          setMembers(Array.isArray(data) ? data : (data.members || []));
         }
       } catch {
         // silent
