@@ -231,7 +231,7 @@ export default function CollaborationPage() {
         <div className="flex items-center gap-3">
           <select
             value={selectedOrgId || ""}
-            onChange={(e) => setSelectedOrgId(e.target.value)}
+            onChange={(e) => { setSelectedOrgId(e.target.value); setSelectedChannelId(null); }}
             className="bg-transparent border border-border/50 rounded-md px-2 py-1 text-sm text-text-primary focus:outline-none focus:border-accent-primary"
           >
             {orgs.map((org) => (

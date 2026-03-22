@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { motion } from 'framer-motion';
 import { Card, Button, Badge } from '@/components/ui';
 import {
@@ -62,6 +62,8 @@ export default function OrganizationPage() {
   const [pendingInvites, setPendingInvites] = useState<PendingInvite[]>([]);
   const [loading, setLoading] = useState(true);
   const [expandedOrgs, setExpandedOrgs] = useState<Set<string>>(new Set());
+  const expandedOrgsRef = useRef(expandedOrgs);
+  expandedOrgsRef.current = expandedOrgs;
   const [expandedTeams, setExpandedTeams] = useState<Set<string>>(new Set());
   const [accepting, setAccepting] = useState<string | null>(null);
 
@@ -159,7 +161,7 @@ export default function OrganizationPage() {
       setOrganizations(enrichedOrgs);
 
       // Auto-expand first org
-      if (enrichedOrgs.length > 0 && expandedOrgs.size === 0) {
+      if (enrichedOrgs.length > 0 && expandedOrgsRef.current.size === 0) {
         setExpandedOrgs(new Set([enrichedOrgs[0].id]));
       }
     } catch {
