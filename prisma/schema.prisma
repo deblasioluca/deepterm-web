@@ -107,6 +107,7 @@ model OrganizationUser {
   token           String?      @unique
   invitedEmail    String?
   expiresAt       DateTime?
+  confirmedAt     DateTime?
   createdAt       DateTime     @default(now())
   updatedAt       DateTime     @updatedAt
   user            ZKUser?      @relation(fields: [userId], references: [id], onDelete: Cascade)

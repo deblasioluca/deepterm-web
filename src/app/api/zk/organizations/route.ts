@@ -100,6 +100,7 @@ export async function POST(request: NextRequest) {
             userId: auth.userId,
             role: OrganizationRole.OWNER,
             status: OrganizationUserStatus.CONFIRMED,
+            confirmedAt: new Date(),
             encryptedOrgKey,
           },
         },

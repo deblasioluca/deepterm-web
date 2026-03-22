@@ -64,6 +64,7 @@ export function Sidebar() {
   ];
 
   const secondaryLinks = [
+    { label: messages.sidebar.sharedTerminals, href: '/dashboard/terminal', icon: Terminal },
     { label: messages.sidebar.audioChannels || 'Audio Channels', href: '/dashboard/audio', icon: Volume2 },
     { label: messages.sidebar.forStudents, href: '/dashboard/students', icon: GraduationCap },
     { label: messages.sidebar.messages || 'Messages', href: '/dashboard/messages', icon: Bell, badge: unreadCount },
