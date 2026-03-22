@@ -7,6 +7,8 @@ import { Card, Button, Badge } from '@/components/ui';
 import { PresenceIndicator } from '@/components/collaboration/PresenceIndicator';
 import { TeamChat } from '@/components/collaboration/TeamChat';
 import { OrgManagement } from '@/components/collaboration/OrgManagement';
+import { TerminalSharing } from '@/components/collaboration/TerminalSharing';
+import { AudioCallUI } from '@/components/collaboration/AudioCallUI';
 import {
   NotificationToast,
   useSessionNotifications,
@@ -193,36 +195,12 @@ export default function CollaborationPage() {
           <TeamChat orgId={selectedOrgId} wsRef={wsRef} wsConnected={wsConnected} currentUserId={currentUserId} />
         )}
 
-        {activeTab === 'terminal' && (
-          <Card className="p-6">
-            <div className="flex items-center gap-3 mb-4">
-              <Terminal className="w-6 h-6 text-accent-primary" />
-              <h3 className="text-lg font-semibold text-text-primary">Shared Terminals</h3>
-            </div>
-            <p className="text-text-secondary text-sm mb-4">
-              View and join shared terminal sessions from your organization members.
-              Shared terminals are started from the DeepTerm macOS app and can be viewed here in read-only mode.
-            </p>
-            <Button variant="primary" onClick={() => window.location.href = '/dashboard/terminal'}>
-              Open Terminal Viewer
-            </Button>
-          </Card>
+        {activeTab === 'terminal' && selectedOrgId && (
+          <TerminalSharing orgId={selectedOrgId} />
         )}
 
-        {activeTab === 'audio' && (
-          <Card className="p-6">
-            <div className="flex items-center gap-3 mb-4">
-              <Mic className="w-6 h-6 text-accent-primary" />
-              <h3 className="text-lg font-semibold text-text-primary">Audio Channels</h3>
-            </div>
-            <p className="text-text-secondary text-sm mb-4">
-              Join voice channels to communicate with your team in real-time.
-              Supports up to 5 participants per channel (mesh topology).
-            </p>
-            <Button variant="primary" onClick={() => window.location.href = '/dashboard/audio'}>
-              Open Audio Channels
-            </Button>
-          </Card>
+        {activeTab === 'audio' && selectedOrgId && (
+          <AudioCallUI orgId={selectedOrgId} />
         )}
 
         {activeTab === 'manage' && (

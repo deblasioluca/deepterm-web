@@ -47,9 +47,20 @@ export async function POST(
       return errorResponse('Membership not found', 404);
     }
 
-    // User can only confirm their own invitation
+    // Allow self-confirmation OR admin/owner confirmation
     if (member.userId !== auth.userId) {
-      return errorResponse('You can only confirm your own invitation', 403);
+      // Check if the caller is an admin or owner of this org
+      const callerMembership = await prisma.organizationUser.findFirst({
+        where: {
+          userId: auth.userId,
+          organizationId: orgId,
+          status: 'confirmed',
+          role: { in: ['owner', 'admin'] },
+        },
+      });
+      if (!callerMembership) {
+        return errorResponse('Only org owners/admins can confirm other members', 403);
+      }
     }
 
     // Check if already confirmed
