@@ -21,7 +21,7 @@ export default function CollaborationPage() {
   const [wsConnected, setWsConnected] = useState(false);
   const [loading, setLoading] = useState(true);
   const wsRef = useRef<WebSocket | null>(null);
-  const { notifications, dismiss } = useSessionNotifications(wsRef);
+  const { notifications, dismiss } = useSessionNotifications(wsRef, wsConnected);
 
   // Fetch current user & org info
   useEffect(() => {
@@ -182,7 +182,7 @@ export default function CollaborationPage() {
         )}
 
         {activeTab === 'chat' && selectedOrgId && (
-          <TeamChat orgId={selectedOrgId} wsRef={wsRef} currentUserId={currentUserId} />
+          <TeamChat orgId={selectedOrgId} wsRef={wsRef} wsConnected={wsConnected} currentUserId={currentUserId} />
         )}
 
         {activeTab === 'terminal' && (

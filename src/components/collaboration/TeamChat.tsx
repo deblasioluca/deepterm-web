@@ -24,10 +24,11 @@ interface ChatChannelData {
 interface TeamChatProps {
   orgId: string;
   wsRef: React.RefObject<WebSocket | null>;
+  wsConnected: boolean;
   currentUserId: string;
 }
 
-export function TeamChat({ orgId, wsRef, currentUserId }: TeamChatProps) {
+export function TeamChat({ orgId, wsRef, wsConnected, currentUserId }: TeamChatProps) {
   const [channels, setChannels] = useState<ChatChannelData[]>([]);
   const [selectedChannel, setSelectedChannel] = useState<string | null>(null);
   const [messages, setMessages] = useState<ChatMessageData[]>([]);
@@ -99,11 +100,11 @@ export function TeamChat({ orgId, wsRef, currentUserId }: TeamChatProps) {
     onMessageRef.current = handler;
 
     const ws = wsRef.current;
-    if (ws) {
+    if (ws && ws.readyState === WebSocket.OPEN) {
       ws.addEventListener('message', handler);
       return () => ws.removeEventListener('message', handler);
     }
-  }, [wsRef, selectedChannel]);
+  }, [wsRef, wsConnected, selectedChannel]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });

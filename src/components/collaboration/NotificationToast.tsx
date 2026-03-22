@@ -104,10 +104,13 @@ function NotificationCard({
 }
 
 // Hook for managing notifications from WebSocket
-export function useSessionNotifications(wsRef: React.RefObject<WebSocket | null>) {
+export function useSessionNotifications(wsRef: React.RefObject<WebSocket | null>, wsConnected: boolean) {
   const [notifications, setNotifications] = useState<SessionNotification[]>([]);
 
   useEffect(() => {
+    const ws = wsRef.current;
+    if (!ws || ws.readyState !== WebSocket.OPEN) return;
+
     const handler = (event: MessageEvent) => {
       try {
         const msg = JSON.parse(event.data);
@@ -123,12 +126,9 @@ export function useSessionNotifications(wsRef: React.RefObject<WebSocket | null>
       }
     };
 
-    const ws = wsRef.current;
-    if (ws) {
-      ws.addEventListener('message', handler);
-      return () => ws.removeEventListener('message', handler);
-    }
-  }, [wsRef]);
+    ws.addEventListener('message', handler);
+    return () => ws.removeEventListener('message', handler);
+  }, [wsRef, wsConnected]);
 
   const dismiss = useCallback((id: string) => {
     setNotifications(prev => prev.filter(n => n.id !== id));

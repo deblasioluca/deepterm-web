@@ -418,7 +418,16 @@ async function handleNotification(ws: AuthenticatedSocket, payload: Record<strin
   if (!orgId || typeof orgId !== 'string') return;
   if (!ws.orgIds.includes(orgId)) return;
 
-  const targets = Array.isArray(targetUserIds) ? targetUserIds as string[] : [];
+  const rawTargets = Array.isArray(targetUserIds) ? targetUserIds as string[] : [];
+
+  // Validate that target users are confirmed members of this organization
+  const validMembers = rawTargets.length > 0
+    ? await prisma.organizationUser.findMany({
+        where: { organizationId: orgId, userId: { in: rawTargets }, status: 'confirmed' },
+        select: { userId: true },
+      })
+    : [];
+  const targets = validMembers.map(m => m.userId).filter((id): id is string => id != null);
 
   switch (notificationType) {
     case 'terminal_invite': {
