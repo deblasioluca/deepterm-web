@@ -118,6 +118,7 @@ export async function POST(
               role,
               userId: invitee.id,
               encryptedOrgKey: encryptedOrgKey || null,
+              confirmedAt: null, // Clear stale confirmedAt from previous membership
               token,
               invitedEmail: normalizedEmail,
               expiresAt,
@@ -168,6 +169,7 @@ export async function POST(
             data: {
               status: OrganizationUserStatus.INVITED,
               role,
+              confirmedAt: null, // Clear stale confirmedAt from previous membership
               token,
               invitedEmail: normalizedEmail,
               expiresAt,
