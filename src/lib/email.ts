@@ -542,3 +542,59 @@ export async function sendIdeaReplyEmail(params: {
     return false;
   }
 }
+
+export async function sendSessionInviteEmail(invitation: {
+  email: string;
+  userName: string;
+  fromEmail: string;
+  sessionType: string;
+  sessionName: string;
+  orgName: string;
+}) {
+  try {
+    const dashboardUrl = 'https://deepterm.net/dashboard/collaboration';
+    const iconMap: Record<string, string> = {
+      'Shared Terminal': '🖥️',
+      'Audio Call': '🎙️',
+    };
+    const icon = iconMap[invitation.sessionType] || '📢';
+
+    const mailOptions = {
+      from: FROM_EMAIL,
+      to: invitation.email,
+      subject: `${invitation.fromEmail} invited you to a ${invitation.sessionType} on DeepTerm`,
+      html: `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+          <div style="background: linear-gradient(135deg, #00ffc6 0%, #7b61ff 100%); padding: 20px; text-align: center;">
+            <h1 style="color: #0a0b0d; margin: 0;">DeepTerm</h1>
+          </div>
+          <div style="background: #1a1b1e; padding: 30px; color: #ffffff;">
+            <h2 style="color: #00ffc6; margin-top: 0;">${icon} ${invitation.sessionType} Invitation</h2>
+            <p>Hi ${invitation.userName},</p>
+            <p><strong>${invitation.fromEmail}</strong> has invited you to join a <strong>${invitation.sessionType}</strong> session in <strong>${invitation.orgName}</strong>.</p>
+            ${invitation.sessionName ? `<p style="color: #ccc;">Session: <strong>${invitation.sessionName}</strong></p>` : ''}
+            <div style="text-align: center; margin: 30px 0;">
+              <a href="${dashboardUrl}" style="background: linear-gradient(135deg, #00ffc6 0%, #7b61ff 100%); color: #0a0b0d; padding: 15px 40px; text-decoration: none; border-radius: 8px; font-weight: bold;">
+                Open DeepTerm
+              </a>
+            </div>
+            <p style="color: #888; font-size: 14px;">
+              You can also join from the DeepTerm macOS app if you have it installed.
+            </p>
+          </div>
+          <div style="background: #0a0b0d; padding: 15px; text-align: center; color: #666; font-size: 12px;">
+            DeepTerm - Secure SSH Client
+          </div>
+        </div>
+      `,
+      text: `${invitation.fromEmail} has invited you to join a ${invitation.sessionType} session "${invitation.sessionName}" in ${invitation.orgName} on DeepTerm.\n\nOpen DeepTerm: ${dashboardUrl}`,
+    };
+
+    await transporter.sendMail(mailOptions);
+    console.log(`[Email] Session invite sent to ${invitation.email} (${invitation.sessionType})`);
+    return true;
+  } catch (error) {
+    console.error('[Email] Failed to send session invite:', error);
+    return false;
+  }
+}

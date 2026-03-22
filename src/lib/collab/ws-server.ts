@@ -25,7 +25,7 @@ interface AuthenticatedSocket extends WebSocket {
 
 interface WSMessage {
   type: string;
-  channel: 'presence' | 'chat' | 'terminal' | 'audio-signal';
+  channel: 'presence' | 'chat' | 'terminal' | 'audio-signal' | 'notification';
   payload: Record<string, unknown>;
 }
 
@@ -410,6 +410,103 @@ function handleAudioSignal(ws: AuthenticatedSocket, payload: Record<string, unkn
   });
 }
 
+// ── Notification Handler ──────────────────────────────────────────────────────
+
+async function handleNotification(ws: AuthenticatedSocket, payload: Record<string, unknown>) {
+  const { notificationType, orgId, targetUserIds, data } = payload;
+
+  if (!orgId || typeof orgId !== 'string') return;
+  if (!ws.orgIds.includes(orgId)) return;
+
+  const targets = Array.isArray(targetUserIds) ? targetUserIds as string[] : [];
+
+  switch (notificationType) {
+    case 'terminal_invite': {
+      const { sessionId, sessionName } = data as { sessionId: string; sessionName: string };
+      // Notify online users via WebSocket
+      for (const targetId of targets) {
+        const sockets = socketsForUser(targetId);
+        if (sockets.length > 0) {
+          for (const sock of sockets) {
+            sock.send(JSON.stringify({
+              type: 'session_invite',
+              channel: 'notification',
+              payload: {
+                notificationType: 'terminal_invite',
+                fromUserId: ws.userId,
+                fromEmail: ws.email,
+                sessionId,
+                sessionName,
+                orgId,
+                timestamp: new Date().toISOString(),
+              },
+            }));
+          }
+        } else {
+          // User is offline — queue email notification
+          queueOfflineNotification(targetId, {
+            type: 'terminal_invite',
+            fromEmail: ws.email,
+            sessionName,
+            orgId,
+          }).catch(err => console.error('[WS] Failed to queue offline notification:', err));
+        }
+      }
+      break;
+    }
+    case 'audio_invite': {
+      const { roomName } = data as { roomName?: string };
+      // Broadcast to all org members that an audio call started
+      const room = orgRooms.get(orgId);
+      if (room) {
+        broadcast(room, {
+          type: 'session_invite',
+          channel: 'notification',
+          payload: {
+            notificationType: 'audio_invite',
+            fromUserId: ws.userId,
+            fromEmail: ws.email,
+            roomName: roomName || 'Audio Channel',
+            orgId,
+            timestamp: new Date().toISOString(),
+          },
+        }, ws);
+      }
+      break;
+    }
+  }
+}
+
+/** Queue an email notification for an offline user. */
+async function queueOfflineNotification(
+  targetUserId: string,
+  data: { type: string; fromEmail: string; sessionName?: string; orgId: string },
+) {
+  // Look up user email
+  const user = await prisma.zKUser.findUnique({
+    where: { id: targetUserId },
+    select: { email: true },
+  });
+  if (!user?.email) return;
+
+  // Look up org name
+  const org = await prisma.organization.findUnique({
+    where: { id: data.orgId },
+    select: { name: true },
+  });
+
+  // Import email sender dynamically to avoid circular deps
+  const { sendSessionInviteEmail } = await import('../email');
+  await sendSessionInviteEmail({
+    email: user.email,
+    userName: user.email.split('@')[0],
+    fromEmail: data.fromEmail,
+    sessionType: data.type === 'terminal_invite' ? 'Shared Terminal' : 'Audio Call',
+    sessionName: data.sessionName || 'Team Session',
+    orgName: org?.name || 'your organization',
+  });
+}
+
 // ── Server Setup ─────────────────────────────────────────────────────────────
 
 export function attachWebSocketServer(server: Server): WebSocketServer {
@@ -489,6 +586,12 @@ export function attachWebSocketServer(server: Server): WebSocketServer {
             break;
           case 'audio-signal':
             handleAudioSignal(authWs, msg.payload);
+            break;
+          case 'notification':
+            handleNotification(authWs, msg.payload).catch(err => {
+              console.error('Notification handler error:', err);
+              authWs.send(JSON.stringify({ type: 'error', message: 'Internal notification error' }));
+            });
             break;
           default:
             authWs.send(JSON.stringify({ type: 'error', message: `Unknown channel: ${msg.channel}` }));
