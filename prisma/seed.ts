@@ -87,7 +87,7 @@ async function main() {
         organizationId: org.id,
         userId: zkUser.id,
         role: webUser === alice ? 'owner' : webUser === bob ? 'admin' : 'member',
-        status: 'active',
+        status: 'confirmed',
       },
     });
   }

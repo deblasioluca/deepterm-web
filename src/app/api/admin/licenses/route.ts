@@ -164,7 +164,7 @@ export async function GET(request: NextRequest) {
           name: user.email,
           email: user.email,
           plan: 'starter',
-          status: 'confirmed',
+          status: 'active',
           seats: 1,
           memberCount: 1,
           members: [{ id: user.id, name: user.email, email: user.email, role: 'owner' }],
