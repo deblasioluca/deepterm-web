@@ -44,7 +44,8 @@ export function SharedTerminal({
   const [connected, setConnected] = useState(false);
   const [writePermission, setWritePermission] = useState(canWrite);
 
-  // Keep refs in sync with latest props
+  // Keep refs/state in sync with latest props
+  useEffect(() => { writePermissionRef.current = canWrite; setWritePermission(canWrite); }, [canWrite]);
   useEffect(() => { onDisconnectRef.current = onDisconnect; }, [onDisconnect]);
   useEffect(() => { onParticipantsChangeRef.current = onParticipantsChange; }, [onParticipantsChange]);
 

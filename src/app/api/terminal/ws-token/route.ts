@@ -13,7 +13,7 @@ export async function OPTIONS() {
 }
 
 /**
- * POST /api/zk/terminal/ws-token
+ * POST /api/terminal/ws-token
  * Generate a short-lived JWT for WebSocket authentication from a web session.
  * This bridges NextAuth sessions to the ZK JWT system used by the WS server.
  */

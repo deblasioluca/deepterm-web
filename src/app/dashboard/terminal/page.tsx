@@ -78,15 +78,15 @@ export default function TerminalPage() {
           }
         }
         setOrgs(orgDetails);
-        if (orgDetails.length > 0 && !selectedOrgId) {
-          setSelectedOrgId(orgDetails[0].id);
+        if (orgDetails.length > 0) {
+          setSelectedOrgId(prev => prev ?? orgDetails[0].id);
         }
       }
     } catch (err) {
       console.error('Failed to get WS auth:', err);
       setError('Failed to authenticate for shared terminals');
     }
-  }, [selectedOrgId]);
+  }, []);
 
   // Fetch active shared sessions for the selected org
   const fetchSessions = useCallback(async () => {
