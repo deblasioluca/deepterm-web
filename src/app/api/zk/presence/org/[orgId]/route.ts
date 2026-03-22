@@ -58,15 +58,17 @@ export async function GET(
 
     const twoMinutesAgo = new Date(Date.now() - 2 * 60 * 1000);
 
-    const result = members.map(m => {
-      const presence = presenceMap.get(m.userId);
+    const result = members
+      .filter(m => m.userId !== null)
+      .map(m => {
+      const presence = presenceMap.get(m.userId!);
       let status = 'offline';
       if (presence) {
         status = presence.lastHeartbeat > twoMinutesAgo ? presence.status : 'offline';
       }
       return {
         userId: m.userId,
-        email: m.user.email,
+        email: m.user?.email ?? m.invitedEmail ?? '',
         role: m.role,
         status,
         lastHeartbeat: presence?.lastHeartbeat?.toISOString() || null,

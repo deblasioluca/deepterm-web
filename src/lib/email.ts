@@ -163,6 +163,55 @@ export async function sendTeamInvitationEmail(invitation: {
   }
 }
 
+export async function sendOrgInvitationEmail(invitation: {
+  email: string;
+  orgName: string;
+  inviterName: string;
+  role: string;
+  token: string;
+}) {
+  try {
+    const inviteUrl = `https://deepterm.net/invite/${invitation.token}`;
+
+    const mailOptions = {
+      from: FROM_EMAIL,
+      to: invitation.email,
+      subject: `You've been invited to join ${invitation.orgName} on DeepTerm`,
+      html: `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+          <div style="background: linear-gradient(135deg, #00ffc6 0%, #7b61ff 100%); padding: 20px; text-align: center;">
+            <h1 style="color: #0a0b0d; margin: 0;">DeepTerm</h1>
+          </div>
+          <div style="background: #1a1b1e; padding: 30px; color: #ffffff;">
+            <h2 style="color: #00ffc6; margin-top: 0;">Organization Invitation</h2>
+            <p>${invitation.inviterName} has invited you to join <strong>${invitation.orgName}</strong> on DeepTerm as a <strong>${invitation.role}</strong>.</p>
+            <p>Click the button below to accept the invitation:</p>
+            <div style="text-align: center; margin: 30px 0;">
+              <a href="${inviteUrl}" style="background: linear-gradient(135deg, #00ffc6 0%, #7b61ff 100%); color: #0a0b0d; padding: 15px 40px; text-decoration: none; border-radius: 8px; font-weight: bold;">
+                Accept Invitation
+              </a>
+            </div>
+            <p style="color: #888; font-size: 14px;">
+              This invitation will expire in 7 days. If you didn't expect this invitation, you can safely ignore this email.
+            </p>
+          </div>
+          <div style="background: #0a0b0d; padding: 15px; text-align: center; color: #666; font-size: 12px;">
+            DeepTerm - Secure SSH Client
+          </div>
+        </div>
+      `,
+      text: `${invitation.inviterName} has invited you to join ${invitation.orgName} on DeepTerm as a ${invitation.role}.\n\nAccept the invitation: ${inviteUrl}\n\nThis invitation will expire in 7 days.`,
+    };
+
+    await transporter.sendMail(mailOptions);
+    console.log(`[Email] Organization invitation sent to ${invitation.email}`);
+    return true;
+  } catch (error) {
+    console.error('[Email] Failed to send organization invitation:', error);
+    return false;
+  }
+}
+
 export async function sendWelcomeEmail(user: {
   name: string;
   email: string;

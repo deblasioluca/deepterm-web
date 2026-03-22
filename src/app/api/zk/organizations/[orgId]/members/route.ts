@@ -66,8 +66,8 @@ export async function GET(
       members.map(m => ({
         id: m.id,
         userId: m.userId,
-        email: m.user.email,
-        publicKey: m.user.publicKey,
+        email: m.user?.email ?? m.invitedEmail ?? '',
+        publicKey: m.user?.publicKey ?? null,
         role: m.role,
         status: m.status,
         createdAt: m.createdAt.toISOString(),

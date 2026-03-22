@@ -100,18 +100,23 @@ model Organization {
 model OrganizationUser {
   id              String       @id @default(cuid())
   organizationId  String
-  userId          String
+  userId          String?
   role            String       @default("member")
   encryptedOrgKey String?
   status          String       @default("invited")
+  token           String?      @unique
+  invitedEmail    String?
+  expiresAt       DateTime?
   createdAt       DateTime     @default(now())
   updatedAt       DateTime     @updatedAt
-  user            ZKUser       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user            ZKUser?      @relation(fields: [userId], references: [id], onDelete: Cascade)
   organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 
   @@unique([organizationId, userId])
   @@index([organizationId])
   @@index([userId])
+  @@index([invitedEmail])
+  @@index([token])
 }
 
 /// Sub-group within an Organization. Users can belong to multiple teams.

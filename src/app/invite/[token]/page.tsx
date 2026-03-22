@@ -7,7 +7,12 @@ import { useSession, signIn } from 'next-auth/react';
 interface InviteDetails {
   email: string;
   role: string;
-  teamName: string;
+  // Team invitations
+  teamName?: string;
+  // Org invitations
+  orgName?: string;
+  orgId?: string;
+  type?: 'organization' | 'team';
   expiresAt: string;
 }
 
@@ -26,20 +31,42 @@ export default function InviteAcceptPage() {
   useEffect(() => {
     if (!token) return;
     fetchInviteDetails();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token]);
 
   const fetchInviteDetails = async () => {
     try {
-      const res = await fetch(`/api/team/invitations/accept?token=${encodeURIComponent(token)}`);
-      const data = await res.json();
+      // Try org invitation first, then fall back to team invitation
+      const orgRes = await fetch(`/api/invitations/accept?token=${encodeURIComponent(token)}`);
 
-      if (!res.ok) {
-        setError(data.error || 'Invalid invitation');
+      if (orgRes.ok) {
+        const data = await orgRes.json();
+        setInvite(data);
         setLoading(false);
         return;
       }
 
-      setInvite(data);
+      // Only fall back to team invitation if org API returned 404 (token not found).
+      // Other errors (400 = already accepted, 410 = expired) are specific to the org
+      // invitation and should be displayed directly.
+      if (orgRes.status !== 404) {
+        const orgData = await orgRes.json();
+        setError(orgData.error || 'Invalid invitation');
+        setLoading(false);
+        return;
+      }
+
+      // Fall back to legacy team invitation
+      const teamRes = await fetch(`/api/team/invitations/accept?token=${encodeURIComponent(token)}`);
+      const teamData = await teamRes.json();
+
+      if (!teamRes.ok) {
+        setError(teamData.error || 'Invalid invitation');
+        setLoading(false);
+        return;
+      }
+
+      setInvite({ ...teamData, type: 'team' });
     } catch {
       setError('Failed to load invitation details');
     } finally {
@@ -52,7 +79,12 @@ export default function InviteAcceptPage() {
     setError('');
 
     try {
-      const res = await fetch('/api/team/invitations/accept', {
+      const isOrgInvite = invite?.type === 'organization';
+      const endpoint = isOrgInvite
+        ? '/api/invitations/accept'
+        : '/api/team/invitations/accept';
+
+      const res = await fetch(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ token }),
@@ -66,7 +98,8 @@ export default function InviteAcceptPage() {
         return;
       }
 
-      setSuccess(data.message || `You have joined ${invite?.teamName}`);
+      const displayName = invite?.orgName || invite?.teamName || 'the organization';
+      setSuccess(data.message || `You have joined ${displayName}`);
       setTimeout(() => router.push('/dashboard/team'), 2000);
     } catch {
       setError('Failed to accept invitation');
@@ -74,6 +107,9 @@ export default function InviteAcceptPage() {
       setAccepting(false);
     }
   };
+
+  const displayName = invite?.orgName || invite?.teamName || '';
+  const inviteLabel = invite?.type === 'organization' ? 'Organization' : 'Team';
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-background-primary p-4">
@@ -126,16 +162,16 @@ export default function InviteAcceptPage() {
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
                   </svg>
                 </div>
-                <h2 className="text-xl font-semibold text-text-primary mb-1">Team Invitation</h2>
+                <h2 className="text-xl font-semibold text-text-primary mb-1">{inviteLabel} Invitation</h2>
                 <p className="text-text-secondary">
-                  You&apos;ve been invited to join a team on DeepTerm
+                  You&apos;ve been invited to join {displayName ? <strong>{displayName}</strong> : 'a team'} on DeepTerm
                 </p>
               </div>
 
               <div className="space-y-3 mb-6">
                 <div className="flex justify-between items-center p-3 bg-background-tertiary rounded-lg">
-                  <span className="text-text-secondary text-sm">Team</span>
-                  <span className="text-text-primary font-medium">{invite.teamName}</span>
+                  <span className="text-text-secondary text-sm">{inviteLabel}</span>
+                  <span className="text-text-primary font-medium">{displayName}</span>
                 </div>
                 <div className="flex justify-between items-center p-3 bg-background-tertiary rounded-lg">
                   <span className="text-text-secondary text-sm">Role</span>
