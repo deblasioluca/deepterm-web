@@ -407,7 +407,7 @@ function handleAudioSignal(ws: AuthenticatedSocket, payload: Record<string, unkn
   // Verify org membership
   if (!orgId || typeof orgId !== 'string' || !ws.orgIds.includes(orgId)) return;
 
-  const roomKey = typeof roomId === 'string' ? roomId : orgId;
+  const roomKey = `${orgId}:${typeof roomId === 'string' ? roomId : 'default'}`;
 
   switch (action) {
     case 'join': {
