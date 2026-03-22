@@ -60,11 +60,11 @@ export default function TerminalPage() {
       const res = await fetch('/api/zk/terminal/ws-token', { method: 'POST' });
       if (!res.ok) return;
       const data = await res.json();
-      if (data.data) {
-        setWsAuth(data.data);
+      if (data) {
+        setWsAuth(data);
         // Fetch org details for each orgId
         const orgDetails: { id: string; name: string }[] = [];
-        for (const orgId of data.data.orgIds || []) {
+        for (const orgId of data.orgIds || []) {
           try {
             // We need to fetch org info — use a simple approach
             orgDetails.push({ id: orgId, name: orgId.substring(0, 8) + '...' });
@@ -95,7 +95,7 @@ export default function TerminalPage() {
       });
       if (res.ok) {
         const data = await res.json();
-        setSessions(data.data || []);
+        setSessions(data || []);
       }
     } catch (err) {
       console.error('Failed to fetch sessions:', err);
@@ -160,6 +160,7 @@ export default function TerminalPage() {
             wsUrl={getWsUrl()}
             canWrite={canWrite}
             isOwner={isOwner}
+            userId={wsAuth.userId}
             onDisconnect={() => {
               // Could show reconnect UI
             }}

@@ -19,6 +19,7 @@ interface SharedTerminalProps {
   wsUrl: string;
   canWrite: boolean;
   isOwner: boolean;
+  userId: string;
   onDisconnect?: () => void;
   onParticipantsChange?: (participants: Participant[]) => void;
 }
@@ -29,6 +30,7 @@ export function SharedTerminal({
   wsUrl,
   canWrite,
   isOwner,
+  userId,
   onDisconnect,
   onParticipantsChange,
 }: SharedTerminalProps) {
@@ -36,6 +38,7 @@ export function SharedTerminal({
   const termRef = useRef<Terminal | null>(null);
   const fitAddonRef = useRef<FitAddon | null>(null);
   const wsRef = useRef<WebSocket | null>(null);
+  const writePermissionRef = useRef(canWrite);
   const [connected, setConnected] = useState(false);
   const [writePermission, setWritePermission] = useState(canWrite);
 
@@ -80,8 +83,9 @@ export function SharedTerminal({
             }
             break;
           case 'permission_change':
-            if (msg.payload?.targetUserId && msg.payload?.canWrite !== undefined) {
+            if (msg.payload?.targetUserId === userId && msg.payload?.canWrite !== undefined) {
               setWritePermission(msg.payload.canWrite);
+              writePermissionRef.current = msg.payload.canWrite;
             }
             break;
           case 'terminal_resize':
@@ -108,14 +112,14 @@ export function SharedTerminal({
     };
 
     return ws;
-  }, [sessionId, wsToken, wsUrl, onDisconnect, onParticipantsChange]);
+  }, [sessionId, wsToken, wsUrl, userId, onDisconnect, onParticipantsChange]);
 
   useEffect(() => {
     if (!terminalRef.current) return;
 
     const term = new Terminal({
-      cursorBlink: writePermission,
-      cursorStyle: writePermission ? 'block' : 'underline',
+      cursorBlink: canWrite,
+      cursorStyle: canWrite ? 'block' : 'underline',
       fontSize: 14,
       fontFamily: '"SF Mono", "Fira Code", "Cascadia Code", Menlo, Monaco, monospace',
       theme: {
@@ -160,7 +164,7 @@ export function SharedTerminal({
 
     // Handle user input — only send if user has write permission
     term.onData((data) => {
-      if (writePermission && wsRef.current?.readyState === WebSocket.OPEN) {
+      if (writePermissionRef.current && wsRef.current?.readyState === WebSocket.OPEN) {
         wsRef.current.send(JSON.stringify({
           type: 'input',
           channel: 'terminal',
@@ -201,7 +205,7 @@ export function SharedTerminal({
     // Display connection info
     term.writeln('\x1b[36m--- DeepTerm Shared Terminal ---\x1b[0m');
     term.writeln(`\x1b[33mSession:\x1b[0m ${sessionId}`);
-    term.writeln(`\x1b[33mMode:\x1b[0m ${writePermission ? '\x1b[32mRead/Write\x1b[0m' : '\x1b[31mRead-Only\x1b[0m'}`);
+    term.writeln(`\x1b[33mMode:\x1b[0m ${canWrite ? '\x1b[32mRead/Write\x1b[0m' : '\x1b[31mRead-Only\x1b[0m'}`);
     term.writeln('\x1b[90mConnecting...\x1b[0m');
     term.writeln('');
 
@@ -211,7 +215,7 @@ export function SharedTerminal({
       ws.close();
       term.dispose();
     };
-  }, [sessionId, connectWebSocket, writePermission]);
+  }, [sessionId, connectWebSocket, canWrite]);
 
   // Update cursor style when write permission changes
   useEffect(() => {
