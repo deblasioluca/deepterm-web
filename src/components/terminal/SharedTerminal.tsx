@@ -130,7 +130,7 @@ export function SharedTerminal({
       fontSize: 14,
       fontFamily: '"SF Mono", "Fira Code", "Cascadia Code", Menlo, Monaco, monospace',
       theme: {
-        background: '#0D0D14',
+        background: '#0A0A0F',
         foreground: '#E0E0E0',
         cursor: '#00D4AA',
         selectionBackground: '#264F78',
@@ -254,8 +254,7 @@ export function SharedTerminal({
       </div>
       <div
         ref={terminalRef}
-        className="w-full h-full rounded-lg overflow-hidden"
-        style={{ backgroundColor: '#0D0D14', padding: '8px' }}
+        className="w-full h-full rounded-lg overflow-hidden bg-background-primary p-2"
       />
     </div>
   );

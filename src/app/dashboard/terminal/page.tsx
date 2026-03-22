@@ -63,7 +63,7 @@ export default function TerminalPage() {
     try {
       // Get WS token which includes orgIds
       const res = await fetch('/api/terminal/ws-token', { method: 'POST' });
-      if (!res.ok) return;
+      if (!res.ok) { setLoading(false); return; }
       const data = await res.json();
       if (data) {
         setWsAuth(data);
@@ -80,11 +80,14 @@ export default function TerminalPage() {
         setOrgs(orgDetails);
         if (orgDetails.length > 0) {
           setSelectedOrgId(prev => prev ?? orgDetails[0].id);
+        } else {
+          setLoading(false);
         }
       }
     } catch (err) {
       console.error('Failed to get WS auth:', err);
       setError('Failed to authenticate for shared terminals');
+      setLoading(false);
     }
   }, []);
 
