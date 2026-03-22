@@ -40,6 +40,12 @@ const terminalRooms = new Map<string, Set<AuthenticatedSocket>>();
 /** channelId -> Set<AuthenticatedSocket> */
 const chatRooms = new Map<string, Set<AuthenticatedSocket>>();
 
+/** audioRoomId -> Set<AuthenticatedSocket> */
+const audioRooms = new Map<string, Set<AuthenticatedSocket>>();
+
+/** Maximum participants per audio room (mesh topology) */
+const MAX_AUDIO_PARTICIPANTS = 5;
+
 /** Global reference to the WSS instance for multi-device helpers */
 let wssInstance: WebSocketServer | null = null;
 
@@ -103,6 +109,16 @@ function leaveAllRooms(ws: AuthenticatedSocket) {
   });
   Array.from(chatRooms.entries()).forEach(([key, room]) => {
     if (room.delete(ws) && room.size === 0) chatRooms.delete(key);
+  });
+  Array.from(audioRooms.entries()).forEach(([key, room]) => {
+    if (room.delete(ws)) {
+      broadcast(room, {
+        type: 'audio_peer_left',
+        channel: 'audio-signal',
+        payload: { roomId: key, userId: ws.userId, email: ws.email, participantCount: room.size },
+      });
+      if (room.size === 0) audioRooms.delete(key);
+    }
   });
 }
 
@@ -386,28 +402,170 @@ async function handleTerminal(ws: AuthenticatedSocket, payload: Record<string, u
 }
 
 function handleAudioSignal(ws: AuthenticatedSocket, payload: Record<string, unknown>) {
-  const { targetUserId, signalType, signalData, orgId } = payload;
+  const { action, roomId, targetUserId, signalType, signalData, orgId } = payload;
 
-  if (!targetUserId || typeof targetUserId !== 'string') return;
+  // Verify org membership
+  if (!orgId || typeof orgId !== 'string' || !ws.orgIds.includes(orgId)) return;
 
-  const room = orgId && typeof orgId === 'string' ? orgRooms.get(orgId) : null;
-  if (!room || !ws.orgIds.includes(orgId as string)) return;
+  const roomKey = `${orgId}:${typeof roomId === 'string' ? roomId : 'default'}`;
 
-  Array.from(room).forEach(client => {
-    if (client.userId === targetUserId && client.readyState === WebSocket.OPEN) {
-      client.send(JSON.stringify({
-        type: 'audio_signal',
+  switch (action) {
+    case 'join': {
+      // Check participant limit
+      const existingRoom = audioRooms.get(roomKey);
+      const currentCount = existingRoom ? existingRoom.size : 0;
+
+      // Handle reconnect / multi-tab: remove old socket for same userId, then re-add
+      if (existingRoom) {
+        const oldSocket = Array.from(existingRoom).find(c => c.userId === ws.userId);
+        if (oldSocket) {
+          existingRoom.delete(oldSocket);
+          // Notify others that the old socket left (will be replaced by new join below)
+          broadcast(existingRoom, {
+            type: 'audio_peer_left',
+            channel: 'audio-signal',
+            payload: {
+              roomId: roomKey,
+              userId: ws.userId,
+              email: ws.email,
+              participantCount: existingRoom.size,
+              maxParticipants: MAX_AUDIO_PARTICIPANTS,
+            },
+          });
+        }
+      }
+
+      const updatedCount = existingRoom ? existingRoom.size : 0;
+      if (updatedCount >= MAX_AUDIO_PARTICIPANTS) {
+        ws.send(JSON.stringify({
+          type: 'audio_room_full',
+          channel: 'audio-signal',
+          payload: {
+            roomId: roomKey,
+            maxParticipants: MAX_AUDIO_PARTICIPANTS,
+            participantCount: updatedCount,
+          },
+        }));
+        return;
+      }
+
+      joinRoom(audioRooms, roomKey, ws);
+      const room = audioRooms.get(roomKey)!;
+
+      // Send current room state to the joiner
+      const existingParticipants = Array.from(room)
+        .filter(c => c !== ws)
+        .map(c => ({ userId: c.userId, email: c.email }));
+
+      ws.send(JSON.stringify({
+        type: 'audio_room_state',
         channel: 'audio-signal',
         payload: {
-          fromUserId: ws.userId,
-          fromEmail: ws.email,
-          signalType,
-          signalData,
+          roomId: roomKey,
+          participants: existingParticipants,
+          participantCount: room.size,
+          maxParticipants: MAX_AUDIO_PARTICIPANTS,
         },
       }));
-      return;
+
+      // Notify existing participants about the new peer
+      broadcast(room, {
+        type: 'audio_peer_joined',
+        channel: 'audio-signal',
+        payload: {
+          roomId: roomKey,
+          userId: ws.userId,
+          email: ws.email,
+          participantCount: room.size,
+          maxParticipants: MAX_AUDIO_PARTICIPANTS,
+        },
+      }, ws);
+      break;
     }
-  });
+
+    case 'leave': {
+      const room = audioRooms.get(roomKey);
+      if (room && room.has(ws)) {
+        room.delete(ws);
+        broadcast(room, {
+          type: 'audio_peer_left',
+          channel: 'audio-signal',
+          payload: {
+            roomId: roomKey,
+            userId: ws.userId,
+            email: ws.email,
+            participantCount: room.size,
+            maxParticipants: MAX_AUDIO_PARTICIPANTS,
+          },
+        });
+        if (room.size === 0) audioRooms.delete(roomKey);
+      }
+      break;
+    }
+
+    case 'signal': {
+      // Relay WebRTC signaling (offer/answer/ice-candidate) to a specific peer
+      if (!targetUserId || typeof targetUserId !== 'string') return;
+
+      const room = audioRooms.get(roomKey);
+      if (!room || !room.has(ws)) return;
+
+      Array.from(room).forEach(client => {
+        if (client.userId === targetUserId && client.readyState === WebSocket.OPEN) {
+          client.send(JSON.stringify({
+            type: 'audio_signal',
+            channel: 'audio-signal',
+            payload: {
+              roomId: roomKey,
+              fromUserId: ws.userId,
+              fromEmail: ws.email,
+              signalType,
+              signalData,
+            },
+          }));
+        }
+      });
+      break;
+    }
+
+    case 'mute_change': {
+      const room = audioRooms.get(roomKey);
+      if (!room || !room.has(ws)) return;
+
+      broadcast(room, {
+        type: 'audio_mute_change',
+        channel: 'audio-signal',
+        payload: {
+          roomId: roomKey,
+          userId: ws.userId,
+          isMuted: !!payload.isMuted,
+        },
+      }, ws);
+      break;
+    }
+
+    default: {
+      // Legacy: relay raw signal to targetUserId (backward compat)
+      if (!targetUserId || typeof targetUserId !== 'string') return;
+      const orgRoom = orgRooms.get(orgId);
+      if (!orgRoom) return;
+
+      Array.from(orgRoom).forEach(client => {
+        if (client.userId === targetUserId && client.readyState === WebSocket.OPEN) {
+          client.send(JSON.stringify({
+            type: 'audio_signal',
+            channel: 'audio-signal',
+            payload: {
+              fromUserId: ws.userId,
+              fromEmail: ws.email,
+              signalType,
+              signalData,
+            },
+          }));
+        }
+      });
+    }
+  }
 }
 
 // ── Notification Handler ──────────────────────────────────────────────────────
