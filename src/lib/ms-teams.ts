@@ -24,7 +24,8 @@ type TeamsEventType =
   | 'audio_call_started'
   | 'chat_message'
   | 'build_status'
-  | 'security_alert';
+  | 'security_alert'
+  | 'test';
 
 interface TeamsNotificationBase {
   orgName?: string;
@@ -78,6 +79,7 @@ type PayloadMap = {
   chat_message: ChatMessagePayload;
   build_status: BuildStatusPayload;
   security_alert: SecurityAlertPayload;
+  test: MemberEventPayload;
 };
 
 // Color mapping for event types
@@ -90,6 +92,7 @@ const EVENT_COLORS: Record<TeamsEventType, string> = {
   chat_message: 'Default',
   build_status: 'Default',    // set dynamically
   security_alert: 'Attention', // red
+  test: 'Default',
 };
 
 const EVENT_ICONS: Record<TeamsEventType, string> = {
@@ -101,6 +104,7 @@ const EVENT_ICONS: Record<TeamsEventType, string> = {
   chat_message: '💬',
   build_status: '🔨',
   security_alert: '🔒',
+  test: '🧪',
 };
 
 const EVENT_TITLES: Record<TeamsEventType, string> = {
@@ -112,6 +116,7 @@ const EVENT_TITLES: Record<TeamsEventType, string> = {
   chat_message: 'New Message',
   build_status: 'Build Status',
   security_alert: 'Security Alert',
+  test: 'Connectivity Test',
 };
 
 /**
@@ -126,6 +131,7 @@ function buildAdaptiveCard<T extends TeamsEventType>(
 
   // Build facts based on event type
   switch (type) {
+    case 'test':
     case 'member_joined':
     case 'member_left':
     case 'member_invited': {

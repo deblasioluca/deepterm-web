@@ -68,10 +68,10 @@ export async function POST(request: Request) {
 
       try {
         const { notifyTeams } = await import('@/lib/ms-teams');
-        const result = await notifyTeams('member_joined', {
-          email: 'test@deepterm.net',
+        const result = await notifyTeams('test', {
+          email: 'system@deepterm.net',
           orgName: 'DeepTerm',
-          role: 'Test notification',
+          role: 'Connectivity test',
         }, { wait: true, webhookUrl });
 
         if (result.ok) {

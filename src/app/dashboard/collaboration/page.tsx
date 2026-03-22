@@ -75,6 +75,7 @@ export default function CollaborationPage() {
   const [loading, setLoading] = useState(true);
   const [panelView, setPanelView] = useState<PanelView>("chat");
   const [showParticipants, setShowParticipants] = useState(true);
+  const [selectedChannelId, setSelectedChannelId] = useState<string | null>(null);
   const wsRef = useRef<WebSocket | null>(null);
   const { notifications, dismiss } = useSessionNotifications(wsRef, wsConnected);
 
@@ -226,7 +227,7 @@ export default function CollaborationPage() {
       />
 
       {/* Top bar */}
-      <div className="flex items-center justify-between px-4 py-2 bg-[#1a1a2e] border-b border-border shrink-0">
+      <div className="flex items-center justify-between px-4 py-2 bg-background-tertiary border-b border-border shrink-0">
         <div className="flex items-center gap-3">
           <select
             value={selectedOrgId || ""}
@@ -286,7 +287,11 @@ export default function CollaborationPage() {
       {/* Three-panel layout */}
       <div className="flex flex-1 min-h-0">
         {panelView === "chat" && selectedOrgId && (
-          <ChannelSidebar orgId={selectedOrgId} />
+          <ChannelSidebar
+            orgId={selectedOrgId}
+            selectedChannelId={selectedChannelId}
+            onSelectChannel={setSelectedChannelId}
+          />
         )}
 
         <div className="flex-1 flex flex-col min-w-0">
@@ -296,6 +301,8 @@ export default function CollaborationPage() {
               wsRef={wsRef}
               wsConnected={wsConnected}
               currentUserId={currentUserId}
+              selectedChannelId={selectedChannelId}
+              onSelectChannel={setSelectedChannelId}
             />
           )}
           {panelView === "terminal" && selectedOrgId && (
@@ -345,9 +352,16 @@ function TopBarTab({
 
 // -- Channel Sidebar (Left) --
 
-function ChannelSidebar({ orgId }: { orgId: string }) {
+function ChannelSidebar({
+  orgId,
+  selectedChannelId,
+  onSelectChannel,
+}: {
+  orgId: string;
+  selectedChannelId: string | null;
+  onSelectChannel: (id: string) => void;
+}) {
   const [channels, setChannels] = useState<ChatChannel[]>([]);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
 
   useEffect(() => {
     async function fetchChannels() {
@@ -357,8 +371,8 @@ function ChannelSidebar({ orgId }: { orgId: string }) {
           const data = await res.json();
           const chs = data.channels || [];
           setChannels(chs);
-          if (chs.length > 0 && !selectedId) {
-            setSelectedId(chs[0].id);
+          if (chs.length > 0 && !selectedChannelId) {
+            onSelectChannel(chs[0].id);
           }
         }
       } catch {
@@ -370,7 +384,7 @@ function ChannelSidebar({ orgId }: { orgId: string }) {
   }, [orgId]);
 
   return (
-    <div className="w-60 bg-[#12121f] border-r border-border flex flex-col shrink-0">
+    <div className="w-60 bg-background-secondary border-r border-border flex flex-col shrink-0">
       <div className="px-3 py-3 border-b border-border/50">
         <div className="flex items-center justify-between mb-2">
           <h3 className="text-xs font-bold text-text-tertiary uppercase tracking-wider">
@@ -399,9 +413,9 @@ function ChannelSidebar({ orgId }: { orgId: string }) {
           channels.map((ch) => (
             <button
               key={ch.id}
-              onClick={() => setSelectedId(ch.id)}
+              onClick={() => onSelectChannel(ch.id)}
               className={`w-full flex items-center gap-2 px-3 py-1.5 text-left transition-colors ${
-                selectedId === ch.id
+                selectedChannelId === ch.id
                   ? "bg-accent-primary/10 text-accent-primary"
                   : "text-text-secondary hover:text-text-primary hover:bg-white/5"
               }`}
@@ -430,14 +444,17 @@ function ChatPanel({
   wsRef,
   wsConnected,
   currentUserId,
+  selectedChannelId,
+  onSelectChannel,
 }: {
   orgId: string;
   wsRef: React.RefObject<WebSocket | null>;
   wsConnected: boolean;
   currentUserId: string;
+  selectedChannelId: string | null;
+  onSelectChannel: (id: string) => void;
 }) {
   const [channels, setChannels] = useState<ChatChannel[]>([]);
-  const [selectedChannel, setSelectedChannel] = useState<string | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [newMessage, setNewMessage] = useState("");
   const [sending, setSending] = useState(false);
@@ -452,8 +469,8 @@ function ChatPanel({
           const data = await res.json();
           const chs = data.channels || [];
           setChannels(chs);
-          if (chs.length > 0 && !selectedChannel) {
-            setSelectedChannel(chs[0].id);
+          if (chs.length > 0 && !selectedChannelId) {
+            onSelectChannel(chs[0].id);
           }
         }
       } catch {
@@ -467,11 +484,11 @@ function ChatPanel({
   }, [orgId]);
 
   useEffect(() => {
-    if (!selectedChannel) return;
+    if (!selectedChannelId) return;
     async function fetchMessages() {
       try {
         const res = await fetch(
-          `/api/zk/chat/channels/${selectedChannel}/messages?limit=50`,
+          `/api/zk/chat/channels/${selectedChannelId}/messages?limit=50`,
         );
         if (res.ok) {
           const data = await res.json();
@@ -482,7 +499,7 @@ function ChatPanel({
       }
     }
     fetchMessages();
-  }, [selectedChannel]);
+  }, [selectedChannelId]);
 
   useEffect(() => {
     const ws = wsRef.current;
@@ -492,7 +509,7 @@ function ChatPanel({
         const msg = JSON.parse(event.data);
         if (
           msg.type === "chat_message" &&
-          msg.payload?.channelId === selectedChannel
+          msg.payload?.channelId === selectedChannelId
         ) {
           setMessages((prev) => [
             ...prev,
@@ -513,7 +530,7 @@ function ChatPanel({
     };
     ws.addEventListener("message", handler);
     return () => ws.removeEventListener("message", handler);
-  }, [wsRef, wsConnected, selectedChannel]);
+  }, [wsRef, wsConnected, selectedChannelId]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -521,11 +538,11 @@ function ChatPanel({
 
   const sendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newMessage.trim() || !selectedChannel) return;
+    if (!newMessage.trim() || !selectedChannelId) return;
     setSending(true);
     try {
       const res = await fetch(
-        `/api/zk/chat/channels/${selectedChannel}/messages`,
+        `/api/zk/chat/channels/${selectedChannelId}/messages`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -543,7 +560,7 @@ function ChatPanel({
   };
 
   const activeChannelName =
-    channels.find((c) => c.id === selectedChannel)?.name || "general";
+    channels.find((c) => c.id === selectedChannelId)?.name || "general";
 
   if (loading) {
     return (
@@ -572,7 +589,7 @@ function ChatPanel({
 
   return (
     <div className="flex-1 flex flex-col min-h-0">
-      <div className="flex items-center justify-between px-4 py-2.5 border-b border-border bg-[#141425]">
+      <div className="flex items-center justify-between px-4 py-2.5 border-b border-border bg-background-secondary">
         <div className="flex items-center gap-2">
           <Hash className="w-4 h-4 text-text-tertiary" />
           <h3 className="text-sm font-semibold text-text-primary">
@@ -670,7 +687,7 @@ function ChatPanel({
       <div className="px-4 pb-3">
         <form
           onSubmit={sendMessage}
-          className="flex items-center gap-2 bg-[#1e1e35] border border-border/50 rounded-lg px-3 py-2"
+          className="flex items-center gap-2 bg-background-tertiary border border-border/50 rounded-lg px-3 py-2"
         >
           <Plus className="w-5 h-5 text-text-tertiary shrink-0 cursor-pointer hover:text-text-secondary transition-colors" />
           <input
@@ -753,7 +770,7 @@ function TerminalPanel({
 
   return (
     <div className="flex-1 flex flex-col min-h-0">
-      <div className="flex items-center justify-between px-4 py-2.5 border-b border-border bg-[#141425]">
+      <div className="flex items-center justify-between px-4 py-2.5 border-b border-border bg-background-secondary">
         <div className="flex items-center gap-2">
           <Terminal className="w-4 h-4 text-green-500" />
           <h3 className="text-sm font-semibold text-text-primary">
@@ -843,7 +860,7 @@ function TerminalPanel({
 function AudioPanel() {
   return (
     <div className="flex-1 flex flex-col min-h-0">
-      <div className="flex items-center justify-between px-4 py-2.5 border-b border-border bg-[#141425]">
+      <div className="flex items-center justify-between px-4 py-2.5 border-b border-border bg-background-secondary">
         <div className="flex items-center gap-2">
           <Volume2 className="w-4 h-4 text-blue-500" />
           <h3 className="text-sm font-semibold text-text-primary">
@@ -969,7 +986,7 @@ function ParticipantsSidebar({ orgId }: { orgId: string }) {
   };
 
   return (
-    <div className="w-56 bg-[#12121f] border-l border-border flex flex-col shrink-0">
+    <div className="w-56 bg-background-secondary border-l border-border flex flex-col shrink-0">
       <div className="px-3 py-3 border-b border-border/50">
         <h3 className="text-xs font-bold text-text-tertiary uppercase tracking-wider">
           Participants ({members.length})
@@ -1061,7 +1078,7 @@ function MemberGroup({
               </span>
             </div>
             <div
-              className={`absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-[#12121f] ${statusDot(m.status)}`}
+              className={`absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-background-secondary ${statusDot(m.status)}`}
             />
           </div>
           <div className="min-w-0 flex-1">
