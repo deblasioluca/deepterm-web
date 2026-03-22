@@ -39,8 +39,14 @@ export function SharedTerminal({
   const fitAddonRef = useRef<FitAddon | null>(null);
   const wsRef = useRef<WebSocket | null>(null);
   const writePermissionRef = useRef(canWrite);
+  const onDisconnectRef = useRef(onDisconnect);
+  const onParticipantsChangeRef = useRef(onParticipantsChange);
   const [connected, setConnected] = useState(false);
   const [writePermission, setWritePermission] = useState(canWrite);
+
+  // Keep refs in sync with latest props
+  useEffect(() => { onDisconnectRef.current = onDisconnect; }, [onDisconnect]);
+  useEffect(() => { onParticipantsChangeRef.current = onParticipantsChange; }, [onParticipantsChange]);
 
   const connectWebSocket = useCallback(() => {
     const ws = new WebSocket(`${wsUrl}?token=${wsToken}`);
@@ -104,7 +110,7 @@ export function SharedTerminal({
 
     ws.onclose = () => {
       setConnected(false);
-      onDisconnect?.();
+      onDisconnectRef.current?.();
     };
 
     ws.onerror = () => {
@@ -112,7 +118,7 @@ export function SharedTerminal({
     };
 
     return ws;
-  }, [sessionId, wsToken, wsUrl, userId, onDisconnect, onParticipantsChange]);
+  }, [sessionId, wsToken, wsUrl, userId]);
 
   useEffect(() => {
     if (!terminalRef.current) return;

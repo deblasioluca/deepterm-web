@@ -53,11 +53,16 @@ export default function TerminalPage() {
   const [orgs, setOrgs] = useState<{ id: string; name: string }[]>([]);
   const [error, setError] = useState('');
 
+  // Stable callback for SharedTerminal disconnect
+  const handleDisconnect = useCallback(() => {
+    // Could show reconnect UI
+  }, []);
+
   // Fetch organizations the user belongs to
   const fetchOrgs = useCallback(async () => {
     try {
       // Get WS token which includes orgIds
-      const res = await fetch('/api/zk/terminal/ws-token', { method: 'POST' });
+      const res = await fetch('/api/terminal/ws-token', { method: 'POST' });
       if (!res.ok) return;
       const data = await res.json();
       if (data) {
@@ -161,9 +166,7 @@ export default function TerminalPage() {
             canWrite={canWrite}
             isOwner={isOwner}
             userId={wsAuth.userId}
-            onDisconnect={() => {
-              // Could show reconnect UI
-            }}
+            onDisconnect={handleDisconnect}
           />
         </div>
       </div>
