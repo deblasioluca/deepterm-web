@@ -87,7 +87,7 @@ export async function GET(request: NextRequest) {
       } : undefined,
       include: {
         members: {
-          where: { status: 'active' },
+          where: { status: 'confirmed' },
           include: {
             user: {
               select: {
@@ -106,7 +106,7 @@ export async function GET(request: NextRequest) {
 
     // Get users without organizations (free tier)
     const allOrgUserIds = await prisma.organizationUser.findMany({
-      where: { status: 'active' },
+      where: { status: 'confirmed' },
       select: { userId: true },
     });
     const orgUserIdSet = new Set(allOrgUserIds.map((ou) => ou.userId));
@@ -164,7 +164,7 @@ export async function GET(request: NextRequest) {
           name: user.email,
           email: user.email,
           plan: 'starter',
-          status: 'active',
+          status: 'confirmed',
           seats: 1,
           memberCount: 1,
           members: [{ id: user.id, name: user.email, email: user.email, role: 'owner' }],
@@ -225,7 +225,7 @@ export async function POST(request: NextRequest) {
 
     // Check if user already belongs to an organization
     const existingMembership = await prisma.organizationUser.findFirst({
-      where: { userId: zkUser.id, status: 'active' },
+      where: { userId: zkUser.id, status: 'confirmed' },
     });
 
     if (existingMembership) {
@@ -253,7 +253,7 @@ export async function POST(request: NextRequest) {
         organizationId: org.id,
         userId: zkUser.id,
         role: 'owner',
-        status: 'active',
+        status: 'confirmed',
       },
     });
 

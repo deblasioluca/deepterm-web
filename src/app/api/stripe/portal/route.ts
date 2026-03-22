@@ -28,7 +28,7 @@ export async function POST(request: NextRequest) {
 
     // Find user's organization
     const membership = await prisma.organizationUser.findFirst({
-      where: { userId: user.zkUser.id, status: 'active' },
+      where: { userId: user.zkUser.id, status: 'confirmed' },
       include: { organization: true },
     });
 

@@ -190,7 +190,7 @@ export function createMcpServer(userId: string, userEmail: string) {
 
       // Look up organization for billing info
       const membership = await prisma.organizationUser.findFirst({
-        where: { userId, status: 'active' },
+        where: { userId, status: 'confirmed' },
         include: {
           organization: {
             include: {
@@ -237,7 +237,7 @@ export function createMcpServer(userId: string, userEmail: string) {
     },
     async ({ limit }) => {
       const membership = await prisma.organizationUser.findFirst({
-        where: { userId, status: 'active' },
+        where: { userId, status: 'confirmed' },
         select: { organizationId: true },
       });
 

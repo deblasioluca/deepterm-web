@@ -57,7 +57,7 @@ export async function POST(request: NextRequest) {
         where: {
           organizationId: invitation.organizationId,
           userId: user.zkUser.id,
-          status: 'active',
+          status: 'confirmed',
         },
       });
 
@@ -77,7 +77,7 @@ export async function POST(request: NextRequest) {
     // Accept the invitation
     await prisma.organizationUser.update({
       where: { id: invitation.id },
-      data: { status: 'active', token: null },
+      data: { status: 'confirmed', token: null },
     });
 
     return NextResponse.json({

@@ -27,7 +27,7 @@ export async function GET() {
 
     // Find user's organization
     const membership = await prisma.organizationUser.findFirst({
-      where: { userId: user.zkUser.id, status: 'active' },
+      where: { userId: user.zkUser.id, status: 'confirmed' },
     });
 
     if (!membership) {
@@ -91,7 +91,7 @@ export async function POST(request: NextRequest) {
     let org;
     if (user.zkUser) {
       const membership = await prisma.organizationUser.findFirst({
-        where: { userId: user.zkUser.id, status: 'active' },
+        where: { userId: user.zkUser.id, status: 'confirmed' },
         include: { organization: true },
       });
       org = membership?.organization;
@@ -103,7 +103,7 @@ export async function POST(request: NextRequest) {
       });
       if (user.zkUser) {
         await prisma.organizationUser.create({
-          data: { organizationId: org.id, userId: user.zkUser.id, role: 'owner', status: 'active' },
+          data: { organizationId: org.id, userId: user.zkUser.id, role: 'owner', status: 'confirmed' },
         });
       }
     }
@@ -198,7 +198,7 @@ export async function PATCH(request: NextRequest) {
     }
 
     const membership = await prisma.organizationUser.findFirst({
-      where: { userId: user.zkUser.id, status: 'active' },
+      where: { userId: user.zkUser.id, status: 'confirmed' },
       include: { organization: true },
     });
 
@@ -300,7 +300,7 @@ export async function DELETE(request: NextRequest) {
     }
 
     const delMembership = await prisma.organizationUser.findFirst({
-      where: { userId: user.zkUser.id, status: 'active' },
+      where: { userId: user.zkUser.id, status: 'confirmed' },
       include: { organization: true },
     });
 

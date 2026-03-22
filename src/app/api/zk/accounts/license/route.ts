@@ -46,7 +46,7 @@ export async function GET(request: NextRequest) {
 
     // Look up user's organization for billing info
     const membership = await prisma.organizationUser.findFirst({
-      where: { userId: zkUser.id, status: 'active' },
+      where: { userId: zkUser.id, status: 'confirmed' },
       include: { organization: true },
     });
     const org = membership?.organization;

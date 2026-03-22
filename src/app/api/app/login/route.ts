@@ -124,7 +124,7 @@ export async function POST(request: NextRequest) {
     let org = null;
     if (zkUserForOrg) {
       const membership = await prisma.organizationUser.findFirst({
-        where: { userId: zkUserForOrg.id, status: 'active' },
+        where: { userId: zkUserForOrg.id, status: 'confirmed' },
         include: { organization: true },
       });
       org = membership?.organization ?? null;

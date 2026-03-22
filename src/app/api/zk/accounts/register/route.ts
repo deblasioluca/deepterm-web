@@ -123,7 +123,7 @@ export async function POST(request: NextRequest) {
         organizationId: org.id,
         userId: user.id,
         role: 'owner',
-        status: 'active',
+        status: 'confirmed',
       },
     });
 
