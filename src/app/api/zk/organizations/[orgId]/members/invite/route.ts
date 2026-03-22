@@ -116,6 +116,7 @@ export async function POST(
             data: {
               status: OrganizationUserStatus.INVITED,
               role,
+              userId: invitee.id,
               encryptedOrgKey: encryptedOrgKey || null,
               token,
               invitedEmail: normalizedEmail,

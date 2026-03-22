@@ -46,6 +46,16 @@ export default function InviteAcceptPage() {
         return;
       }
 
+      // Only fall back to team invitation if org API returned 404 (token not found).
+      // Other errors (400 = already accepted, 410 = expired) are specific to the org
+      // invitation and should be displayed directly.
+      if (orgRes.status !== 404) {
+        const orgData = await orgRes.json();
+        setError(orgData.error || 'Invalid invitation');
+        setLoading(false);
+        return;
+      }
+
       // Fall back to legacy team invitation
       const teamRes = await fetch(`/api/team/invitations/accept?token=${encodeURIComponent(token)}`);
       const teamData = await teamRes.json();

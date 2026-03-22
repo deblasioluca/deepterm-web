@@ -104,16 +104,22 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'This invitation has expired' }, { status: 410 });
     }
 
+    const userEmail = session.user.email?.toLowerCase();
+    if (!userEmail) {
+      return NextResponse.json(
+        { error: 'Your account does not have an email address. Cannot accept invitation.' },
+        { status: 400 }
+      );
+    }
+
     // Find the signed-in user's ZKUser account
     const zkUser = await prisma.zKUser.findFirst({
       where: {
-        // Match by email from the NextAuth User record
-        email: session.user.email?.toLowerCase(),
+        email: userEmail,
       },
     });
 
     // Check the invited email matches the signed-in user
-    const userEmail = session.user.email?.toLowerCase();
     if (invitation.invitedEmail && userEmail !== invitation.invitedEmail) {
       return NextResponse.json(
         { error: `This invitation was sent to ${invitation.invitedEmail}. Please sign in with that email address.` },
