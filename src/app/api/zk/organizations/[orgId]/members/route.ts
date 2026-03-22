@@ -71,7 +71,7 @@ export async function GET(
         role: m.role,
         status: m.status,
         invitedAt: m.createdAt.toISOString(),
-        confirmedAt: m.status === 'confirmed' ? m.updatedAt.toISOString() : null,
+        confirmedAt: m.confirmedAt ? m.confirmedAt.toISOString() : null,
         createdAt: m.createdAt.toISOString(),
         updatedAt: m.updatedAt.toISOString(),
       }))

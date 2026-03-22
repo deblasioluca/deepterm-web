@@ -51,6 +51,7 @@ export async function POST(
       where: { id: membership.id },
       data: {
         status: OrganizationUserStatus.CONFIRMED,
+        confirmedAt: new Date(),
         token: null,
       },
     });
