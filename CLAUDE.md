@@ -70,10 +70,16 @@ const session = await auth();
 import { withAuth } from '@/lib/zk/middleware';
 export const POST = withAuth(async (request, auth) => { ... });
 
-// WRONG: Using NextAuth session for ZK vault endpoints
+// CORRECT: Organization routes that serve both app AND web dashboard
+import { getAuthFromRequestOrSession } from '@/lib/zk';
+const auth = await getAuthFromRequestOrSession(request);
+// Tries Bearer token first (app), falls back to NextAuth session → ZKUser lookup (web)
+
 // WRONG: Using ZK JWT for admin panel
 // WRONG: Creating a fourth auth system
 ```
+
+**Exception — Organization routes:** The `/api/zk/organizations/*` endpoints serve both the macOS app (Bearer token) and the web collaboration dashboard (NextAuth session). These routes use `getAuthFromRequestOrSession()` which tries Bearer auth first, then falls back to session-based auth by resolving the linked `ZKUser`. This is intentional — the web dashboard needs to display organization membership, members, and teams. Vault item encryption/decryption still happens exclusively client-side.
 
 ### Admin Panel is Intranet-Only
 **ALL `/admin` and `/api/admin` routes are restricted to private IPs.** This is enforced at two layers:

@@ -170,7 +170,7 @@ export async function POST(request: NextRequest) {
       });
 
       if (existingMembership) {
-        const msg = existingMembership.status === 'active'
+        const msg = existingMembership.status === 'confirmed'
           ? 'This user is already an organization member'
           : 'An invitation has already been sent to this email';
         return NextResponse.json({ error: msg }, { status: 400 });
