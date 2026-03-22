@@ -89,7 +89,7 @@ export async function GET() {
       })),
       invitations: pendingInvites.map((i) => ({
         id: i.id,
-        email: i.user?.email || '',
+        email: i.user?.email || i.invitedEmail || '',
         role: i.role,
         status: 'pending',
         createdAt: i.createdAt,

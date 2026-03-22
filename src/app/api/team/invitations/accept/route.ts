@@ -125,7 +125,7 @@ export async function GET(request: NextRequest) {
     }
 
     return NextResponse.json({
-      email: invitation.user?.email || '',
+      email: invitation.invitedEmail || invitation.user?.email || '',
       role: invitation.role,
       teamName: invitation.organization.name,
       expiresAt: null,

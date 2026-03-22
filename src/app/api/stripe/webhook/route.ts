@@ -533,7 +533,6 @@ async function syncOrgMemberPlans(
         where: { id: { in: webUserIds } },
         data: {
           plan,
-          stripeCustomerId,
           stripeSubscriptionId,
         },
       });
