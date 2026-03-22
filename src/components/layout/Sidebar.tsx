@@ -63,6 +63,7 @@ export function Sidebar() {
   ];
 
   const secondaryLinks = [
+    { label: 'Shared Terminals', href: '/dashboard/terminal', icon: Terminal },
     { label: messages.sidebar.forStudents, href: '/dashboard/students', icon: GraduationCap },
     { label: messages.sidebar.messages || 'Messages', href: '/dashboard/messages', icon: Bell, badge: unreadCount },
     { label: messages.sidebar.ideas, href: '/dashboard/ideas', icon: Lightbulb },
