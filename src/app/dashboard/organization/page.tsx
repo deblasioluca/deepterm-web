@@ -15,6 +15,8 @@ import {
   Crown,
   Mail,
   Hash,
+  Plus,
+  X,
 } from 'lucide-react';
 
 interface OrgMember {
@@ -30,6 +32,8 @@ interface OrgMember {
 interface OrgTeam {
   id: string;
   name: string;
+  description?: string;
+  isDefault?: boolean;
   memberCount: number;
   members?: OrgMember[];
 }
@@ -60,6 +64,11 @@ export default function OrganizationPage() {
   const [expandedOrgs, setExpandedOrgs] = useState<Set<string>>(new Set());
   const [expandedTeams, setExpandedTeams] = useState<Set<string>>(new Set());
   const [accepting, setAccepting] = useState<string | null>(null);
+
+  // Modal states
+  const [showCreateOrg, setShowCreateOrg] = useState(false);
+  const [showInviteMember, setShowInviteMember] = useState<string | null>(null);
+  const [showCreateTeam, setShowCreateTeam] = useState<string | null>(null);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -118,9 +127,11 @@ export default function OrganizationPage() {
             if (teamsRes.ok) {
               const teamsData = await teamsRes.json();
               const rawTeams = Array.isArray(teamsData) ? teamsData : (teamsData.teams || []);
-              teams = rawTeams.map((t: { id: string; name: string; memberCount?: number; _count?: { members: number } }) => ({
+              teams = rawTeams.map((t: { id: string; name: string; description?: string; isDefault?: boolean; memberCount?: number; _count?: { members: number } }) => ({
                 id: t.id,
                 name: t.name,
+                description: t.description,
+                isDefault: t.isDefault,
                 memberCount: t.memberCount || t._count?.members || 0,
               }));
             }
@@ -228,6 +239,8 @@ export default function OrganizationPage() {
     }
   };
 
+  const isOrgAdmin = (org: Organization) => org.role === 'owner' || org.role === 'admin';
+
   if (loading) {
     return (
       <div className="flex items-center justify-center py-12">
@@ -250,6 +263,13 @@ export default function OrganizationPage() {
               Manage your organizations, teams, and members
             </p>
           </div>
+          <Button
+            variant="primary"
+            onClick={() => setShowCreateOrg(true)}
+          >
+            <Plus className="w-4 h-4 mr-1" />
+            New Organization
+          </Button>
         </div>
 
         {/* Pending Invitations Banner */}
@@ -305,16 +325,22 @@ export default function OrganizationPage() {
           <Card className="p-12 text-center">
             <Building2 className="w-12 h-12 text-text-tertiary mx-auto mb-4" />
             <h3 className="text-lg font-semibold text-text-primary mb-2">
-              No Organizations
+              No Organizations Yet
             </h3>
-            <p className="text-text-secondary">
-              You are not part of any organization yet. Organizations are created from the DeepTerm macOS app.
+            <p className="text-text-secondary mb-6 max-w-md mx-auto">
+              Organizations let you collaborate with your team &mdash; share terminals,
+              chat, and make audio calls. Create one to get started.
             </p>
+            <Button variant="primary" onClick={() => setShowCreateOrg(true)}>
+              <Plus className="w-4 h-4 mr-1" />
+              Create Your First Organization
+            </Button>
           </Card>
         ) : (
           <div className="space-y-4">
             {organizations.map(org => {
               const isExpanded = expandedOrgs.has(org.id);
+              const canManage = isOrgAdmin(org);
 
               return (
                 <Card key={org.id} className="overflow-hidden">
@@ -362,6 +388,28 @@ export default function OrganizationPage() {
                   {/* Expanded Content */}
                   {isExpanded && (
                     <div className="border-t border-border">
+                      {/* Action Buttons for admins/owners */}
+                      {canManage && (
+                        <div className="px-4 py-3 flex items-center gap-2 border-b border-border/50 bg-background-secondary/30">
+                          <Button
+                            variant="secondary"
+                            size="sm"
+                            onClick={(e) => { e.stopPropagation(); setShowInviteMember(org.id); }}
+                          >
+                            <UserPlus className="w-3.5 h-3.5 mr-1" />
+                            Invite Member
+                          </Button>
+                          <Button
+                            variant="secondary"
+                            size="sm"
+                            onClick={(e) => { e.stopPropagation(); setShowCreateTeam(org.id); }}
+                          >
+                            <Plus className="w-3.5 h-3.5 mr-1" />
+                            Create Team
+                          </Button>
+                        </div>
+                      )}
+
                       {/* Teams Section */}
                       {org.teams.length > 0 && (
                         <div className="p-4 border-b border-border/50">
@@ -387,14 +435,22 @@ export default function OrganizationPage() {
                                       <span className="text-sm font-medium text-text-primary">
                                         {team.name}
                                       </span>
+                                      {team.isDefault && (
+                                        <Badge variant="default" className="text-[9px]">default</Badge>
+                                      )}
                                     </div>
                                     <span className="text-xs text-text-tertiary">
                                       {team.memberCount} member{team.memberCount !== 1 ? 's' : ''}
                                     </span>
                                   </button>
                                   {isTeamExpanded && (
-                                    <div className="ml-8 mt-1 mb-2 text-xs text-text-tertiary">
-                                      <p>Team members are managed from the DeepTerm macOS app.</p>
+                                    <div className="ml-8 mt-1 mb-2">
+                                      {team.description && (
+                                        <p className="text-xs text-text-tertiary mb-2">{team.description}</p>
+                                      )}
+                                      <p className="text-xs text-text-tertiary">
+                                        Members can be managed from the DeepTerm macOS app or by inviting to the organization above.
+                                      </p>
                                     </div>
                                   )}
                                 </div>
@@ -479,7 +535,318 @@ export default function OrganizationPage() {
             })}
           </div>
         )}
+
+        {/* Create Organization Modal */}
+        {showCreateOrg && (
+          <CreateOrgModal
+            onClose={() => setShowCreateOrg(false)}
+            onCreated={() => { setShowCreateOrg(false); fetchData(); }}
+          />
+        )}
+
+        {/* Invite Member Modal */}
+        {showInviteMember && (
+          <InviteMemberModal
+            orgId={showInviteMember}
+            orgName={organizations.find(o => o.id === showInviteMember)?.name || 'Organization'}
+            onClose={() => setShowInviteMember(null)}
+            onInvited={() => { setShowInviteMember(null); fetchData(); }}
+          />
+        )}
+
+        {/* Create Team Modal */}
+        {showCreateTeam && (
+          <CreateTeamModal
+            orgId={showCreateTeam}
+            orgName={organizations.find(o => o.id === showCreateTeam)?.name || 'Organization'}
+            onClose={() => setShowCreateTeam(null)}
+            onCreated={() => { setShowCreateTeam(null); fetchData(); }}
+          />
+        )}
       </motion.div>
+    </div>
+  );
+}
+
+// -- Create Organization Modal --
+
+function CreateOrgModal({
+  onClose,
+  onCreated,
+}: {
+  onClose: () => void;
+  onCreated: () => void;
+}) {
+  const [name, setName] = useState('');
+  const [creating, setCreating] = useState(false);
+  const [error, setError] = useState('');
+
+  const handleCreate = async () => {
+    if (!name.trim()) return;
+    setCreating(true);
+    setError('');
+    try {
+      const res = await fetch('/api/zk/organizations', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: name.trim(),
+          encryptedOrgKey: 'web-placeholder',
+        }),
+      });
+      if (res.ok) {
+        onCreated();
+      } else {
+        const data = await res.json().catch(() => ({}));
+        setError(data.message || data.error || 'Failed to create organization');
+      }
+    } catch {
+      setError('Network error');
+    } finally {
+      setCreating(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+      <Card className="w-full max-w-md p-6">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-lg font-semibold text-text-primary">Create Organization</h2>
+          <button onClick={onClose} className="text-text-tertiary hover:text-text-primary">
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+        <p className="text-sm text-text-secondary mb-4">
+          An organization groups your team members together. You can create teams within it
+          and invite members to collaborate.
+        </p>
+        <div className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-text-secondary mb-1">
+              Organization Name
+            </label>
+            <input
+              type="text"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="e.g. My Company"
+              className="w-full bg-background-secondary border border-border rounded-lg px-3 py-2 text-sm text-text-primary placeholder:text-text-tertiary focus:outline-none focus:ring-1 focus:ring-accent-primary"
+              onKeyDown={(e) => e.key === 'Enter' && handleCreate()}
+              autoFocus
+            />
+          </div>
+          {error && (
+            <p className="text-sm text-accent-danger">{error}</p>
+          )}
+          <div className="flex justify-end gap-2">
+            <Button variant="secondary" onClick={onClose}>Cancel</Button>
+            <Button variant="primary" onClick={handleCreate} disabled={!name.trim() || creating}>
+              {creating ? <Loader2 className="w-4 h-4 animate-spin mr-1" /> : <Plus className="w-4 h-4 mr-1" />}
+              Create
+            </Button>
+          </div>
+        </div>
+      </Card>
+    </div>
+  );
+}
+
+// -- Invite Member Modal --
+
+function InviteMemberModal({
+  orgId,
+  orgName,
+  onClose,
+  onInvited,
+}: {
+  orgId: string;
+  orgName: string;
+  onClose: () => void;
+  onInvited: () => void;
+}) {
+  const [email, setEmail] = useState('');
+  const [role, setRole] = useState('member');
+  const [inviting, setInviting] = useState(false);
+  const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
+
+  const handleInvite = async () => {
+    if (!email.trim()) return;
+    setInviting(true);
+    setError('');
+    setSuccess('');
+    try {
+      const res = await fetch(`/api/zk/organizations/${orgId}/members/invite`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: email.trim(), role }),
+      });
+      if (res.ok) {
+        setSuccess(`Invitation sent to ${email.trim()}`);
+        setEmail('');
+        setTimeout(() => onInvited(), 1500);
+      } else {
+        const data = await res.json().catch(() => ({}));
+        setError(data.message || data.error || 'Failed to send invitation');
+      }
+    } catch {
+      setError('Network error');
+    } finally {
+      setInviting(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+      <Card className="w-full max-w-md p-6">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-lg font-semibold text-text-primary">Invite to {orgName}</h2>
+          <button onClick={onClose} className="text-text-tertiary hover:text-text-primary">
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+        <p className="text-sm text-text-secondary mb-4">
+          Enter the email address of the person you&apos;d like to invite. They&apos;ll receive
+          an email with a link to join. If they don&apos;t have an account yet, they can create one.
+        </p>
+        <div className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-text-secondary mb-1">
+              Email Address
+            </label>
+            <input
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="colleague@company.com"
+              className="w-full bg-background-secondary border border-border rounded-lg px-3 py-2 text-sm text-text-primary placeholder:text-text-tertiary focus:outline-none focus:ring-1 focus:ring-accent-primary"
+              onKeyDown={(e) => e.key === 'Enter' && handleInvite()}
+              autoFocus
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-text-secondary mb-1">
+              Role
+            </label>
+            <select
+              value={role}
+              onChange={(e) => setRole(e.target.value)}
+              className="w-full bg-background-secondary border border-border rounded-lg px-3 py-2 text-sm text-text-primary focus:outline-none focus:ring-1 focus:ring-accent-primary"
+            >
+              <option value="member">Member &mdash; can access shared resources</option>
+              <option value="admin">Admin &mdash; can manage members and teams</option>
+              <option value="readonly">Read-only &mdash; view-only access</option>
+            </select>
+          </div>
+          {error && <p className="text-sm text-accent-danger">{error}</p>}
+          {success && <p className="text-sm text-green-500">{success}</p>}
+          <div className="flex justify-end gap-2">
+            <Button variant="secondary" onClick={onClose}>Cancel</Button>
+            <Button variant="primary" onClick={handleInvite} disabled={!email.trim() || inviting}>
+              {inviting ? <Loader2 className="w-4 h-4 animate-spin mr-1" /> : <UserPlus className="w-4 h-4 mr-1" />}
+              Send Invitation
+            </Button>
+          </div>
+        </div>
+      </Card>
+    </div>
+  );
+}
+
+// -- Create Team Modal --
+
+function CreateTeamModal({
+  orgId,
+  orgName,
+  onClose,
+  onCreated,
+}: {
+  orgId: string;
+  orgName: string;
+  onClose: () => void;
+  onCreated: () => void;
+}) {
+  const [name, setName] = useState('');
+  const [description, setDescription] = useState('');
+  const [creating, setCreating] = useState(false);
+  const [error, setError] = useState('');
+
+  const handleCreate = async () => {
+    if (!name.trim()) return;
+    setCreating(true);
+    setError('');
+    try {
+      const res = await fetch(`/api/zk/organizations/${orgId}/teams`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: name.trim(),
+          description: description.trim() || undefined,
+        }),
+      });
+      if (res.ok) {
+        onCreated();
+      } else {
+        const data = await res.json().catch(() => ({}));
+        setError(data.message || data.error || 'Failed to create team');
+      }
+    } catch {
+      setError('Network error');
+    } finally {
+      setCreating(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+      <Card className="w-full max-w-md p-6">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-lg font-semibold text-text-primary">Create Team in {orgName}</h2>
+          <button onClick={onClose} className="text-text-tertiary hover:text-text-primary">
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+        <p className="text-sm text-text-secondary mb-4">
+          Teams help you organize members within your organization. Each team gets its own
+          chat channels, shared terminal sessions, and audio rooms.
+        </p>
+        <div className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-text-secondary mb-1">
+              Team Name
+            </label>
+            <input
+              type="text"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="e.g. Engineering, Design, DevOps"
+              className="w-full bg-background-secondary border border-border rounded-lg px-3 py-2 text-sm text-text-primary placeholder:text-text-tertiary focus:outline-none focus:ring-1 focus:ring-accent-primary"
+              onKeyDown={(e) => e.key === 'Enter' && handleCreate()}
+              autoFocus
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-text-secondary mb-1">
+              Description <span className="text-text-tertiary font-normal">(optional)</span>
+            </label>
+            <input
+              type="text"
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              placeholder="What this team works on..."
+              className="w-full bg-background-secondary border border-border rounded-lg px-3 py-2 text-sm text-text-primary placeholder:text-text-tertiary focus:outline-none focus:ring-1 focus:ring-accent-primary"
+            />
+          </div>
+          {error && <p className="text-sm text-accent-danger">{error}</p>}
+          <div className="flex justify-end gap-2">
+            <Button variant="secondary" onClick={onClose}>Cancel</Button>
+            <Button variant="primary" onClick={handleCreate} disabled={!name.trim() || creating}>
+              {creating ? <Loader2 className="w-4 h-4 animate-spin mr-1" /> : <Plus className="w-4 h-4 mr-1" />}
+              Create Team
+            </Button>
+          </div>
+        </div>
+      </Card>
     </div>
   );
 }

@@ -197,13 +197,21 @@ export default function CollaborationPage() {
         <Card className="p-12 text-center">
           <MessageSquare className="w-12 h-12 text-text-tertiary mx-auto mb-4" />
           <h3 className="text-lg font-semibold text-text-primary mb-2">
-            No Organization
+            No Organization Yet
           </h3>
-          <p className="text-text-secondary text-sm">
-            You need to be part of an organization to use collaboration
-            features. Create one from the DeepTerm macOS app or accept an
-            invite.
+          <p className="text-text-secondary text-sm mb-6 max-w-md mx-auto">
+            Collaboration features require an organization. Create one to start
+            sharing terminals, chatting, and making audio calls with your team.
           </p>
+          <Button
+            variant="primary"
+            onClick={() => {
+              window.location.href = "/dashboard/organization";
+            }}
+          >
+            <Plus className="w-4 h-4 mr-1" />
+            Create Organization
+          </Button>
         </Card>
       </div>
     );
@@ -757,15 +765,20 @@ function TerminalPanel({
       <div className="flex-1 overflow-y-auto p-4">
         {sessions.length === 0 ? (
           <div className="flex items-center justify-center h-full">
-            <div className="text-center">
+            <div className="text-center max-w-md">
               <Terminal className="w-10 h-10 text-text-tertiary mx-auto mb-3" />
               <h3 className="text-lg font-semibold text-text-primary mb-2">
                 No Active Sessions
               </h3>
-              <p className="text-text-secondary text-sm max-w-md">
-                Terminal sessions are shared from the DeepTerm macOS app. Share
-                a session to see it here.
+              <p className="text-text-secondary text-sm mb-4">
+                Share a terminal session from the DeepTerm macOS app to let team
+                members view or collaborate in real time.
               </p>
+              <div className="text-xs text-text-tertiary space-y-1">
+                <p>1. Open a terminal in the DeepTerm macOS app</p>
+                <p>2. Click the share icon in the terminal toolbar</p>
+                <p>3. Team members will see the session here</p>
+              </div>
             </div>
           </div>
         ) : (
@@ -854,18 +867,12 @@ function AudioPanel() {
                 </p>
               </div>
             </div>
+            <p className="text-sm text-text-secondary mb-4">
+              Start or join an audio call with your team members. Calls use
+              encrypted peer-to-peer connections &mdash; no audio is routed
+              through the server.
+            </p>
             <div className="grid grid-cols-2 gap-3">
-              <div className="flex items-center gap-2 p-3 bg-white/[0.03] rounded-lg">
-                <Mic className="w-4 h-4 text-green-500" />
-                <div>
-                  <p className="text-xs font-medium text-text-primary">
-                    Mute / Unmute
-                  </p>
-                  <p className="text-[10px] text-text-tertiary">
-                    Toggle microphone
-                  </p>
-                </div>
-              </div>
               <div className="flex items-center gap-2 p-3 bg-white/[0.03] rounded-lg">
                 <Phone className="w-4 h-4 text-green-500" />
                 <div>
@@ -873,7 +880,18 @@ function AudioPanel() {
                     Join Room
                   </p>
                   <p className="text-[10px] text-text-tertiary">
-                    Connect to audio
+                    Connect to audio channel
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2 p-3 bg-white/[0.03] rounded-lg">
+                <Mic className="w-4 h-4 text-green-500" />
+                <div>
+                  <p className="text-xs font-medium text-text-primary">
+                    Mute / Unmute
+                  </p>
+                  <p className="text-[10px] text-text-tertiary">
+                    Toggle your microphone
                   </p>
                 </div>
               </div>
@@ -884,7 +902,7 @@ function AudioPanel() {
                     Push to Talk
                   </p>
                   <p className="text-[10px] text-text-tertiary">
-                    Hold to speak
+                    Hold key to speak
                   </p>
                 </div>
               </div>
@@ -895,7 +913,7 @@ function AudioPanel() {
                     Leave Room
                   </p>
                   <p className="text-[10px] text-text-tertiary">
-                    No recording
+                    No calls are recorded
                   </p>
                 </div>
               </div>
