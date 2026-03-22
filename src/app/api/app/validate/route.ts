@@ -67,7 +67,13 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: 'TOKEN_EMAIL_MISMATCH' }, { status: 403 });
       }
 
-      const license = determineLicenseStatus(user);
+      // Look up the user's organization for billing/subscription status
+      const orgMembership = await prisma.organizationUser.findFirst({
+        where: { userId: zkAuth.userId, status: 'active' },
+        include: { organization: true },
+      });
+
+      const license = determineLicenseStatus(user, orgMembership?.organization ?? null);
 
       return NextResponse.json({
         valid: true,
@@ -160,7 +166,18 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    const license = determineLicenseStatus(user);
+    // Look up the user's organization for billing/subscription status
+    const zkUserForOrg = await prisma.zKUser.findFirst({ where: { email: user.email } });
+    let orgForLicense = null;
+    if (zkUserForOrg) {
+      const mem = await prisma.organizationUser.findFirst({
+        where: { userId: zkUserForOrg.id, status: 'active' },
+        include: { organization: true },
+      });
+      orgForLicense = mem?.organization ?? null;
+    }
+
+    const license = determineLicenseStatus(user, orgForLicense);
 
     return NextResponse.json({
       valid: true,
@@ -235,7 +252,13 @@ export async function GET(request: NextRequest) {
         return NextResponse.json({ error: 'TOKEN_EMAIL_MISMATCH' }, { status: 403 });
       }
 
-      const license = determineLicenseStatus(user);
+      // Look up org for billing status
+      const orgMem = await prisma.organizationUser.findFirst({
+        where: { userId: zkAuth.userId, status: 'active' },
+        include: { organization: true },
+      });
+
+      const license = determineLicenseStatus(user, orgMem?.organization ?? null);
 
       return NextResponse.json({
         valid: true,
@@ -263,7 +286,18 @@ export async function GET(request: NextRequest) {
       });
     }
 
-    const license = determineLicenseStatus(user);
+    // Look up org for billing status
+    const zkUserLookup = await prisma.zKUser.findFirst({ where: { email: user.email } });
+    let orgLookup = null;
+    if (zkUserLookup) {
+      const mem = await prisma.organizationUser.findFirst({
+        where: { userId: zkUserLookup.id, status: 'active' },
+        include: { organization: true },
+      });
+      orgLookup = mem?.organization ?? null;
+    }
+
+    const license = determineLicenseStatus(user, orgLookup);
 
     return NextResponse.json({
       valid: true,

@@ -81,15 +81,29 @@ export interface LicenseStatus {
 /**
  * Derive the licence status for a `User` row.
  *
- * @param user  A Prisma `User` row (no team relation needed — billing is on Organization now).
+ * @param user  A Prisma `User` row.
+ * @param org   Optional Organization data (billing is on Organization now).
  */
 export function determineLicenseStatus(user: {
   plan?: string | null;
   subscriptionExpiresAt?: Date | null;
-}): LicenseStatus {
-  const plan = user.plan || 'free';
-  const subscriptionStatus = 'active';
-  const expiresAt: Date | null = user.subscriptionExpiresAt ?? null;
+}, org?: {
+  id: string;
+  name: string;
+  plan?: string | null;
+  subscriptionStatus?: string | null;
+  currentPeriodEnd?: Date | null;
+  seats?: number | null;
+} | null): LicenseStatus {
+  let plan = user.plan || 'free';
+  let subscriptionStatus = 'active';
+  let expiresAt: Date | null = user.subscriptionExpiresAt ?? null;
+
+  if (org) {
+    plan = org.plan || plan;
+    subscriptionStatus = org.subscriptionStatus || 'active';
+    expiresAt = org.currentPeriodEnd ?? expiresAt;
+  }
 
   const isSubscriptionValid =
     subscriptionStatus === 'active' ||
@@ -102,9 +116,9 @@ export function determineLicenseStatus(user: {
     valid: isSubscriptionValid,
     plan,
     status: subscriptionStatus,
-    teamId: null,
-    teamName: null,
-    seats: 1,
+    teamId: org?.id ?? null,
+    teamName: org?.name ?? null,
+    seats: org?.seats ?? 1,
     expiresAt: expiresAt?.toISOString() ?? null,
     features,
   };

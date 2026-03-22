@@ -132,167 +132,136 @@ describe('determineLicenseStatus', () => {
     expect(result.features).toEqual(PLAN_FEATURES.free);
   });
 
-  // --- Team user ---
+  // --- Organization user ---
 
-  it('uses team plan over user plan when team exists', () => {
-    const result = determineLicenseStatus({
-      plan: 'free',
-      team: {
-        id: 'team-123',
-        name: 'My Team',
+  it('uses org plan over user plan when org exists', () => {
+    const result = determineLicenseStatus(
+      { plan: 'free' },
+      {
+        id: 'org-123',
+        name: 'My Org',
         plan: 'team',
         subscriptionStatus: 'active',
         currentPeriodEnd: new Date('2027-06-01'),
         seats: 25,
       },
-    });
+    );
     expect(result.plan).toBe('team');
     expect(result.valid).toBe(true);
-    expect(result.teamId).toBe('team-123');
-    expect(result.teamName).toBe('My Team');
+    expect(result.teamId).toBe('org-123');
+    expect(result.teamName).toBe('My Org');
     expect(result.seats).toBe(25);
     expect(result.features).toEqual(PLAN_FEATURES.team);
   });
 
-  it('falls back to user plan when team plan is null', () => {
-    const result = determineLicenseStatus({
-      plan: 'pro',
-      team: {
-        id: 'team-123',
-        name: 'My Team',
+  it('falls back to user plan when org plan is null', () => {
+    const result = determineLicenseStatus(
+      { plan: 'pro' },
+      {
+        id: 'org-123',
+        name: 'My Org',
         plan: null,
         subscriptionStatus: 'active',
         currentPeriodEnd: null,
         seats: 5,
       },
-    });
+    );
     expect(result.plan).toBe('pro');
     expect(result.features).toEqual(PLAN_FEATURES.pro);
   });
 
-  it('uses team currentPeriodEnd over user subscriptionExpiresAt', () => {
+  it('uses org currentPeriodEnd over user subscriptionExpiresAt', () => {
     const userExpires = new Date('2026-06-01');
-    const teamExpires = new Date('2027-12-01');
-    const result = determineLicenseStatus({
-      plan: 'pro',
-      subscriptionExpiresAt: userExpires,
-      team: {
-        id: 'team-1',
-        name: 'Team',
+    const orgExpires = new Date('2027-12-01');
+    const result = determineLicenseStatus(
+      { plan: 'pro', subscriptionExpiresAt: userExpires },
+      {
+        id: 'org-1',
+        name: 'Org',
         plan: 'enterprise',
         subscriptionStatus: 'active',
-        currentPeriodEnd: teamExpires,
+        currentPeriodEnd: orgExpires,
         seats: 100,
       },
-    });
-    expect(result.expiresAt).toBe(teamExpires.toISOString());
+    );
+    expect(result.expiresAt).toBe(orgExpires.toISOString());
   });
 
-  it('returns seats=1 when team has null seats', () => {
-    const result = determineLicenseStatus({
-      team: {
-        id: 'team-1',
-        name: 'Team',
+  it('returns seats=1 when org has null seats', () => {
+    const result = determineLicenseStatus(
+      {},
+      {
+        id: 'org-1',
+        name: 'Org',
         plan: 'team',
         seats: null,
       },
-    });
+    );
     expect(result.seats).toBe(1);
   });
 
   // --- Subscription status ---
 
   it('treats active subscription as valid', () => {
-    const result = determineLicenseStatus({
-      plan: 'pro',
-      team: {
-        id: 't1',
-        name: 'T',
-        subscriptionStatus: 'active',
-      },
-    });
+    const result = determineLicenseStatus(
+      { plan: 'pro' },
+      { id: 'o1', name: 'O', subscriptionStatus: 'active' },
+    );
     expect(result.valid).toBe(true);
     expect(result.status).toBe('active');
   });
 
   it('treats trialing subscription as valid', () => {
-    const result = determineLicenseStatus({
-      plan: 'pro',
-      team: {
-        id: 't1',
-        name: 'T',
-        subscriptionStatus: 'trialing',
-      },
-    });
+    const result = determineLicenseStatus(
+      { plan: 'pro' },
+      { id: 'o1', name: 'O', subscriptionStatus: 'trialing' },
+    );
     expect(result.valid).toBe(true);
     expect(result.status).toBe('trialing');
   });
 
   it('treats past_due subscription as valid if not expired', () => {
     const futureDate = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000); // 30 days from now
-    const result = determineLicenseStatus({
-      plan: 'pro',
-      team: {
-        id: 't1',
-        name: 'T',
-        subscriptionStatus: 'past_due',
-        currentPeriodEnd: futureDate,
-      },
-    });
+    const result = determineLicenseStatus(
+      { plan: 'pro' },
+      { id: 'o1', name: 'O', subscriptionStatus: 'past_due', currentPeriodEnd: futureDate },
+    );
     expect(result.valid).toBe(true);
     expect(result.status).toBe('past_due');
   });
 
   it('treats past_due subscription as invalid if expired', () => {
     const pastDate = new Date('2020-01-01');
-    const result = determineLicenseStatus({
-      plan: 'pro',
-      team: {
-        id: 't1',
-        name: 'T',
-        subscriptionStatus: 'past_due',
-        currentPeriodEnd: pastDate,
-      },
-    });
+    const result = determineLicenseStatus(
+      { plan: 'pro' },
+      { id: 'o1', name: 'O', subscriptionStatus: 'past_due', currentPeriodEnd: pastDate },
+    );
     expect(result.valid).toBe(false);
     expect(result.status).toBe('past_due');
   });
 
   it('treats past_due subscription as invalid if no expiresAt', () => {
-    const result = determineLicenseStatus({
-      plan: 'pro',
-      team: {
-        id: 't1',
-        name: 'T',
-        subscriptionStatus: 'past_due',
-        currentPeriodEnd: null,
-      },
-    });
+    const result = determineLicenseStatus(
+      { plan: 'pro' },
+      { id: 'o1', name: 'O', subscriptionStatus: 'past_due', currentPeriodEnd: null },
+    );
     expect(result.valid).toBe(false);
   });
 
   it('treats canceled subscription as invalid', () => {
-    const result = determineLicenseStatus({
-      plan: 'pro',
-      team: {
-        id: 't1',
-        name: 'T',
-        subscriptionStatus: 'canceled',
-      },
-    });
+    const result = determineLicenseStatus(
+      { plan: 'pro' },
+      { id: 'o1', name: 'O', subscriptionStatus: 'canceled' },
+    );
     expect(result.valid).toBe(false);
     expect(result.status).toBe('canceled');
   });
 
   it('treats unpaid subscription as invalid', () => {
-    const result = determineLicenseStatus({
-      plan: 'pro',
-      team: {
-        id: 't1',
-        name: 'T',
-        subscriptionStatus: 'unpaid',
-      },
-    });
+    const result = determineLicenseStatus(
+      { plan: 'pro' },
+      { id: 'o1', name: 'O', subscriptionStatus: 'unpaid' },
+    );
     expect(result.valid).toBe(false);
     expect(result.status).toBe('unpaid');
   });
@@ -311,22 +280,17 @@ describe('determineLicenseStatus', () => {
     expect(result).toHaveProperty('features');
   });
 
-  // --- Null team ---
+  // --- Null org ---
 
-  it('handles null team gracefully', () => {
-    const result = determineLicenseStatus({
-      plan: 'pro',
-      team: null,
-    });
+  it('handles null org gracefully', () => {
+    const result = determineLicenseStatus({ plan: 'pro' }, null);
     expect(result.teamId).toBeNull();
     expect(result.teamName).toBeNull();
     expect(result.seats).toBe(1);
   });
 
-  it('handles undefined team gracefully', () => {
-    const result = determineLicenseStatus({
-      plan: 'pro',
-    });
+  it('handles undefined org gracefully', () => {
+    const result = determineLicenseStatus({ plan: 'pro' });
     expect(result.teamId).toBeNull();
     expect(result.teamName).toBeNull();
   });

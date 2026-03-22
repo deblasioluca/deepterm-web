@@ -43,7 +43,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'User not found' }, { status: 404 });
     }
 
-    const invitedEmail = invitation.user?.email;
+    const invitedEmail = invitation.invitedEmail || invitation.user?.email;
     if (invitedEmail && user.email?.toLowerCase() !== invitedEmail.toLowerCase()) {
       return NextResponse.json(
         { error: `This invitation was sent to ${invitedEmail}. Please sign in with that email address.` },

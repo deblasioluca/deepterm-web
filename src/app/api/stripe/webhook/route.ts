@@ -136,7 +136,7 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
           orgId = membership.organizationId;
         }
       }
-      // Last resort: create a new organization
+      // Last resort: create a new organization and link the user as owner
       if (!orgId) {
         const newOrg = await prisma.organization.create({
           data: {
@@ -145,6 +145,13 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
           },
         });
         orgId = newOrg.id;
+        // Link the ZK user as owner if they exist
+        const zkUserForOrg = await prisma.zKUser.findFirst({ where: { email } });
+        if (zkUserForOrg) {
+          await prisma.organizationUser.create({
+            data: { organizationId: newOrg.id, userId: zkUserForOrg.id, role: 'owner', status: 'active' },
+          });
+        }
       }
     }
   }

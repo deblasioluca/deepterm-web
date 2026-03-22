@@ -180,7 +180,7 @@ export async function POST(request: NextRequest) {
     // Create invitation token
     const token = crypto.randomBytes(32).toString('hex');
 
-    // If the user exists in ZK, create a pending OrganizationUser
+    // Create a pending OrganizationUser record so the token can be found on acceptance
     if (existingZkUser) {
       await prisma.organizationUser.create({
         data: {
@@ -189,6 +189,18 @@ export async function POST(request: NextRequest) {
           role: role || 'member',
           status: 'pending',
           token,
+          invitedEmail: email,
+        },
+      });
+    } else {
+      // User doesn't have a ZK account yet — store invitation with invitedEmail
+      await prisma.organizationUser.create({
+        data: {
+          organizationId: org.id,
+          role: role || 'member',
+          status: 'pending',
+          token,
+          invitedEmail: email,
         },
       });
     }
