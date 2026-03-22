@@ -98,6 +98,18 @@ export async function POST(
       userAgent: request.headers.get('user-agent') || undefined,
     });
 
+    // Fire-and-forget MS Teams notification
+    import('@/lib/ms-teams').then(({ notifyTeamsMemberJoined }) => {
+      // Look up org name for the notification
+      prisma.organization.findUnique({ where: { id: orgId }, select: { name: true } }).then(org => {
+        notifyTeamsMemberJoined({
+          email: member.invitedEmail || 'unknown',
+          role: member.role,
+          orgName: org?.name,
+        });
+      }).catch(() => { /* ignore */ });
+    }).catch(() => { /* ignore */ });
+
     const response = successResponse({ message: 'Membership confirmed successfully' });
     return addCorsHeaders(response);
   } catch (error) {

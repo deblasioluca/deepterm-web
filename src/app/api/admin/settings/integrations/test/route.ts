@@ -62,6 +62,28 @@ export async function POST(request: Request) {
       }
     }
 
+    if (integration === 'ms-teams') {
+      const webhookUrl = process.env.MS_TEAMS_WEBHOOK_URL;
+      if (!webhookUrl) return NextResponse.json({ ok: false, message: 'MS_TEAMS_WEBHOOK_URL not configured' }, { status: 400 });
+
+      try {
+        const { notifyTeams } = await import('@/lib/ms-teams');
+        const result = await notifyTeams('member_joined', {
+          email: 'test@deepterm.net',
+          orgName: 'DeepTerm',
+          role: 'Test notification',
+        }, { wait: true, webhookUrl });
+
+        if (result.ok) {
+          return NextResponse.json({ ok: true, message: 'MS Teams webhook test sent successfully' });
+        }
+        return NextResponse.json({ ok: false, message: result.error || `Webhook returned ${result.status}` });
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : 'Connection failed';
+        return NextResponse.json({ ok: false, message: msg });
+      }
+    }
+
     return NextResponse.json({ ok: false, message: `Unknown integration: ${integration}` }, { status: 400 });
   } catch (error) {
     console.error('Integration test error:', error);
