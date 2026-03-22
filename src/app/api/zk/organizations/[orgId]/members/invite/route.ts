@@ -157,24 +157,37 @@ export async function POST(
         where: {
           invitedEmail: normalizedEmail,
           organizationId: orgId,
-          status: 'invited',
         },
       });
 
       if (existingEmailInvite) {
-        return errorResponse('An invitation has already been sent to this email', 409);
+        if (existingEmailInvite.status === 'revoked') {
+          // Re-use the revoked record
+          await prisma.organizationUser.update({
+            where: { id: existingEmailInvite.id },
+            data: {
+              status: OrganizationUserStatus.INVITED,
+              role,
+              token,
+              invitedEmail: normalizedEmail,
+              expiresAt,
+            },
+          });
+        } else {
+          return errorResponse('An invitation has already been sent to this email', 409);
+        }
+      } else {
+        await prisma.organizationUser.create({
+          data: {
+            organizationId: orgId,
+            role,
+            status: OrganizationUserStatus.INVITED,
+            token,
+            invitedEmail: normalizedEmail,
+            expiresAt,
+          },
+        });
       }
-
-      await prisma.organizationUser.create({
-        data: {
-          organizationId: orgId,
-          role,
-          status: OrganizationUserStatus.INVITED,
-          token,
-          invitedEmail: normalizedEmail,
-          expiresAt,
-        },
-      });
 
       await createAuditLog({
         userId: auth.userId,
