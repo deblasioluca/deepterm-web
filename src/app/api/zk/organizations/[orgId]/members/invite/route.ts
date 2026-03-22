@@ -3,6 +3,7 @@ import crypto from 'crypto';
 import { prisma } from '@/lib/prisma';
 import {
   getAuthFromRequest,
+  getAuthFromRequestOrSession,
   createAuditLog,
   getClientIP,
   errorResponse,
@@ -33,7 +34,7 @@ export async function POST(
   { params }: { params: Promise<{ orgId: string }> }
 ) {
   try {
-    const auth = getAuthFromRequest(request);
+    const auth = await getAuthFromRequestOrSession(request);
 
     if (!auth) {
       return errorResponse('Unauthorized', 401);

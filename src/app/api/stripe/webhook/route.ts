@@ -130,7 +130,7 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
       const zkUser = await prisma.zKUser.findFirst({ where: { email } });
       if (zkUser) {
         const membership = await prisma.organizationUser.findFirst({
-          where: { userId: zkUser.id, status: 'active' },
+          where: { userId: zkUser.id, status: 'confirmed' },
         });
         if (membership) {
           orgId = membership.organizationId;
@@ -149,7 +149,7 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
         const zkUserForOrg = await prisma.zKUser.findFirst({ where: { email } });
         if (zkUserForOrg) {
           await prisma.organizationUser.create({
-            data: { organizationId: newOrg.id, userId: zkUserForOrg.id, role: 'owner', status: 'active' },
+            data: { organizationId: newOrg.id, userId: zkUserForOrg.id, role: 'owner', status: 'confirmed' },
           });
         }
       }
@@ -521,7 +521,7 @@ async function syncOrgMemberPlans(
   try {
     // Find all web User IDs linked to this organization's ZK users
     const orgMembers = await prisma.organizationUser.findMany({
-      where: { organizationId, status: 'active' },
+      where: { organizationId, status: 'confirmed' },
       include: { user: { include: { webUser: true } } },
     });
     const webUserIds = orgMembers

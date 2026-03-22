@@ -34,12 +34,12 @@ export async function GET() {
 
     // Find user's organization membership
     const membership = await prisma.organizationUser.findFirst({
-      where: { userId: user.zkUser.id, status: 'active' },
+      where: { userId: user.zkUser.id, status: 'confirmed' },
       include: {
         organization: {
           include: {
             members: {
-              where: { status: 'active' },
+              where: { status: 'confirmed' },
               include: { user: true },
               orderBy: { createdAt: 'asc' },
             },
@@ -137,7 +137,7 @@ export async function POST(request: NextRequest) {
 
     // Find user's organization membership
     const membership = await prisma.organizationUser.findFirst({
-      where: { userId: user.zkUser.id, status: 'active' },
+      where: { userId: user.zkUser.id, status: 'confirmed' },
       include: { organization: true },
     });
 
@@ -165,12 +165,12 @@ export async function POST(request: NextRequest) {
         where: {
           organizationId: org.id,
           userId: existingZkUser.id,
-          status: { in: ['active', 'pending'] },
+          status: { in: ['confirmed', 'pending', 'invited'] },
         },
       });
 
       if (existingMembership) {
-        const msg = existingMembership.status === 'active'
+        const msg = existingMembership.status === 'confirmed'
           ? 'This user is already an organization member'
           : 'An invitation has already been sent to this email';
         return NextResponse.json({ error: msg }, { status: 400 });

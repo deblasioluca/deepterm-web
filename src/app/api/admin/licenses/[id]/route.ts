@@ -54,7 +54,7 @@ export async function GET(
         where: { id },
         include: {
           members: {
-            where: { status: 'active' },
+            where: { status: 'confirmed' },
             include: {
               user: {
                 select: {
@@ -99,7 +99,7 @@ export async function GET(
 
       // Check if user has an organization
       const membership = await prisma.organizationUser.findFirst({
-        where: { userId: zkUser.id, status: 'active' },
+        where: { userId: zkUser.id, status: 'confirmed' },
         include: { organization: true },
       });
 
@@ -181,7 +181,7 @@ export async function PATCH(
       }
 
       const existingMembership = await prisma.organizationUser.findFirst({
-        where: { userId: zkUser.id, status: 'active' },
+        where: { userId: zkUser.id, status: 'confirmed' },
       });
 
       if (!existingMembership && plan && plan !== 'free' && plan !== 'starter') {
@@ -202,7 +202,7 @@ export async function PATCH(
             organizationId: org.id,
             userId: zkUser.id,
             role: 'owner',
-            status: 'active',
+            status: 'confirmed',
           },
         });
 

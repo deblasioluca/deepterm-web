@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { verifyAccessToken, JWTPayload } from './jwt';
 import { getClientIP } from './rate-limit';
+import { auth } from '@/lib/auth';
+import { prisma } from '@/lib/prisma';
 
 export interface AuthenticatedRequest extends NextRequest {
   auth: JWTPayload;
@@ -18,6 +20,41 @@ export function getAuthFromRequest(request: NextRequest): JWTPayload | null {
 
   const token = authHeader.substring(7);
   return verifyAccessToken(token);
+}
+
+/**
+ * Resolve auth from either Bearer token (macOS app) or NextAuth session (web UI).
+ * Falls back to session-based auth when no Bearer token is present,
+ * looking up the linked ZKUser to produce a compatible JWTPayload.
+ */
+export async function getAuthFromRequestOrSession(request: NextRequest): Promise<JWTPayload | null> {
+  // Try Bearer token first (macOS app)
+  const bearerAuth = getAuthFromRequest(request);
+  if (bearerAuth) return bearerAuth;
+
+  // Fall back to NextAuth session (web dashboard)
+  const session = await auth();
+  if (!session?.user?.id) return null;
+
+  // Look up the linked ZKUser
+  const zkUser = await prisma.zKUser.findUnique({
+    where: { webUserId: session.user.id },
+    select: { id: true, email: true },
+  });
+
+  if (!zkUser) return null;
+
+  // Get org memberships for the payload
+  const orgUsers = await prisma.organizationUser.findMany({
+    where: { userId: zkUser.id, status: 'confirmed' },
+    select: { organizationId: true },
+  });
+
+  return {
+    userId: zkUser.id,
+    email: zkUser.email,
+    orgIds: orgUsers.map(ou => ou.organizationId),
+  };
 }
 
 /**

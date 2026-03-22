@@ -2,6 +2,7 @@ import { NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import {
   getAuthFromRequest,
+  getAuthFromRequestOrSession,
   errorResponse,
   successResponse,
   handleCorsPreflightRequest,
@@ -23,7 +24,7 @@ export async function DELETE(
   { params }: { params: Promise<{ orgId: string; teamId: string }> }
 ) {
   try {
-    const auth = getAuthFromRequest(request);
+    const auth = await getAuthFromRequestOrSession(request);
     if (!auth) return errorResponse('Unauthorized', 401);
 
     const { orgId, teamId } = await params;

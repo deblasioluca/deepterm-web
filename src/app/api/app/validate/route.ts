@@ -69,7 +69,7 @@ export async function POST(request: NextRequest) {
 
       // Look up the user's organization for billing/subscription status
       const orgMembership = await prisma.organizationUser.findFirst({
-        where: { userId: zkAuth.userId, status: 'active' },
+        where: { userId: zkAuth.userId, status: 'confirmed' },
         include: { organization: true },
       });
 
@@ -171,7 +171,7 @@ export async function POST(request: NextRequest) {
     let orgForLicense = null;
     if (zkUserForOrg) {
       const mem = await prisma.organizationUser.findFirst({
-        where: { userId: zkUserForOrg.id, status: 'active' },
+        where: { userId: zkUserForOrg.id, status: 'confirmed' },
         include: { organization: true },
       });
       orgForLicense = mem?.organization ?? null;
@@ -254,7 +254,7 @@ export async function GET(request: NextRequest) {
 
       // Look up org for billing status
       const orgMem = await prisma.organizationUser.findFirst({
-        where: { userId: zkAuth.userId, status: 'active' },
+        where: { userId: zkAuth.userId, status: 'confirmed' },
         include: { organization: true },
       });
 
@@ -291,7 +291,7 @@ export async function GET(request: NextRequest) {
     let orgLookup = null;
     if (zkUserLookup) {
       const mem = await prisma.organizationUser.findFirst({
-        where: { userId: zkUserLookup.id, status: 'active' },
+        where: { userId: zkUserLookup.id, status: 'confirmed' },
         include: { organization: true },
       });
       orgLookup = mem?.organization ?? null;

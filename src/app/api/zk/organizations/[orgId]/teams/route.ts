@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import {
   getAuthFromRequest,
+  getAuthFromRequestOrSession,
   errorResponse,
   successResponse,
   handleCorsPreflightRequest,
@@ -23,7 +24,7 @@ export async function GET(
   { params }: { params: Promise<{ orgId: string }> }
 ) {
   try {
-    const auth = getAuthFromRequest(request);
+    const auth = await getAuthFromRequestOrSession(request);
     if (!auth) return errorResponse('Unauthorized', 401);
 
     const { orgId } = await params;
@@ -67,7 +68,7 @@ export async function POST(
   { params }: { params: Promise<{ orgId: string }> }
 ) {
   try {
-    const auth = getAuthFromRequest(request);
+    const auth = await getAuthFromRequestOrSession(request);
     if (!auth) return errorResponse('Unauthorized', 401);
 
     const { orgId } = await params;

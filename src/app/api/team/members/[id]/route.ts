@@ -34,7 +34,7 @@ export async function PATCH(
     }
 
     const currentMembership = await prisma.organizationUser.findFirst({
-      where: { userId: currentUser.zkUser.id, status: 'active' },
+      where: { userId: currentUser.zkUser.id, status: 'confirmed' },
     });
 
     if (!currentMembership) {
@@ -114,7 +114,7 @@ export async function DELETE(
     }
 
     const currentMembership = await prisma.organizationUser.findFirst({
-      where: { userId: currentUser.zkUser.id, status: 'active' },
+      where: { userId: currentUser.zkUser.id, status: 'confirmed' },
     });
 
     if (!currentMembership) {

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import {
   getAuthFromRequest,
+  getAuthFromRequestOrSession,
   createAuditLog,
   getClientIP,
   errorResponse,
@@ -18,11 +19,12 @@ export async function OPTIONS() {
 
 /**
  * GET /api/zk/organizations
- * List all organizations the user belongs to
+ * List all organizations the user belongs to.
+ * Accepts both Bearer token (macOS app) and NextAuth session (web dashboard).
  */
 export async function GET(request: NextRequest) {
   try {
-    const auth = getAuthFromRequest(request);
+    const auth = await getAuthFromRequestOrSession(request);
 
     if (!auth) {
       return errorResponse('Unauthorized', 401);

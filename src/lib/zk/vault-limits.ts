@@ -40,7 +40,7 @@ export async function checkVaultItemLimit(userId: string): Promise<VaultLimitChe
 
   // Look up user's organization for billing/plan info
   const membership = await prisma.organizationUser.findFirst({
-    where: { userId, status: 'active' },
+    where: { userId, status: 'confirmed' },
     include: { organization: true },
   });
   const org = membership?.organization;

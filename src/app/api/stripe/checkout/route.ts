@@ -52,7 +52,7 @@ export async function POST(request: NextRequest) {
       org = await prisma.organization.findUnique({ where: { id: organizationId } });
     } else if (user.zkUser) {
       const membership = await prisma.organizationUser.findFirst({
-        where: { userId: user.zkUser.id, status: 'active' },
+        where: { userId: user.zkUser.id, status: 'confirmed' },
         include: { organization: true },
       });
       org = membership?.organization;
@@ -64,7 +64,7 @@ export async function POST(request: NextRequest) {
       });
       if (user.zkUser) {
         await prisma.organizationUser.create({
-          data: { organizationId: newOrg.id, userId: user.zkUser.id, role: 'owner', status: 'active' },
+          data: { organizationId: newOrg.id, userId: user.zkUser.id, role: 'owner', status: 'confirmed' },
         });
       }
       org = newOrg;

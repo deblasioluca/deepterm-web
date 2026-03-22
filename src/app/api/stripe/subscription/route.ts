@@ -38,11 +38,11 @@ export async function GET() {
 
     // Find user's organization
     const membership = await prisma.organizationUser.findFirst({
-      where: { userId: user.zkUser.id, status: 'active' },
+      where: { userId: user.zkUser.id, status: 'confirmed' },
       include: {
         organization: {
           include: {
-            members: { where: { status: 'active' }, include: { user: true } },
+            members: { where: { status: 'confirmed' }, include: { user: true } },
             invoices: { orderBy: { createdAt: 'desc' }, take: 10 },
           },
         },
@@ -133,8 +133,8 @@ export async function PATCH(request: NextRequest) {
 
     // Find user's organization
     const membership = await prisma.organizationUser.findFirst({
-      where: { userId: user.zkUser.id, status: 'active' },
-      include: { organization: { include: { members: { where: { status: 'active' } } } } },
+      where: { userId: user.zkUser.id, status: 'confirmed' },
+      include: { organization: { include: { members: { where: { status: 'confirmed' } } } } },
     });
 
     if (!membership?.organization?.stripeSubscriptionId) {

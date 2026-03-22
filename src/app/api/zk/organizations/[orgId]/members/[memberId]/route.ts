@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import {
   getAuthFromRequest,
+  getAuthFromRequestOrSession,
   createAuditLog,
   getClientIP,
   errorResponse,
@@ -24,7 +25,7 @@ export async function GET(
   { params }: { params: Promise<{ orgId: string; memberId: string }> }
 ) {
   try {
-    const auth = getAuthFromRequest(request);
+    const auth = await getAuthFromRequestOrSession(request);
 
     if (!auth) {
       return errorResponse('Unauthorized', 401);
@@ -92,7 +93,7 @@ export async function PUT(
   { params }: { params: Promise<{ orgId: string; memberId: string }> }
 ) {
   try {
-    const auth = getAuthFromRequest(request);
+    const auth = await getAuthFromRequestOrSession(request);
 
     if (!auth) {
       return errorResponse('Unauthorized', 401);
@@ -182,7 +183,7 @@ export async function DELETE(
   { params }: { params: Promise<{ orgId: string; memberId: string }> }
 ) {
   try {
-    const auth = getAuthFromRequest(request);
+    const auth = await getAuthFromRequestOrSession(request);
 
     if (!auth) {
       return errorResponse('Unauthorized', 401);
