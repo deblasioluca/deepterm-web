@@ -32,6 +32,13 @@ import {
   Wrench,
   LayoutGrid,
   History,
+  Radio,
+  Volume2,
+  UserPlus,
+  Share2,
+  MessageSquare,
+  Headphones,
+  Building2,
   type LucideIcon,
 } from 'lucide-react';
 
@@ -1677,6 +1684,377 @@ Subsystem sftp /usr/lib/openssh/sftp-server</code></pre>
 
 <h3>Managing Known Hosts</h3>
 <p>View and delete known host entries from the vault sidebar. Useful when servers are rebuilt or decommissioned.</p>
+`,
+      },
+    ],
+  },
+
+  // ─── Team Collaboration ─────────────────────────────
+  {
+    label: 'Collaboration',
+    icon: Radio,
+    articles: [
+      {
+        slug: 'collaboration-overview',
+        title: 'Collaboration Overview',
+        description: 'Real-time team collaboration features in DeepTerm.',
+        content: `
+<p>DeepTerm includes a full suite of real-time collaboration features that let your team work together seamlessly — whether you're pair-programming on a shared terminal, chatting about an issue, or hopping on an audio call.</p>
+
+<h3>What's Included</h3>
+<ul>
+  <li><strong>Team Presence</strong> — see who's online and what they're working on in real time.</li>
+  <li><strong>Shared Terminals</strong> — share your terminal session so teammates can watch or collaborate live.</li>
+  <li><strong>Team Chat</strong> — text messaging within your organization, with file sharing support.</li>
+  <li><strong>Audio Channels</strong> — WebRTC-based voice calls with up to 5 participants per room.</li>
+  <li><strong>Session Notifications</strong> — get notified when teammates invite you to a session or audio channel.</li>
+</ul>
+
+<h3>How It Works</h3>
+<p>All collaboration features run over a persistent WebSocket connection to the DeepTerm server. When you sign in and select an organization, a WebSocket is established at <code>/ws/collab</code> that handles presence updates, chat messages, terminal sharing, and signalling for audio calls.</p>
+
+<div style="background: #0d1117; border: 1px solid #30363d; border-radius: 8px; padding: 20px; margin: 16px 0; font-family: monospace; font-size: 12px;">
+  <div style="color: #58a6ff; margin-bottom: 12px;">Collaboration Architecture</div>
+  <div style="display: grid; grid-template-columns: 1fr auto 1fr; gap: 12px; align-items: center;">
+    <div style="background: #161b22; border: 1px solid #30363d; border-radius: 6px; padding: 12px; text-align: center;">
+      <div style="color: #3fb950; font-weight: 600;">macOS App</div>
+      <div style="color: #8b949e; font-size: 11px; margin-top: 4px;">WebSocket client</div>
+    </div>
+    <div style="color: #8b949e;">\u2194</div>
+    <div style="background: #161b22; border: 1px solid #30363d; border-radius: 6px; padding: 12px; text-align: center;">
+      <div style="color: #f0883e; font-weight: 600;">DeepTerm Server</div>
+      <div style="color: #8b949e; font-size: 11px; margin-top: 4px;">WebSocket relay + REST API</div>
+    </div>
+  </div>
+  <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-top: 12px;">
+    <div style="background: #161b22; border: 1px solid #30363d; border-radius: 4px; padding: 8px; text-align: center; font-size: 11px; color: #c9d1d9;">Presence</div>
+    <div style="background: #161b22; border: 1px solid #30363d; border-radius: 4px; padding: 8px; text-align: center; font-size: 11px; color: #c9d1d9;">Chat</div>
+    <div style="background: #161b22; border: 1px solid #30363d; border-radius: 4px; padding: 8px; text-align: center; font-size: 11px; color: #c9d1d9;">Terminals</div>
+    <div style="background: #161b22; border: 1px solid #30363d; border-radius: 4px; padding: 8px; text-align: center; font-size: 11px; color: #c9d1d9;">Audio</div>
+  </div>
+</div>
+
+<h3>Requirements</h3>
+<ul>
+  <li>A <strong>Team</strong> or <strong>Business</strong> plan.</li>
+  <li>At least one organization with team members.</li>
+  <li>Active internet connection (WebSocket-based).</li>
+</ul>
+`,
+      },
+      {
+        slug: 'team-presence',
+        title: 'Team Presence',
+        description: 'See who is online and what they are working on.',
+        content: `
+<p>Team Presence shows you which members of your organization are currently online, what device they're using, and what they're working on — all in real time.</p>
+
+<h3>Accessing Presence</h3>
+<p>In the macOS app, go to the <strong>Teams</strong> section in the vault sidebar and select the <strong>Presence</strong> tab. On the web, visit <a href="/dashboard/collaboration">Dashboard \u2192 Collaboration</a>.</p>
+
+<h3>Presence States</h3>
+<ul>
+  <li><span style="color: #3fb950;">\u25cf</span> <strong>Online</strong> — user is active in DeepTerm.</li>
+  <li><span style="color: #f0883e;">\u25cf</span> <strong>Away</strong> — user has DeepTerm open but hasn't interacted recently.</li>
+  <li><span style="color: #8b949e;">\u25cf</span> <strong>Offline</strong> — user is not connected.</li>
+</ul>
+
+<h3>Activity Information</h3>
+<p>Presence indicators show:</p>
+<ul>
+  <li>Current status (online/away/offline).</li>
+  <li>Device name and platform.</li>
+  <li>What they're working on (e.g., "Connected to web-prod-01").</li>
+  <li>Last seen timestamp for offline users.</li>
+</ul>
+
+<h3>Quick Actions</h3>
+<p>Click on an online team member to:</p>
+<ul>
+  <li><strong>Invite to Terminal</strong> — send them an invitation to join your shared terminal session.</li>
+  <li><strong>Invite to Audio</strong> — invite them to your current audio channel.</li>
+  <li><strong>Open Chat</strong> — start a direct message conversation.</li>
+</ul>
+`,
+      },
+      {
+        slug: 'shared-terminals',
+        title: 'Shared Terminals',
+        description: 'Share your terminal session for real-time collaboration.',
+        content: `
+<p>Shared Terminals let you broadcast your terminal session to teammates. They can watch in real time and (if granted write access) type commands alongside you — perfect for pair programming, debugging, and mentoring.</p>
+
+<h3>Sharing Your Terminal</h3>
+<ol>
+  <li>Open a terminal connection to any host.</li>
+  <li>In the <strong>Teams</strong> sidebar, click the <strong>Share Terminal</strong> button (rectangle icon).</li>
+  <li>Choose a session name and the organization to share with.</li>
+  <li>Click <strong>Share</strong> — your terminal is now live for teammates to join.</li>
+</ol>
+
+<h3>Joining a Shared Session</h3>
+<p>When a teammate shares their terminal, it appears in the <strong>Teams \u2192 Sessions</strong> tab. Click <strong>Join</strong> to open a read-only view of their terminal. On the web, visit <a href="/dashboard/terminal">Dashboard \u2192 Shared Terminal</a> to view shared sessions in your browser.</p>
+
+<div style="background: #0d1117; border: 1px solid #30363d; border-radius: 8px; padding: 20px; margin: 16px 0; font-family: monospace; font-size: 12px;">
+  <div style="color: #58a6ff; margin-bottom: 12px;">Shared Terminal Session</div>
+  <div style="background: #161b22; border: 1px solid #30363d; border-radius: 6px; padding: 12px;">
+    <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+      <span style="color: #3fb950;">\u25cf Production Debug Session</span>
+      <span style="color: #8b949e; font-size: 11px;">2 participants</span>
+    </div>
+    <div style="background: #0d1117; border-radius: 4px; padding: 8px; color: #c9d1d9; font-size: 11px;">
+      <div>$ kubectl get pods -n production</div>
+      <div style="color: #8b949e;">NAME&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;READY&nbsp;&nbsp;STATUS</div>
+      <div style="color: #3fb950;">api-7d8f9b6c4-x2k9j&nbsp;&nbsp;1/1&nbsp;&nbsp;&nbsp;&nbsp;Running</div>
+      <div style="color: #f85149;">worker-5c4d3b2a1-m8n7&nbsp;0/1&nbsp;&nbsp;&nbsp;&nbsp;CrashLoopBackOff</div>
+    </div>
+  </div>
+</div>
+
+<h3>Session Controls</h3>
+<ul>
+  <li><strong>End Session</strong> — the owner can end the shared session at any time.</li>
+  <li><strong>Leave</strong> — participants can leave without ending the session.</li>
+  <li><strong>Refresh</strong> — reload the list of available sessions.</li>
+</ul>
+
+<h3>Web Viewer</h3>
+<p>The web-based shared terminal viewer uses xterm.js to render the terminal in your browser. It supports full ANSI color output, cursor movement, and real-time updates. No app installation required for viewers.</p>
+`,
+      },
+      {
+        slug: 'team-chat',
+        title: 'Team Chat',
+        description: 'Text messaging and file sharing within your organization.',
+        content: `
+<p>Team Chat provides instant messaging between organization members. Use it for quick questions, sharing command outputs, or coordinating during incidents.</p>
+
+<h3>Opening Chat</h3>
+<p>In the macOS app, click the <strong>chat bubble</strong> button in the Teams header. A separate chat window opens with your organization's channels.</p>
+
+<h3>Features</h3>
+<ul>
+  <li><strong>Real-time messaging</strong> — messages appear instantly for all connected members.</li>
+  <li><strong>File sharing</strong> — drag and drop files into the chat to share with your team.</li>
+  <li><strong>Message history</strong> — scroll back through previous conversations.</li>
+  <li><strong>Organization-scoped</strong> — each organization has its own chat space.</li>
+</ul>
+
+<h3>Web Access</h3>
+<p>Team Chat is also available on the web at <a href="/dashboard/collaboration">Dashboard \u2192 Collaboration</a>, so team members can participate from any device with a browser.</p>
+`,
+      },
+    ],
+  },
+
+  // ─── Audio Channels ─────────────────────────────────
+  {
+    label: 'Audio Channels',
+    icon: Headphones,
+    articles: [
+      {
+        slug: 'audio-overview',
+        title: 'Audio Channels Overview',
+        description: 'Voice communication with WebRTC-based audio channels.',
+        content: `
+<p>Audio Channels bring voice communication to DeepTerm. Using WebRTC technology, you can join audio rooms to talk with teammates while working — no need to switch to a separate app like Zoom or Discord.</p>
+
+<h3>Key Features</h3>
+<ul>
+  <li><strong>Mesh topology</strong> — direct peer-to-peer audio connections for low latency.</li>
+  <li><strong>Up to 5 participants</strong> per room (optimised for mesh topology).</li>
+  <li><strong>Mute / unmute</strong> — toggle your microphone with one click.</li>
+  <li><strong>Room management</strong> — create, join, and leave audio rooms.</li>
+  <li><strong>Cross-platform</strong> — works in the macOS app and the web dashboard.</li>
+</ul>
+
+<h3>How It Works</h3>
+<p>Audio channels use <strong>WebRTC</strong> with a mesh topology. Each participant connects directly to every other participant — no media server is needed. The DeepTerm server handles signalling (SDP offer/answer and ICE candidates) via the WebSocket connection.</p>
+
+<div style="background: #0d1117; border: 1px solid #30363d; border-radius: 8px; padding: 20px; margin: 16px 0; font-family: monospace; font-size: 12px;">
+  <div style="color: #58a6ff; margin-bottom: 12px;">WebRTC Mesh Topology (3 participants)</div>
+  <div style="text-align: center; color: #c9d1d9; line-height: 2;">
+    <div><span style="color: #3fb950;">\ud83c\udf99\ufe0f Alice</span></div>
+    <div style="color: #8b949e;">\u2199\ufe0f &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;\u2198\ufe0f</div>
+    <div><span style="color: #58a6ff;">\ud83c\udf99\ufe0f Bob</span> \u2014\u2014\u2014 <span style="color: #f0883e;">\ud83c\udf99\ufe0f Carol</span></div>
+  </div>
+  <div style="color: #8b949e; font-size: 11px; margin-top: 8px; text-align: center;">Each participant connects directly to every other participant</div>
+</div>
+
+<h3>Limitations</h3>
+<ul>
+  <li><strong>5-person limit</strong> — mesh topology doesn't scale well beyond 5 peers. For larger groups, use an external conferencing tool.</li>
+  <li><strong>No recording</strong> — audio channels are ephemeral and not recorded.</li>
+  <li><strong>Microphone access required</strong> — you'll be prompted to grant microphone permission on first use.</li>
+</ul>
+`,
+      },
+      {
+        slug: 'audio-usage',
+        title: 'Using Audio Channels',
+        description: 'Create, join, and manage audio rooms.',
+        content: `
+<h3>Creating a Room</h3>
+<ol>
+  <li>In the macOS app, go to <strong>Teams \u2192 Audio</strong> tab.</li>
+  <li>Click <strong>Create Room</strong> and enter a name (e.g., "Incident Call").</li>
+  <li>Your microphone activates and you're in the room.</li>
+</ol>
+
+<h3>Joining a Room</h3>
+<p>Active audio rooms appear in the <strong>Audio</strong> tab. Click <strong>Join</strong> to enter. On the web, visit <a href="/dashboard/audio">Dashboard \u2192 Audio Channels</a>.</p>
+
+<h3>Controls</h3>
+<ul>
+  <li><strong>Mute / Unmute</strong> — click the microphone button or press the mute shortcut.</li>
+  <li><strong>Leave Room</strong> — click the hang-up button to leave the room.</li>
+  <li><strong>Participant List</strong> — see who's in the room and their mute status.</li>
+</ul>
+
+<h3>Inviting Others</h3>
+<p>From the Presence tab, click on an online team member and choose <strong>Invite to Audio</strong>. They'll receive a notification that they can accept or dismiss.</p>
+
+<h3>Troubleshooting</h3>
+<ul>
+  <li><strong>No audio</strong> — check that DeepTerm has microphone permission in System Settings \u2192 Privacy &amp; Security \u2192 Microphone.</li>
+  <li><strong>Echo or feedback</strong> — use headphones or enable echo cancellation in your system audio settings.</li>
+  <li><strong>Can't connect</strong> — WebRTC requires certain ports for peer connections. If you're behind a restrictive firewall, peer connections may fail.</li>
+</ul>
+`,
+      },
+    ],
+  },
+
+  // ─── Organization Management ────────────────────────
+  {
+    label: 'Organizations',
+    icon: Building2,
+    articles: [
+      {
+        slug: 'org-overview',
+        title: 'Organization Overview',
+        description: 'Understanding the Organization hierarchy.',
+        content: `
+<p>Organizations are the top-level entity for team management in DeepTerm. Every team feature — billing, member management, vaults, collaboration — lives under an Organization.</p>
+
+<h3>Hierarchy</h3>
+<div style="background: #0d1117; border: 1px solid #30363d; border-radius: 8px; padding: 20px; margin: 16px 0; font-family: monospace; font-size: 12px;">
+  <div style="color: #58a6ff; margin-bottom: 12px;">DeepTerm Hierarchy</div>
+  <div style="color: #c9d1d9; line-height: 2;">
+    <div><span style="color: #3fb950;">\ud83c\udfe2 Organization</span> (billing, subscription, SSO)</div>
+    <div style="padding-left: 24px;"><span style="color: #58a6ff;">\ud83d\udc65 Team</span> (group of members)</div>
+    <div style="padding-left: 48px;"><span style="color: #f0883e;">\ud83d\udc64 Members</span> (users with roles)</div>
+    <div style="padding-left: 24px;"><span style="color: #58a6ff;">\ud83d\udd12 Vaults</span> (personal + team vaults)</div>
+    <div style="padding-left: 24px;"><span style="color: #58a6ff;">\ud83d\udcac Collaboration</span> (chat, presence, audio)</div>
+  </div>
+</div>
+
+<h3>Key Concepts</h3>
+<ul>
+  <li><strong>Organization</strong> — owns the subscription and billing. Has one or more teams.</li>
+  <li><strong>Team</strong> — a group of members within the organization. Teams can have their own vaults.</li>
+  <li><strong>Members</strong> — users invited to the organization with specific roles (owner, admin, member).</li>
+  <li><strong>Vaults</strong> — can be personal (private to a user) or team vaults (shared with team members).</li>
+</ul>
+`,
+      },
+      {
+        slug: 'org-management',
+        title: 'Managing Organizations',
+        description: 'Create organizations, invite members, and manage teams.',
+        content: `
+<h3>Creating an Organization</h3>
+<p>In the macOS app, go to <strong>Account Settings</strong> (gear icon) and click <strong>Create Organization</strong>. On the web, visit <a href="/dashboard/collaboration">Dashboard \u2192 Collaboration</a>.</p>
+
+<h3>Inviting Members</h3>
+<ol>
+  <li>Open your organization in Account Settings or the Collaboration dashboard.</li>
+  <li>Click <strong>Invite Member</strong>.</li>
+  <li>Enter their email address and select a role.</li>
+  <li>They receive an email invitation with a link to join.</li>
+</ol>
+
+<p><strong>Note:</strong> You can invite users who don't have a DeepTerm account yet. They'll be prompted to create one when they click the invitation link.</p>
+
+<h3>Member Roles</h3>
+<table>
+  <thead><tr><th>Role</th><th>Permissions</th></tr></thead>
+  <tbody>
+    <tr><td><strong>Owner</strong></td><td>Full control — billing, members, teams, vaults, settings</td></tr>
+    <tr><td><strong>Admin</strong></td><td>Manage members, teams, and vaults (no billing access)</td></tr>
+    <tr><td><strong>Member</strong></td><td>Access shared vaults and collaboration features</td></tr>
+  </tbody>
+</table>
+
+<h3>Managing Teams</h3>
+<p>Within an organization, you can create teams to group members:</p>
+<ol>
+  <li>Click <strong>Manage Teams</strong> in the organization view.</li>
+  <li>Click <strong>Create Team</strong> and enter a name.</li>
+  <li>Add members from the organization to the team.</li>
+</ol>
+
+<h3>Removing Members</h3>
+<p>Organization admins and owners can remove members from the organization settings. Removed members immediately lose access to all shared vaults and collaboration features.</p>
+`,
+      },
+      {
+        slug: 'org-billing',
+        title: 'Organization Billing',
+        description: 'Subscription management at the organization level.',
+        content: `
+<h3>Billing Owner</h3>
+<p>The organization owner manages the subscription. Billing is at the <strong>organization level</strong> — one subscription covers all members.</p>
+
+<h3>Subscription Plans</h3>
+<p>Organizations can subscribe to Team or Business plans, which unlock collaboration features, team vaults, SSO, and more. See <a href="/pricing">Pricing</a> for details.</p>
+
+<h3>Managing Billing</h3>
+<p>From the web dashboard:</p>
+<ul>
+  <li><a href="/dashboard/billing">Dashboard \u2192 Billing</a> — view current plan, next billing date, and usage.</li>
+  <li><strong>Update Payment Method</strong> — add or change credit cards and PayPal.</li>
+  <li><strong>Download Invoices</strong> — access past invoices as PDFs.</li>
+  <li><strong>Cancel Subscription</strong> — cancels at the end of the current billing period.</li>
+</ul>
+
+<h3>Seat Management</h3>
+<p>Your subscription includes a number of seats. Each organization member occupies one seat. Add more seats from the billing page if your team grows beyond the current allocation.</p>
+`,
+      },
+    ],
+  },
+
+  // ─── Session Notifications ──────────────────────────
+  {
+    label: 'Notifications',
+    icon: UserPlus,
+    articles: [
+      {
+        slug: 'session-notifications',
+        title: 'Session Notifications',
+        description: 'Get notified when teammates invite you to sessions or audio channels.',
+        content: `
+<p>Session Notifications keep you in the loop when teammates want to collaborate. When someone invites you to a shared terminal session or an audio channel, you receive an in-app notification that you can accept or dismiss.</p>
+
+<h3>Types of Notifications</h3>
+<ul>
+  <li><strong>Terminal Invitation</strong> — a teammate wants you to join their shared terminal session.</li>
+  <li><strong>Audio Invitation</strong> — a teammate wants you to join their audio channel.</li>
+</ul>
+
+<h3>Responding to Invitations</h3>
+<p>When you receive an invitation, a notification banner appears:</p>
+<ul>
+  <li><strong>Accept</strong> — joins the session or audio channel immediately.</li>
+  <li><strong>Dismiss</strong> — hides the notification without joining.</li>
+</ul>
+
+<h3>Notification Management</h3>
+<p>Notifications are managed through the <strong>SessionNotificationService</strong> in the macOS app. They appear as non-intrusive banners and auto-dismiss after a timeout if not acted upon. Active invitations are visible in the Teams \u2192 Presence view.</p>
+
+<h3>Privacy</h3>
+<p>Invitations only come from members of your organization. You won't receive notifications from users outside your org.</p>
 `,
       },
     ],
