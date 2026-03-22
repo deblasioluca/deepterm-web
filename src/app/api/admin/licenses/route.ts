@@ -65,7 +65,7 @@ async function verifyAdmin() {
   }
 }
 
-// GET - List all licenses (users and teams with their plans)
+// GET - List all licenses (organizations with their plans)
 export async function GET(request: NextRequest) {
   try {
     const admin = await verifyAdmin();
@@ -77,21 +77,24 @@ export async function GET(request: NextRequest) {
     const search = searchParams.get('search') || '';
     const type = searchParams.get('type') || 'all'; // all, user, team
 
-    // Get teams with their license info
-    const teams = await prisma.team.findMany({
+    // Get organizations with their license info
+    const orgs = await prisma.organization.findMany({
       where: search ? {
         OR: [
           { name: { contains: search } },
-          { members: { some: { email: { contains: search } } } },
+          { members: { some: { user: { email: { contains: search } } } } },
         ],
       } : undefined,
       include: {
         members: {
-          select: {
-            id: true,
-            name: true,
-            email: true,
-            role: true,
+          where: { status: 'active' },
+          include: {
+            user: {
+              select: {
+                id: true,
+                email: true,
+              },
+            },
           },
         },
         _count: {
@@ -101,62 +104,70 @@ export async function GET(request: NextRequest) {
       orderBy: { createdAt: 'desc' },
     });
 
-    // Get users without teams (free tier)
-    const usersWithoutTeam = await prisma.user.findMany({
-      where: {
-        teamId: null,
-        ...(search ? {
-          OR: [
-            { name: { contains: search } },
-            { email: { contains: search } },
-          ],
-        } : {}),
-      },
+    // Get users without organizations (free tier)
+    const allOrgUserIds = await prisma.organizationUser.findMany({
+      where: { status: 'active' },
+      select: { userId: true },
+    });
+    const orgUserIdSet = new Set(allOrgUserIds.map((ou) => ou.userId));
+
+    const allZkUsers = await prisma.zKUser.findMany({
+      where: search ? {
+        OR: [
+          { email: { contains: search } },
+        ],
+      } : undefined,
       select: {
         id: true,
-        name: true,
         email: true,
         createdAt: true,
       },
       orderBy: { createdAt: 'desc' },
     });
 
+    const usersWithoutOrg = allZkUsers.filter((u) => !orgUserIdSet.has(u.id));
+
     const licenses = [];
 
-    // Add team licenses
+    // Add organization licenses
     if (type === 'all' || type === 'team') {
-      for (const team of teams) {
+      for (const org of orgs) {
         licenses.push({
-          id: team.id,
+          id: org.id,
           type: 'team',
-          name: team.name,
-          plan: team.plan,
-          status: team.subscriptionStatus || 'active',
-          seats: team.seats,
-          memberCount: team._count.members,
-          members: team.members,
-          ssoEnabled: team.ssoEnabled,
-          expiresAt: team.currentPeriodEnd,
-          stripeSubscriptionId: team.stripeSubscriptionId,
-          createdAt: team.createdAt,
-          features: PLAN_FEATURES[team.plan] || PLAN_FEATURES.starter,
+          name: org.name,
+          plan: org.plan,
+          status: org.subscriptionStatus || 'active',
+          seats: org.seats,
+          memberCount: org._count.members,
+          members: org.members.map((m) => ({
+            id: m.id,
+            name: m.user?.email || 'Unknown',
+            email: m.user?.email || '',
+            role: m.role,
+          })),
+          ssoEnabled: org.ssoEnabled,
+          expiresAt: org.currentPeriodEnd,
+          stripeSubscriptionId: org.stripeSubscriptionId,
+          createdAt: org.createdAt,
+          features: PLAN_FEATURES[org.plan] || PLAN_FEATURES.starter,
         });
       }
     }
 
     // Add individual user licenses (free tier)
     if (type === 'all' || type === 'user') {
-      for (const user of usersWithoutTeam) {
+      for (const user of usersWithoutOrg) {
         licenses.push({
           id: user.id,
           type: 'user',
-          name: user.name,
+          name: user.email,
           email: user.email,
           plan: 'starter',
           status: 'active',
           seats: 1,
           memberCount: 1,
-          members: [{ id: user.id, name: user.name, email: user.email, role: 'owner' }],
+          members: [{ id: user.id, name: user.email, email: user.email, role: 'owner' }],
           ssoEnabled: false,
           expiresAt: null,
           stripeSubscriptionId: null,
@@ -183,7 +194,7 @@ export async function GET(request: NextRequest) {
   }
 }
 
-// POST - Create a new team with license for a user
+// POST - Create a new organization with license for a user
 export async function POST(request: NextRequest) {
   try {
     const admin = await verifyAdmin();
@@ -200,27 +211,32 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Find the user
-    const user = await prisma.user.findUnique({
+    // Find the ZK user
+    const zkUser = await prisma.zKUser.findUnique({
       where: { id: userId },
     });
 
-    if (!user) {
+    if (!zkUser) {
       return NextResponse.json(
         { error: 'User not found' },
         { status: 404 }
       );
     }
 
-    if (user.teamId) {
+    // Check if user already belongs to an organization
+    const existingMembership = await prisma.organizationUser.findFirst({
+      where: { userId: zkUser.id, status: 'active' },
+    });
+
+    if (existingMembership) {
       return NextResponse.json(
-        { error: 'User already belongs to a team' },
+        { error: 'User already belongs to an organization' },
         { status: 400 }
       );
     }
 
-    // Create team with license
-    const team = await prisma.team.create({
+    // Create organization with license
+    const org = await prisma.organization.create({
       data: {
         name: teamName,
         plan,
@@ -231,10 +247,14 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    // Add user to team as owner
-    await prisma.user.update({
-      where: { id: userId },
-      data: { teamId: team.id, role: 'owner' },
+    // Add user to organization as owner
+    await prisma.organizationUser.create({
+      data: {
+        organizationId: org.id,
+        userId: zkUser.id,
+        role: 'owner',
+        status: 'active',
+      },
     });
 
     // Log audit
@@ -242,8 +262,8 @@ export async function POST(request: NextRequest) {
       data: {
         adminId: admin.id,
         action: 'license.created',
-        entityType: 'team',
-        entityId: team.id,
+        entityType: 'organization',
+        entityId: org.id,
         metadata: JSON.stringify({ userId, plan, seats }),
       },
     });
@@ -251,10 +271,10 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       success: true,
       team: {
-        id: team.id,
-        name: team.name,
-        plan: team.plan,
-        seats: team.seats,
+        id: org.id,
+        name: org.name,
+        plan: org.plan,
+        seats: org.seats,
       },
     });
   } catch (error) {

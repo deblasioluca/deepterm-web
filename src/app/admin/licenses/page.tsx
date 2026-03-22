@@ -163,7 +163,7 @@ export default function LicensesPage() {
       if (response.ok) {
         const data = await response.json();
         // Filter out users who already have a team (not on free plan)
-        const freeUsers = (data.users || []).filter((u: { teamId?: string }) => !u.teamId);
+        const freeUsers = (data.users || []);
         setSearchResults(freeUsers.slice(0, 5));
       }
     } catch (err) {

@@ -41,14 +41,12 @@ export async function POST(request: NextRequest) {
       if (zkUser.webUserId) {
         user = await prisma.user.findUnique({
           where: { id: zkUser.webUserId },
-          include: { team: true },
         });
       }
 
       if (!user) {
         user = await prisma.user.findUnique({
           where: { email: zkUser.email },
-          include: { team: true },
         });
       }
 
@@ -68,9 +66,6 @@ export async function POST(request: NextRequest) {
       // Find user by email
       user = await prisma.user.findUnique({
         where: { email },
-        include: {
-          team: true,
-        },
       });
 
       if (!user) {

@@ -41,7 +41,7 @@ export async function POST(request: NextRequest) {
     // Find the passkey by credential ID
     const passkey = await prisma.passkey.findUnique({
       where: { credentialId: authData.id },
-      include: { user: { include: { team: true } } },
+      include: { user: true },
     });
 
     // Debug: Log if passkey was found
@@ -104,8 +104,8 @@ export async function POST(request: NextRequest) {
       email: passkey.user.email,
       name: passkey.user.name,
       role: passkey.user.role,
-      teamId: passkey.user.teamId,
-      teamName: passkey.user.team?.name,
+      teamId: null,
+      teamName: undefined,
     })
       .setProtectedHeader({ alg: 'HS256' })
       .setIssuedAt()

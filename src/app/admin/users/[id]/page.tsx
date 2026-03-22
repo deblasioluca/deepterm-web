@@ -98,7 +98,7 @@ export default function UserDetailPage({ params }: { params: { id: string } }) {
           email: user.email,
           role: user.role,
           plan: user.plan,
-          team: user.team?.name || 'none',
+          team: 'none',
           ideas: user.stats.ideas,
           issues: user.stats.issues,
           hasVault: !!user.zkUser,
@@ -205,24 +205,6 @@ export default function UserDetailPage({ params }: { params: { id: string } }) {
                 </div>
               </div>
             </Card>
-
-            {/* Team */}
-            {user.team && (
-              <Card>
-                <h2 className="text-lg font-semibold text-text-primary mb-3 flex items-center gap-2">
-                  <Users className="w-5 h-5 text-purple-400" /> Team
-                </h2>
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-text-primary font-medium">{user.team.name}</p>
-                    <p className="text-xs text-text-tertiary">{user.team.plan} plan</p>
-                  </div>
-                  <Link href="/admin/teams">
-                    <Button variant="secondary" size="sm">View Team</Button>
-                  </Link>
-                </div>
-              </Card>
-            )}
 
             {/* Subscription */}
             <Card>

@@ -108,20 +108,20 @@ export const PLAN_DETAILS = {
 
 export type PlanType = keyof typeof PLAN_DETAILS;
 
-// Create or get a Stripe customer for a team
+// Create or get a Stripe customer for an organization
 export async function getOrCreateStripeCustomer(
-  teamId: string,
+  organizationId: string,
   email: string,
   name: string
 ): Promise<Stripe.Customer> {
   const { prisma } = await import('./prisma');
   
-  const team = await prisma.team.findUnique({
-    where: { id: teamId },
+  const org = await prisma.organization.findUnique({
+    where: { id: organizationId },
   });
 
-  if (team?.stripeCustomerId) {
-    const customer = await stripe.customers.retrieve(team.stripeCustomerId);
+  if (org?.stripeCustomerId) {
+    const customer = await stripe.customers.retrieve(org.stripeCustomerId);
     if (!customer.deleted) {
       return customer as Stripe.Customer;
     }
@@ -132,13 +132,13 @@ export async function getOrCreateStripeCustomer(
     email,
     name,
     metadata: {
-      teamId,
+      organizationId,
     },
   });
 
-  // Update team with Stripe customer ID
-  await prisma.team.update({
-    where: { id: teamId },
+  // Update organization with Stripe customer ID
+  await prisma.organization.update({
+    where: { id: organizationId },
     data: { stripeCustomerId: customer.id },
   });
 
@@ -149,7 +149,7 @@ export async function getOrCreateStripeCustomer(
 export async function createCheckoutSession(
   customerId: string,
   priceId: string,
-  teamId: string,
+  organizationId: string,
   seats: number = 1,
   successUrl: string,
   cancelUrl: string
@@ -167,7 +167,7 @@ export async function createCheckoutSession(
     cancel_url: cancelUrl,
     subscription_data: {
       metadata: {
-        teamId,
+        organizationId,
       },
     },
     // Enable multiple payment methods: cards, Apple Pay, Google Pay, PayPal, Link
@@ -342,7 +342,7 @@ export async function createSetupIntent(
 // Sync payment methods from Stripe to database
 export async function syncPaymentMethodsFromStripe(
   customerId: string,
-  teamId: string
+  organizationId: string
 ): Promise<void> {
   const { prisma } = await import('./prisma');
   
@@ -368,7 +368,7 @@ export async function syncPaymentMethodsFromStripe(
         isDefault,
       },
       create: {
-        teamId,
+        organizationId,
         stripePaymentMethodId: pm.id,
         ...pmData,
         isDefault,

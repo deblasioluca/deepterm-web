@@ -35,9 +35,6 @@ export async function GET(request: NextRequest) {
         take: limit,
         orderBy: { [sortBy]: sortOrder },
         include: {
-          team: {
-            select: { id: true, name: true, plan: true },
-          },
           _count: {
             select: { ideas: true },
           },
@@ -52,8 +49,6 @@ export async function GET(request: NextRequest) {
         name: user.name,
         email: user.email,
         role: user.role,
-        teamId: user.teamId,
-        team: user.team,
         ideaCount: user._count.ideas,
         createdAt: user.createdAt,
         updatedAt: user.updatedAt,
@@ -78,7 +73,7 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { name, email, password, role, teamId } = body;
+    const { name, email, password, role } = body;
 
     if (!name || !email || !password) {
       return NextResponse.json(
@@ -109,12 +104,6 @@ export async function POST(request: NextRequest) {
         email,
         passwordHash,
         role: role || 'member',
-        teamId: teamId || null,
-      },
-      include: {
-        team: {
-          select: { id: true, name: true },
-        },
       },
     });
 
@@ -123,7 +112,6 @@ export async function POST(request: NextRequest) {
       name: user.name,
       email: user.email,
       role: user.role,
-      team: user.team,
       createdAt: user.createdAt,
     });
   } catch (error) {

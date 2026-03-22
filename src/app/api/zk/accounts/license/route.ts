@@ -33,18 +33,6 @@ export async function GET(request: NextRequest) {
         webUser: {
           select: {
             name: true,
-            team: {
-              select: {
-                id: true,
-                name: true,
-                plan: true,
-                seats: true,
-                subscriptionStatus: true,
-                currentPeriodStart: true,
-                currentPeriodEnd: true,
-                cancelAtPeriodEnd: true,
-              },
-            },
           },
         },
       },
@@ -55,12 +43,18 @@ export async function GET(request: NextRequest) {
     }
 
     const now = new Date();
-    const team = zkUser.webUser?.team;
+
+    // Look up user's organization for billing info
+    const membership = await prisma.organizationUser.findFirst({
+      where: { userId: zkUser.id, status: 'active' },
+      include: { organization: true },
+    });
+    const org = membership?.organization;
 
     // Check Stripe subscription (web purchase)
-    const stripeActive = team?.subscriptionStatus === 'active' || team?.subscriptionStatus === 'trialing';
-    const stripePastDue = team?.subscriptionStatus === 'past_due';
-    const stripePeriodEnd = team?.currentPeriodEnd;
+    const stripeActive = org?.subscriptionStatus === 'active' || org?.subscriptionStatus === 'trialing';
+    const stripePastDue = org?.subscriptionStatus === 'past_due';
+    const stripePeriodEnd = org?.currentPeriodEnd;
     const stripeWithinPeriod = stripePeriodEnd ? stripePeriodEnd > now : false;
     const stripeValid = stripeActive || (stripeWithinPeriod && !stripePastDue);
 
@@ -73,8 +67,8 @@ export async function GET(request: NextRequest) {
     
     // Determine effective plan (prefer higher tier)
     let effectivePlan = 'starter';
-    if (stripeValid && team?.plan) {
-      effectivePlan = team.plan;
+    if (stripeValid && org?.plan) {
+      effectivePlan = org.plan;
     }
     if (appleValid && applePlan) {
       effectivePlan = getPlanPriority(applePlan) > getPlanPriority(effectivePlan) ? applePlan : effectivePlan;
@@ -100,14 +94,14 @@ export async function GET(request: NextRequest) {
       license: {
         valid: hasValidLicense,
         plan: effectivePlan,
-        status: hasValidLicense ? 'active' : (team?.subscriptionStatus || 'free'),
+        status: hasValidLicense ? 'active' : (org?.subscriptionStatus || 'free'),
         expiresAt: expiresAt?.toISOString() || null,
-        currentPeriodStart: team?.currentPeriodStart?.toISOString() || null,
-        currentPeriodEnd: team?.currentPeriodEnd?.toISOString() || null,
-        cancelAtPeriodEnd: team?.cancelAtPeriodEnd || false,
-        seats: team?.seats || 1,
-        teamId: team?.id || null,
-        teamName: team?.name || null,
+        currentPeriodStart: org?.currentPeriodStart?.toISOString() || null,
+        currentPeriodEnd: org?.currentPeriodEnd?.toISOString() || null,
+        cancelAtPeriodEnd: org?.cancelAtPeriodEnd || false,
+        seats: org?.seats || 1,
+        teamId: org?.id || null,
+        teamName: org?.name || null,
         source: stripeValid ? 'stripe' : (appleValid ? 'apple' : 'none'),
       },
       features: features,

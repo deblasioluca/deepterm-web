@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 
-// GET - Get a single team with details
+// GET - Get a single organization with details
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -9,16 +9,17 @@ export async function GET(
   try {
     const { id } = await params;
     
-    const team = await prisma.team.findUnique({
+    const team = await prisma.organization.findUnique({
       where: { id },
       include: {
         members: {
-          select: {
-            id: true,
-            name: true,
-            email: true,
-            role: true,
-            createdAt: true,
+          include: {
+            user: {
+              select: {
+                id: true,
+                email: true,
+              },
+            },
           },
         },
         invoices: {
@@ -33,22 +34,31 @@ export async function GET(
 
     if (!team) {
       return NextResponse.json(
-        { error: 'Team not found' },
+        { error: 'Organization not found' },
         { status: 404 }
       );
     }
 
-    return NextResponse.json(team);
+    return NextResponse.json({
+      ...team,
+      members: team.members.map((m) => ({
+        id: m.id,
+        name: m.user?.email || 'Unknown',
+        email: m.user?.email || '',
+        role: m.role,
+        createdAt: m.createdAt,
+      })),
+    });
   } catch (error) {
-    console.error('Failed to fetch team:', error);
+    console.error('Failed to fetch organization:', error);
     return NextResponse.json(
-      { error: 'Failed to fetch team' },
+      { error: 'Failed to fetch organization' },
       { status: 500 }
     );
   }
 }
 
-// PATCH - Update a team
+// PATCH - Update an organization
 export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -58,18 +68,18 @@ export async function PATCH(
     const body = await request.json();
     const { name, plan, seats, ssoEnabled, ssoDomain, ssoProvider } = body;
 
-    const team = await prisma.team.findUnique({
+    const team = await prisma.organization.findUnique({
       where: { id },
     });
 
     if (!team) {
       return NextResponse.json(
-        { error: 'Team not found' },
+        { error: 'Organization not found' },
         { status: 404 }
       );
     }
 
-    const updateData: any = {};
+    const updateData: Record<string, unknown> = {};
     if (name !== undefined) updateData.name = name;
     if (plan !== undefined) updateData.plan = plan;
     if (seats !== undefined) updateData.seats = seats;
@@ -77,22 +87,22 @@ export async function PATCH(
     if (ssoDomain !== undefined) updateData.ssoDomain = ssoDomain;
     if (ssoProvider !== undefined) updateData.ssoProvider = ssoProvider;
 
-    const updatedTeam = await prisma.team.update({
+    const updatedTeam = await prisma.organization.update({
       where: { id },
       data: updateData,
     });
 
     return NextResponse.json(updatedTeam);
   } catch (error) {
-    console.error('Failed to update team:', error);
+    console.error('Failed to update organization:', error);
     return NextResponse.json(
-      { error: 'Failed to update team' },
+      { error: 'Failed to update organization' },
       { status: 500 }
     );
   }
 }
 
-// DELETE - Delete a team
+// DELETE - Delete an organization
 export async function DELETE(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -100,34 +110,33 @@ export async function DELETE(
   try {
     const { id } = await params;
 
-    const team = await prisma.team.findUnique({
+    const team = await prisma.organization.findUnique({
       where: { id },
       include: { _count: { select: { members: true } } },
     });
 
     if (!team) {
       return NextResponse.json(
-        { error: 'Team not found' },
+        { error: 'Organization not found' },
         { status: 404 }
       );
     }
 
-    // Remove team association from members first
-    await prisma.user.updateMany({
-      where: { teamId: id },
-      data: { teamId: null },
+    // Remove all members from organization first
+    await prisma.organizationUser.deleteMany({
+      where: { organizationId: id },
     });
 
-    // Delete team
-    await prisma.team.delete({
+    // Delete organization
+    await prisma.organization.delete({
       where: { id },
     });
 
     return NextResponse.json({ success: true });
   } catch (error) {
-    console.error('Failed to delete team:', error);
+    console.error('Failed to delete organization:', error);
     return NextResponse.json(
-      { error: 'Failed to delete team' },
+      { error: 'Failed to delete organization' },
       { status: 500 }
     );
   }

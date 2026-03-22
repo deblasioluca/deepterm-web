@@ -208,7 +208,7 @@ export default function AdminUsersPage() {
       email: user.email,
       password: '',
       role: user.role,
-      teamId: user.team?.id || '',
+      teamId: '',
     });
     setIsEditModalOpen(true);
   };
@@ -349,19 +349,7 @@ export default function AdminUsersPage() {
                           </Badge>
                         </td>
                         <td className="py-3 px-4">
-                          {user.team ? (
-                            <div className="flex items-center gap-2">
-                              <Building2 className="w-4 h-4 text-text-tertiary" />
-                              <span className="text-text-primary">
-                                {user.team.name}
-                              </span>
-                              <Badge variant="secondary" className="text-xs">
-                                {user.team.plan}
-                              </Badge>
-                            </div>
-                          ) : (
-                            <span className="text-text-tertiary">No team</span>
-                          )}
+                          <span className="text-text-tertiary">-</span>
                         </td>
 
                         <td className="py-3 px-4 text-text-secondary">

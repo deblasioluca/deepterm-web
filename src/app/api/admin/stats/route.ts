@@ -22,13 +22,13 @@ export async function GET() {
       }),
     ]);
 
-    // Team counts
+    // Organization counts (replaces Team counts)
     const [totalTeams, teamsThisMonth, teamsLastMonth] = await Promise.all([
-      prisma.team.count(),
-      prisma.team.count({
+      prisma.organization.count(),
+      prisma.organization.count({
         where: { createdAt: { gte: startOfMonth } },
       }),
-      prisma.team.count({
+      prisma.organization.count({
         where: {
           createdAt: { gte: startOfLastMonth, lte: endOfLastMonth },
         },
@@ -36,7 +36,7 @@ export async function GET() {
     ]);
 
     // Subscription counts
-    const activeSubscriptions = await prisma.team.count({
+    const activeSubscriptions = await prisma.organization.count({
       where: {
         subscriptionStatus: 'active',
         plan: { not: 'starter' },
@@ -44,7 +44,7 @@ export async function GET() {
     });
 
     // Calculate MRR (Monthly Recurring Revenue)
-    const paidTeams = await prisma.team.findMany({
+    const paidTeams = await prisma.organization.findMany({
       where: {
         subscriptionStatus: 'active',
         plan: { not: 'starter' },

@@ -18,15 +18,24 @@ export async function GET() {
 
     const user = await prisma.user.findUnique({
       where: { id: session.user.id },
-      include: { team: true },
+      include: { zkUser: true },
     });
 
-    if (!user?.team) {
+    if (!user?.zkUser) {
+      return NextResponse.json({ paymentMethods: [] });
+    }
+
+    // Find user's organization
+    const membership = await prisma.organizationUser.findFirst({
+      where: { userId: user.zkUser.id, status: 'active' },
+    });
+
+    if (!membership) {
       return NextResponse.json({ paymentMethods: [] });
     }
 
     const paymentMethods = await prisma.paymentMethod.findMany({
-      where: { teamId: user.team.id },
+      where: { organizationId: membership.organizationId },
       orderBy: [{ isDefault: 'desc' }, { createdAt: 'desc' }],
     });
 
@@ -71,35 +80,45 @@ export async function POST(request: NextRequest) {
 
     const user = await prisma.user.findUnique({
       where: { id: session.user.id },
-      include: { team: true },
+      include: { zkUser: true },
     });
 
     if (!user) {
       return NextResponse.json({ error: 'User not found' }, { status: 404 });
     }
 
-    // Create team if it doesn't exist
-    let team = user.team;
-    if (!team) {
-      team = await prisma.team.create({
-        data: {
-          name: `${user.name}'s Team`,
-          members: { connect: { id: user.id } },
-        },
+    // Find or create organization
+    let org;
+    if (user.zkUser) {
+      const membership = await prisma.organizationUser.findFirst({
+        where: { userId: user.zkUser.id, status: 'active' },
+        include: { organization: true },
       });
+      org = membership?.organization;
+    }
+
+    if (!org) {
+      org = await prisma.organization.create({
+        data: { name: `${user.name}'s Organization`, plan: 'free' },
+      });
+      if (user.zkUser) {
+        await prisma.organizationUser.create({
+          data: { organizationId: org.id, userId: user.zkUser.id, role: 'owner', status: 'active' },
+        });
+      }
     }
 
     // Get or create Stripe customer
-    let customerId = team.stripeCustomerId;
+    let customerId = org.stripeCustomerId;
     if (!customerId) {
       const customer = await stripe.customers.create({
         email: user.email,
         name: user.name || undefined,
-        metadata: { teamId: team.id },
+        metadata: { organizationId: org.id },
       });
       customerId = customer.id;
-      await prisma.team.update({
-        where: { id: team.id },
+      await prisma.organization.update({
+        where: { id: org.id },
         data: { stripeCustomerId: customer.id },
       });
     }
@@ -110,7 +129,7 @@ export async function POST(request: NextRequest) {
         customer: customerId,
         payment_method_types: ['card'],
         usage: 'off_session',
-        metadata: { teamId: team.id },
+        metadata: { organizationId: org.id },
       });
 
       return NextResponse.json({
@@ -128,7 +147,7 @@ export async function POST(request: NextRequest) {
       payment_method_types: ['card', 'paypal', 'link'],
       success_url: `${baseUrl}/dashboard/billing?setup=success`,
       cancel_url: `${baseUrl}/dashboard/billing?setup=canceled`,
-      metadata: { teamId: team.id },
+      metadata: { organizationId: org.id },
     });
 
     return NextResponse.json({
@@ -171,25 +190,36 @@ export async function PATCH(request: NextRequest) {
 
     const user = await prisma.user.findUnique({
       where: { id: session.user.id },
-      include: { team: true },
+      include: { zkUser: true },
     });
 
-    if (!user?.team) {
-      return NextResponse.json({ error: 'No team found' }, { status: 404 });
+    if (!user?.zkUser) {
+      return NextResponse.json({ error: 'No organization found' }, { status: 404 });
+    }
+
+    const membership = await prisma.organizationUser.findFirst({
+      where: { userId: user.zkUser.id, status: 'active' },
+      include: { organization: true },
+    });
+
+    if (!membership?.organization) {
+      return NextResponse.json({ error: 'No organization found' }, { status: 404 });
     }
 
     // Check user permissions
-    if (!['owner', 'admin'].includes(user.role)) {
+    if (!['owner', 'admin'].includes(membership.role)) {
       return NextResponse.json(
         { error: 'Insufficient permissions' },
         { status: 403 }
       );
     }
 
+    const org = membership.organization;
+
     const paymentMethod = await prisma.paymentMethod.findFirst({
       where: {
         id: paymentMethodId,
-        teamId: user.team.id,
+        organizationId: org.id,
       },
     });
 
@@ -202,8 +232,8 @@ export async function PATCH(request: NextRequest) {
 
     if (action === 'set_default') {
       // Update Stripe customer's default payment method
-      if (user.team.stripeCustomerId) {
-        await stripe.customers.update(user.team.stripeCustomerId, {
+      if (org.stripeCustomerId) {
+        await stripe.customers.update(org.stripeCustomerId, {
           invoice_settings: {
             default_payment_method: paymentMethod.stripePaymentMethodId,
           },
@@ -213,7 +243,7 @@ export async function PATCH(request: NextRequest) {
       // Update database: set all to non-default, then set selected as default
       await prisma.$transaction([
         prisma.paymentMethod.updateMany({
-          where: { teamId: user.team.id },
+          where: { organizationId: org.id },
           data: { isDefault: false },
         }),
         prisma.paymentMethod.update({
@@ -262,15 +292,24 @@ export async function DELETE(request: NextRequest) {
 
     const user = await prisma.user.findUnique({
       where: { id: session.user.id },
-      include: { team: true },
+      include: { zkUser: true },
     });
 
-    if (!user?.team) {
-      return NextResponse.json({ error: 'No team found' }, { status: 404 });
+    if (!user?.zkUser) {
+      return NextResponse.json({ error: 'No organization found' }, { status: 404 });
+    }
+
+    const delMembership = await prisma.organizationUser.findFirst({
+      where: { userId: user.zkUser.id, status: 'active' },
+      include: { organization: true },
+    });
+
+    if (!delMembership?.organization) {
+      return NextResponse.json({ error: 'No organization found' }, { status: 404 });
     }
 
     // Check user permissions
-    if (!['owner', 'admin'].includes(user.role)) {
+    if (!['owner', 'admin'].includes(delMembership.role)) {
       return NextResponse.json(
         { error: 'Insufficient permissions' },
         { status: 403 }
@@ -280,7 +319,7 @@ export async function DELETE(request: NextRequest) {
     const paymentMethod = await prisma.paymentMethod.findFirst({
       where: {
         id: paymentMethodId,
-        teamId: user.team.id,
+        organizationId: delMembership.organizationId,
       },
     });
 

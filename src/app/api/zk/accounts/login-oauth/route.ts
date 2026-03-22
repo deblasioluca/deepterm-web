@@ -248,7 +248,7 @@ export async function POST(request: NextRequest) {
     // -----------------------------------------------------------------------
     // Find or create web User
     // -----------------------------------------------------------------------
-    let webUser = await prisma.user.findUnique({ where: { email: normalizedEmail }, include: { team: true } });
+    let webUser = await prisma.user.findUnique({ where: { email: normalizedEmail } });
 
     if (!webUser) {
       const fallbackName = name ?? normalizedEmail.split('@')[0];
@@ -259,7 +259,6 @@ export async function POST(request: NextRequest) {
           passwordHash: null,
           emailVerified: new Date(),
         },
-        include: { team: true },
       });
 
       await createAuditLog({
@@ -391,9 +390,7 @@ export async function POST(request: NextRequest) {
         kdfParallelism: zkUser.kdfParallelism,
       }),
       device: device ? { id: device.id, name: device.name, type: device.deviceType } : null,
-      subscription: webUser.team
-        ? { plan: webUser.team.plan, status: webUser.team.subscriptionStatus, teamName: webUser.team.name }
-        : null,
+      subscription: null, // Subscription info now fetched via /api/zk/accounts/license
     });
 
     return addCorsHeaders(response);

@@ -13,9 +13,6 @@ export async function GET(
     const user = await prisma.user.findUnique({
       where: { id },
       include: {
-        team: {
-          select: { id: true, name: true, plan: true },
-        },
         sessions: {
           select: { id: true, device: true, lastActive: true },
           orderBy: { lastActive: 'desc' },
@@ -86,7 +83,6 @@ export async function GET(
       twoFactorEnabled: (user as Record<string, unknown>).twoFactorEnabled || false,
       subscriptionSource: (user as Record<string, unknown>).subscriptionSource || null,
       subscriptionExpiresAt: (user as Record<string, unknown>).subscriptionExpiresAt || null,
-      team: user.team,
       sessions: user.sessions,
       ideas: user.ideas,
       issues: user.issues,
@@ -119,7 +115,7 @@ export async function PATCH(
   try {
     const { id } = await params;
     const body = await request.json();
-    const { name, email, password, role, teamId } = body;
+    const { name, email, password, role } = body;
 
     const user = await prisma.user.findUnique({
       where: { id },
@@ -149,7 +145,6 @@ export async function PATCH(
     if (name) updateData.name = name;
     if (email) updateData.email = email;
     if (role) updateData.role = role;
-    if (teamId !== undefined) updateData.teamId = teamId || null;
     if (password) {
       updateData.passwordHash = await bcrypt.hash(password, 12);
     }
@@ -157,11 +152,6 @@ export async function PATCH(
     const updatedUser = await prisma.user.update({
       where: { id },
       data: updateData,
-      include: {
-        team: {
-          select: { id: true, name: true },
-        },
-      },
     });
 
     return NextResponse.json({
@@ -169,7 +159,6 @@ export async function PATCH(
       name: updatedUser.name,
       email: updatedUser.email,
       role: updatedUser.role,
-      team: updatedUser.team,
       updatedAt: updatedUser.updatedAt,
     });
   } catch (error) {

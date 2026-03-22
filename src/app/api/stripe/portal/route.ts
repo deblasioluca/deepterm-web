@@ -16,10 +16,23 @@ export async function POST(request: NextRequest) {
 
     const user = await prisma.user.findUnique({
       where: { id: session.user.id },
-      include: { team: true },
+      include: { zkUser: true },
     });
 
-    if (!user?.team?.stripeCustomerId) {
+    if (!user?.zkUser) {
+      return NextResponse.json(
+        { error: 'No billing account found' },
+        { status: 404 }
+      );
+    }
+
+    // Find user's organization
+    const membership = await prisma.organizationUser.findFirst({
+      where: { userId: user.zkUser.id, status: 'active' },
+      include: { organization: true },
+    });
+
+    if (!membership?.organization?.stripeCustomerId) {
       return NextResponse.json(
         { error: 'No billing account found' },
         { status: 404 }
@@ -28,7 +41,7 @@ export async function POST(request: NextRequest) {
 
     const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
     const portalSession = await createPortalSession(
-      user.team.stripeCustomerId,
+      membership.organization.stripeCustomerId,
       `${baseUrl}/dashboard/billing`
     );
 
