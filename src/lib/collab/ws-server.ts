@@ -435,14 +435,15 @@ function handleAudioSignal(ws: AuthenticatedSocket, payload: Record<string, unkn
         }
       }
 
-      if (currentCount >= MAX_AUDIO_PARTICIPANTS) {
+      const updatedCount = existingRoom ? existingRoom.size : 0;
+      if (updatedCount >= MAX_AUDIO_PARTICIPANTS) {
         ws.send(JSON.stringify({
           type: 'audio_room_full',
           channel: 'audio-signal',
           payload: {
             roomId: roomKey,
             maxParticipants: MAX_AUDIO_PARTICIPANTS,
-            participantCount: currentCount,
+            participantCount: updatedCount,
           },
         }));
         return;

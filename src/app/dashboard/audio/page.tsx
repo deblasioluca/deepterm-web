@@ -34,7 +34,7 @@ export default function AudioPage() {
 
   const fetchOrgs = useCallback(async () => {
     try {
-      const res = await fetch('/api/zk/terminal/ws-token', { method: 'POST' });
+      const res = await fetch('/api/terminal/ws-token', { method: 'POST' });
       if (!res.ok) {
         setError('Failed to authenticate');
         setLoading(false);
