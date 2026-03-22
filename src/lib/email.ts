@@ -570,7 +570,7 @@ export async function sendSessionInviteEmail(invitation: {
           </div>
           <div style="background: #1a1b1e; padding: 30px; color: #ffffff;">
             <h2 style="color: #00ffc6; margin-top: 0;">${icon} ${invitation.sessionType} Invitation</h2>
-            <p>Hi ${invitation.userName},</p>
+            <p>Hi ${invitation.userName.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')},</p>
             <p><strong>${invitation.fromEmail.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')}</strong> has invited you to join a <strong>${invitation.sessionType}</strong> session in <strong>${invitation.orgName.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')}</strong>.</p>
             ${invitation.sessionName ? `<p style="color: #ccc;">Session: <strong>${invitation.sessionName.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')}</strong></p>` : ''}
             <div style="text-align: center; margin: 30px 0;">

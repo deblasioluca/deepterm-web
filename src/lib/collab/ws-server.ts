@@ -417,6 +417,7 @@ async function handleNotification(ws: AuthenticatedSocket, payload: Record<strin
 
   if (!orgId || typeof orgId !== 'string') return;
   if (!ws.orgIds.includes(orgId)) return;
+  if (!data || typeof data !== 'object') return;
 
   const rawTargets = Array.isArray(targetUserIds) ? targetUserIds as string[] : [];
 

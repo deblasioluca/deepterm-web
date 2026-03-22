@@ -232,7 +232,7 @@ export default function CollaborationPage() {
           />
         )}
 
-        {!selectedOrgId && (
+        {!selectedOrgId && activeTab !== 'manage' && (
           <Card className="p-8 text-center">
             <Users className="w-12 h-12 text-text-tertiary mx-auto mb-4" />
             <h3 className="text-lg font-semibold text-text-primary mb-2">No Organization</h3>
