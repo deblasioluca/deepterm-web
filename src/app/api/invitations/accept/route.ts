@@ -4,7 +4,7 @@ import { prisma } from '@/lib/prisma';
 import { OrganizationUserStatus } from '@/lib/zk';
 
 /**
- * GET /api/zk/invitations/accept?token=...
+ * GET /api/invitations/accept?token=...
  * Look up an organization invitation by token (public, no auth required).
  * Used by the /invite/[token] page to display invitation details.
  */
@@ -56,7 +56,7 @@ export async function GET(request: NextRequest) {
 }
 
 /**
- * POST /api/zk/invitations/accept
+ * POST /api/invitations/accept
  * Accept an organization invitation by token.
  * Requires the user to be signed in (via NextAuth session).
  * Links the OrganizationUser to the signed-in user's ZKUser account,
@@ -134,21 +134,27 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Check if the user is already a confirmed member of this org (via a different OrganizationUser record)
+    // Check if the user already has another OrganizationUser record in this org
     const existingMembership = await prisma.organizationUser.findFirst({
       where: {
+        id: { not: invitation.id },
         userId: zkUser.id,
         organizationId: invitation.organizationId,
-        status: 'confirmed',
       },
     });
 
     if (existingMembership) {
-      // Already a member — just mark the invitation as accepted
-      await prisma.organizationUser.update({
+      // Already has a record — delete the duplicate invitation and keep the existing one
+      await prisma.organizationUser.delete({
         where: { id: invitation.id },
-        data: { status: 'accepted', token: null },
       });
+      // If existing record is not confirmed, confirm it now
+      if (existingMembership.status !== 'confirmed') {
+        await prisma.organizationUser.update({
+          where: { id: existingMembership.id },
+          data: { status: OrganizationUserStatus.CONFIRMED, token: null },
+        });
+      }
       return NextResponse.json({
         success: true,
         message: `You are already a member of ${invitation.organization.name}`,

@@ -37,7 +37,7 @@ export default function InviteAcceptPage() {
   const fetchInviteDetails = async () => {
     try {
       // Try org invitation first, then fall back to team invitation
-      const orgRes = await fetch(`/api/zk/invitations/accept?token=${encodeURIComponent(token)}`);
+      const orgRes = await fetch(`/api/invitations/accept?token=${encodeURIComponent(token)}`);
 
       if (orgRes.ok) {
         const data = await orgRes.json();
@@ -71,7 +71,7 @@ export default function InviteAcceptPage() {
     try {
       const isOrgInvite = invite?.type === 'organization';
       const endpoint = isOrgInvite
-        ? '/api/zk/invitations/accept'
+        ? '/api/invitations/accept'
         : '/api/team/invitations/accept';
 
       const res = await fetch(endpoint, {

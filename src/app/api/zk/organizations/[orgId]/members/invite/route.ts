@@ -101,8 +101,11 @@ export async function POST(
       // ── Registered user path ──
       const existingMembership = await prisma.organizationUser.findFirst({
         where: {
-          userId: invitee.id,
           organizationId: orgId,
+          OR: [
+            { userId: invitee.id },
+            { invitedEmail: normalizedEmail },
+          ],
         },
       });
 
@@ -176,7 +179,7 @@ export async function POST(
         userId: auth.userId,
         organizationId: orgId,
         eventType: 'user_invited',
-        targetType: 'email',
+        targetType: 'user',
         targetId: normalizedEmail,
         ipAddress: getClientIP(request),
         userAgent: request.headers.get('user-agent') || undefined,

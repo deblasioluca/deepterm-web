@@ -68,8 +68,8 @@ export async function GET(
     const response = successResponse({
       id: member.id,
       userId: member.userId,
-      email: member.user.email,
-      publicKey: member.user.publicKey,
+      email: member.user?.email ?? member.invitedEmail ?? '',
+      publicKey: member.user?.publicKey ?? null,
       role: member.role,
       status: member.status,
       createdAt: member.createdAt.toISOString(),
@@ -159,7 +159,7 @@ export async function PUT(
       organizationId: orgId,
       eventType: 'user_role_changed',
       targetType: 'user',
-      targetId: member.userId,
+      targetId: member.userId ?? undefined,
       ipAddress: getClientIP(request),
       userAgent: request.headers.get('user-agent') || undefined,
       metadata: { previousRole: member.role, newRole: role },
@@ -241,7 +241,7 @@ export async function DELETE(
       organizationId: orgId,
       eventType: 'user_removed',
       targetType: 'user',
-      targetId: member.userId,
+      targetId: member.userId ?? undefined,
       ipAddress: getClientIP(request),
       userAgent: request.headers.get('user-agent') || undefined,
     });
