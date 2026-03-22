@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { X, Terminal, Mic, Bell } from 'lucide-react';
 
 export interface SessionNotification {
@@ -48,15 +48,17 @@ function NotificationCard({
   onAccept: () => void;
 }) {
   const [visible, setVisible] = useState(false);
+  const onDismissRef = useRef(onDismiss);
+  useEffect(() => { onDismissRef.current = onDismiss; });
 
   useEffect(() => {
     requestAnimationFrame(() => setVisible(true));
     const timer = setTimeout(() => {
       setVisible(false);
-      setTimeout(onDismiss, 300);
+      setTimeout(() => onDismissRef.current(), 300);
     }, 15000);
     return () => clearTimeout(timer);
-  }, [onDismiss]);
+  }, []);
 
   const isTerminal = notification.notificationType === 'terminal_invite';
   const Icon = isTerminal ? Terminal : Mic;

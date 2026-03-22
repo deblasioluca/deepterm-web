@@ -30,7 +30,7 @@ export default function CollaborationPage() {
         const res = await fetch('/api/zk/organizations');
         if (res.ok) {
           const data = await res.json();
-          const orgs = data.organizations || [];
+          const orgs = Array.isArray(data) ? data : (data.organizations || []);
           if (orgs.length > 0) {
             setSelectedOrgId(orgs[0].id);
           }

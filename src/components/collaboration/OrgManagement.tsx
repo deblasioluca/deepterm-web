@@ -49,12 +49,13 @@ export function OrgManagement({ onOrgSelect, selectedOrgId }: OrgManagementProps
       const res = await fetch('/api/zk/organizations');
       if (res.ok) {
         const data = await res.json();
-        const orgList: OrgData[] = (data.organizations || []).map((o: Record<string, unknown>) => ({
+        const rawOrgs = Array.isArray(data) ? data : (data.organizations || []);
+        const orgList: OrgData[] = rawOrgs.map((o: Record<string, unknown>) => ({
           id: o.id as string,
           name: o.name as string,
-          plan: o.plan as string,
-          memberCount: (o.members as Array<unknown>)?.length || 0,
-          role: (o.members as Array<Record<string, unknown>>)?.[0]?.role as string || 'member',
+          plan: (o.plan as string) || 'free',
+          memberCount: typeof o.memberCount === 'number' ? o.memberCount : 0,
+          role: typeof o.role === 'string' ? o.role : 'member',
         }));
         setOrgs(orgList);
         if (orgList.length > 0 && !activeOrg) {
