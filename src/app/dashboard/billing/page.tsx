@@ -602,18 +602,25 @@ export default function BillingPage() {
                   {data?.subscription?.status === 'past_due' && <Badge variant="danger">Past Due</Badge>}
                 </div>
                 <p className="text-text-secondary">
-                  {currentPlan === 'starter' && !licenseData?.subscription?.organization?.active ? 'Free forever' : (
-                    billingPeriod === 'yearly' ? (
+                  {(() => {
+                    // Use the effective plan for pricing display (not Stripe's plan which may be starter)
+                    const effectivePlanId = licenseData?.subscription?.effectivePlan || currentPlan;
+                    const effectiveDetails = plans.find((p) => p.id === effectivePlanId) || currentPlanDetails;
+                    const hasPrice = 'monthlyPrice' in effectiveDetails;
+                    if (effectivePlanId === 'starter' || effectivePlanId === 'enterprise' || !hasPrice) {
+                      return effectivePlanId === 'enterprise' ? 'Custom pricing' : 'Free forever';
+                    }
+                    return billingPeriod === 'yearly' ? (
                       <>
-                        ${(currentPlanDetails as any).yearlyPrice}/user/month • <span className="text-accent-primary font-medium">${(currentPlanDetails as any).yearlyPrice * 12}/year</span>
+                        ${(effectiveDetails as any).yearlyPrice}/user/month • <span className="text-accent-primary font-medium">${(effectiveDetails as any).yearlyPrice * 12}/year</span>
                         <span className="text-green-400 ml-2">
-                          (Save ${(((currentPlanDetails as any).monthlyPrice - (currentPlanDetails as any).yearlyPrice) * 12).toFixed(0)}/year)
+                          (Save ${(((effectiveDetails as any).monthlyPrice - (effectiveDetails as any).yearlyPrice) * 12).toFixed(0)}/year)
                         </span>
                       </>
                     ) : (
-                      <>${(currentPlanDetails as any).monthlyPrice}/user/month</>
-                    )
-                  )}
+                      <>${(effectiveDetails as any).monthlyPrice}/user/month</>
+                    );
+                  })()}
                 </p>
               </div>
             </div>

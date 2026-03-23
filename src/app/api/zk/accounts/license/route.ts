@@ -2,6 +2,8 @@ import { NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import {
   getAuthFromRequest,
+  getAuthFromRequestOrSession,
+  isSessionOnlyAuth,
   errorResponse,
   successResponse,
   handleCorsPreflightRequest,
@@ -21,10 +23,41 @@ export async function OPTIONS() {
  */
 export async function GET(request: NextRequest) {
   try {
-    const auth = getAuthFromRequest(request);
+    // Support both Bearer token (macOS app) and session cookies (web dashboard)
+    const auth = await getAuthFromRequestOrSession(request);
 
     if (!auth) {
       return errorResponse('Unauthorized', 401);
+    }
+
+    // Session-only users (no ZKUser yet) — return minimal response
+    if (isSessionOnlyAuth(auth)) {
+      // Look up org membership by email for session-only users
+      const sessionOrg = await prisma.organizationUser.findFirst({
+        where: {
+          organization: { members: { some: { user: { email: auth.email }, status: 'confirmed' } } },
+          user: { email: auth.email },
+          status: 'confirmed',
+        },
+        include: { organization: true },
+      });
+      const org = sessionOrg?.organization;
+      const stripeActive = org?.subscriptionStatus === 'active' || org?.subscriptionStatus === 'trialing';
+      const orgPlan = (stripeActive && org?.plan) ? org.plan : 'starter';
+
+      const response = successResponse({
+        user: { id: auth.webUserId, email: auth.email, name: null },
+        license: { valid: stripeActive, plan: orgPlan, status: stripeActive ? 'active' : 'free', source: stripeActive ? 'stripe' : 'none' },
+        subscription: {
+          individual: { active: false, plan: 'starter', source: 'none', expiresAt: null },
+          organization: { active: stripeActive, plan: orgPlan, orgId: org?.id || null, orgName: org?.name || null },
+          effectivePlan: orgPlan,
+          hasRedundantSubscription: false,
+        },
+        features: getPlanFeatures(orgPlan),
+        limits: getPlanLimits(orgPlan),
+      });
+      return addCorsHeaders(response);
     }
 
     // Get the ZK user with linked web user and Apple IAP info
