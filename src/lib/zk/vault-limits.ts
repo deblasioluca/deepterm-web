@@ -38,23 +38,35 @@ export async function checkVaultItemLimit(userId: string): Promise<VaultLimitChe
     };
   }
 
-  // Look up user's organization for billing/plan info
-  const membership = await prisma.organizationUser.findFirst({
+  // Look up ALL user's organizations — pick the one with the best plan
+  const memberships = await prisma.organizationUser.findMany({
     where: { userId, status: 'confirmed' },
     include: { organization: true },
   });
-  const org = membership?.organization;
 
-  // Determine effective plan
-  const isActive = org?.subscriptionStatus === 'active'
-    || org?.subscriptionStatus === 'trialing';
-  const plan = isActive
-    ? (org?.plan || 'starter')
-    : 'starter';
+  // Find the org with the most permissive active plan
+  const planRank: Record<string, number> = {
+    starter: 0, free: 0, pro: 1, team: 2, business: 3, enterprise: 4,
+  };
+  let bestOrg: typeof memberships[0]['organization'] | null = null;
+  let bestPlan = 'starter';
+  for (const m of memberships) {
+    const o = m.organization;
+    const active = o.subscriptionStatus === 'active'
+      || o.subscriptionStatus === 'trialing';
+    const p = active ? (o.plan || 'starter') : 'starter';
+    const normalized = p === 'free' ? 'starter' : p;
+    if ((planRank[normalized] ?? 0) > (planRank[bestPlan] ?? 0)) {
+      bestPlan = normalized;
+      bestOrg = o;
+    }
+  }
+  const org = bestOrg ?? memberships[0]?.organization ?? null;
+  const plan = bestPlan;
 
   console.log('[vault-limits] userId:', userId,
     'org:', org ? JSON.stringify({ plan: org.plan, status: org.subscriptionStatus }) : 'none',
-    'isActive:', isActive, 'plan:', plan);
+    'effectivePlan:', plan);
 
   const limits = getLimitsForPlan(plan);
 

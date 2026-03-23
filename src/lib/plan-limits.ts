@@ -139,11 +139,13 @@ export const PLAN_FEATURES: Record<PlanKey, PlanFeatures> = {
 };
 
 export function getLimitsForPlan(plan: string): PlanLimits {
-  return PLAN_LIMITS[plan as PlanKey] || PLAN_LIMITS.starter;
+  const normalized = plan === 'free' ? 'starter' : plan;
+  return PLAN_LIMITS[normalized as PlanKey] || PLAN_LIMITS.starter;
 }
 
 export function getFeaturesForPlan(plan: string): PlanFeatures {
-  return PLAN_FEATURES[plan as PlanKey] || PLAN_FEATURES.starter;
+  const normalized = plan === 'free' ? 'starter' : plan;
+  return PLAN_FEATURES[normalized as PlanKey] || PLAN_FEATURES.starter;
 }
 
 export function isWithinLimit(current: number, max: number): boolean {
