@@ -12,6 +12,7 @@ import {
   addCorsHeaders,
   OrganizationUserStatus,
 } from '@/lib/zk';
+import { syncNewMemberPlan } from '@/lib/zk/sync-org-plans';
 
 export async function OPTIONS() {
   return handleCorsPreflightRequest();
@@ -98,6 +99,11 @@ export async function POST(
       ipAddress: getClientIP(request),
       userAgent: request.headers.get('user-agent') || undefined,
     });
+
+    // Sync org plan to the newly confirmed member (fire-and-forget)
+    if (member.userId) {
+      syncNewMemberPlan(orgId, member.userId).catch(() => {});
+    }
 
     // Fire-and-forget MS Teams notification
     import('@/lib/ms-teams').then(({ notifyTeamsMemberJoined }) => {

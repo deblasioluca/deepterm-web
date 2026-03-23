@@ -12,6 +12,7 @@ import {
   addCorsHeaders,
   OrganizationUserStatus,
 } from '@/lib/zk';
+import { syncNewMemberPlan } from '@/lib/zk/sync-org-plans';
 
 export async function OPTIONS() {
   return handleCorsPreflightRequest();
@@ -115,6 +116,11 @@ export async function POST(
           });
         }
       }
+    }
+
+    // Sync org plan to the newly accepted member (fire-and-forget)
+    if (!sessionOnly && auth.userId) {
+      syncNewMemberPlan(orgId, auth.userId).catch(() => {});
     }
 
     // Audit log — skip userId/targetId for session-only users to avoid

@@ -105,17 +105,37 @@ export async function POST(request: NextRequest) {
     // Handle notification types
     switch (notificationType) {
       case 'SUBSCRIBED': {
+        // Store Apple IAP info on User for tracking, but set subscriptionScope
+        // to 'individual' — the effective plan is calculated at runtime by the
+        // license API (max of individual + org plans).
         await prisma.user.update({
           where: { id: user.id },
           data: {
             plan: 'pro',
+            subscriptionScope: 'individual',
             subscriptionSource: 'appstore',
             subscriptionExpiresAt: expiresDate,
             appStoreOriginalTransactionId: originalTransactionId,
           },
         });
 
-        console.log(`App Store: ${user.email} subscribed to Pro`);
+        // Also update ZKUser Apple IAP fields if linked
+        const zkUserSub = await prisma.zKUser.findFirst({
+          where: { webUserId: user.id },
+        });
+        if (zkUserSub) {
+          await prisma.zKUser.update({
+            where: { id: zkUserSub.id },
+            data: {
+              appleOriginalTransactionId: originalTransactionId,
+              appleProductId: productId,
+              applePurchaseDate: new Date(),
+              appleExpiresDate: expiresDate,
+            },
+          });
+        }
+
+        console.log(`App Store: ${user.email} subscribed to Pro (individual scope)`);
         await logEvent('appstore-subscribed', 'pro', `App Store subscription (${productId})`);
         notifyPayment('appstore-subscribed', user.email, 'pro', `App Store subscription (${productId})`);
         break;
@@ -126,9 +146,23 @@ export async function POST(request: NextRequest) {
           where: { id: user.id },
           data: {
             plan: 'pro',
+            subscriptionScope: 'individual',
             subscriptionExpiresAt: expiresDate,
           },
         });
+
+        // Also update ZKUser Apple IAP fields if linked
+        const zkUserRenew = await prisma.zKUser.findFirst({
+          where: { webUserId: user.id },
+        });
+        if (zkUserRenew) {
+          await prisma.zKUser.update({
+            where: { id: zkUserRenew.id },
+            data: {
+              appleExpiresDate: expiresDate,
+            },
+          });
+        }
 
         console.log(`App Store: ${user.email} renewed Pro (expires: ${expiresDate})`);
         await logEvent('appstore-renewed', 'pro', `Renewed until ${expiresDate?.toISOString()}`);
@@ -144,60 +178,86 @@ export async function POST(request: NextRequest) {
       }
 
       case 'EXPIRED': {
-        // Only downgrade if they don't have active Stripe
-        if (!user.stripeSubscriptionId) {
-          await prisma.user.update({
-            where: { id: user.id },
-            data: {
-              plan: 'free',
-              subscriptionSource: 'none',
-              subscriptionExpiresAt: null,
-            },
-          });
+        // Clear individual Apple subscription — the user's effective plan
+        // will be recalculated by the license API. If they have an org plan,
+        // they keep that tier. Only the individual scope is cleared.
+        await prisma.user.update({
+          where: { id: user.id },
+          data: {
+            plan: user.subscriptionScope === 'organization' ? user.plan : 'free',
+            subscriptionScope: user.subscriptionScope === 'organization' ? 'organization' : 'none',
+            subscriptionSource: 'none',
+            subscriptionExpiresAt: null,
+          },
+        });
 
-          console.log(`App Store: ${user.email} subscription expired -> Free`);
-          await logEvent('appstore-expired', 'free', 'Subscription expired');
-          notifyPayment('appstore-expired', user.email, 'free', 'Subscription expired');
-        } else {
-          console.log(`App Store: ${user.email} App Store expired, but has Stripe — keeping Pro`);
+        // Clear ZKUser Apple IAP fields
+        const zkUserExp = await prisma.zKUser.findFirst({ where: { webUserId: user.id } });
+        if (zkUserExp) {
+          await prisma.zKUser.update({
+            where: { id: zkUserExp.id },
+            data: { appleExpiresDate: null },
+          });
         }
+
+        console.log(`App Store: ${user.email} subscription expired — scope was ${user.subscriptionScope}`);
+        await logEvent('appstore-expired', 'free', 'Subscription expired');
+        notifyPayment('appstore-expired', user.email, 'free', 'Subscription expired');
         break;
       }
 
       case 'GRACE_PERIOD_EXPIRED': {
-        if (!user.stripeSubscriptionId) {
-          await prisma.user.update({
-            where: { id: user.id },
-            data: {
-              plan: 'free',
-              subscriptionSource: 'none',
-              subscriptionExpiresAt: null,
-            },
-          });
+        await prisma.user.update({
+          where: { id: user.id },
+          data: {
+            plan: user.subscriptionScope === 'organization' ? user.plan : 'free',
+            subscriptionScope: user.subscriptionScope === 'organization' ? 'organization' : 'none',
+            subscriptionSource: 'none',
+            subscriptionExpiresAt: null,
+          },
+        });
 
-          console.log(`App Store: ${user.email} grace period expired -> Free`);
-          await logEvent('appstore-grace-expired', 'free', 'Grace period ended — downgraded');
-          notifyPayment('appstore-grace-expired', user.email, 'free', 'Grace period ended — downgraded');
+        const zkUserGrace = await prisma.zKUser.findFirst({ where: { webUserId: user.id } });
+        if (zkUserGrace) {
+          await prisma.zKUser.update({
+            where: { id: zkUserGrace.id },
+            data: { appleExpiresDate: null },
+          });
         }
+
+        console.log(`App Store: ${user.email} grace period expired — scope was ${user.subscriptionScope}`);
+        await logEvent('appstore-grace-expired', 'free', 'Grace period ended — downgraded');
+        notifyPayment('appstore-grace-expired', user.email, 'free', 'Grace period ended — downgraded');
         break;
       }
 
       case 'REVOKE': {
-        if (!user.stripeSubscriptionId) {
-          await prisma.user.update({
-            where: { id: user.id },
+        await prisma.user.update({
+          where: { id: user.id },
+          data: {
+            plan: user.subscriptionScope === 'organization' ? user.plan : 'free',
+            subscriptionScope: user.subscriptionScope === 'organization' ? 'organization' : 'none',
+            subscriptionSource: 'none',
+            subscriptionExpiresAt: null,
+            appStoreOriginalTransactionId: null,
+          },
+        });
+
+        const zkUserRevoke = await prisma.zKUser.findFirst({ where: { webUserId: user.id } });
+        if (zkUserRevoke) {
+          await prisma.zKUser.update({
+            where: { id: zkUserRevoke.id },
             data: {
-              plan: 'free',
-              subscriptionSource: 'none',
-              subscriptionExpiresAt: null,
-              appStoreOriginalTransactionId: null,
+              appleOriginalTransactionId: null,
+              appleProductId: null,
+              appleExpiresDate: null,
             },
           });
-
-          console.log(`App Store: ${user.email} subscription revoked -> Free`);
-          await logEvent('appstore-revoked', 'free', 'Subscription revoked by Apple');
-          notifyPayment('appstore-revoked', user.email, 'free', 'Subscription revoked by Apple');
         }
+
+        console.log(`App Store: ${user.email} subscription revoked — scope was ${user.subscriptionScope}`);
+        await logEvent('appstore-revoked', 'free', 'Subscription revoked by Apple');
+        notifyPayment('appstore-revoked', user.email, 'free', 'Subscription revoked by Apple');
         break;
       }
 

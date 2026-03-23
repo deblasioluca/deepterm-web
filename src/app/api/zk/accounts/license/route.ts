@@ -66,13 +66,13 @@ export async function GET(request: NextRequest) {
     const hasValidLicense = stripeValid || appleValid;
     
     // Determine effective plan (prefer higher tier)
-    let effectivePlan = 'starter';
-    if (stripeValid && org?.plan) {
-      effectivePlan = org.plan;
-    }
-    if (appleValid && applePlan) {
-      effectivePlan = getPlanPriority(applePlan) > getPlanPriority(effectivePlan) ? applePlan : effectivePlan;
-    }
+    // Organization plan (via Stripe on Organization model)
+    const orgPlan = (stripeValid && org?.plan) ? org.plan : 'starter';
+    // Individual plan (via Apple IAP on ZKUser)
+    const individualPlan = (appleValid && applePlan) ? applePlan : 'starter';
+    // Effective = max(org, individual)
+    const effectivePlan = getPlanPriority(orgPlan) >= getPlanPriority(individualPlan)
+      ? orgPlan : individualPlan;
 
     // Determine expiration date (latest of the two)
     let expiresAt: Date | null = null;
@@ -82,6 +82,11 @@ export async function GET(request: NextRequest) {
         expiresAt = zkUser.appleExpiresDate;
       }
     }
+
+    // Detect redundant subscription: user has BOTH an active individual sub
+    // AND an org sub where org plan >= individual plan
+    const hasRedundantSubscription = appleValid && stripeValid
+      && getPlanPriority(orgPlan) >= getPlanPriority(individualPlan);
 
     const features = getPlanFeatures(effectivePlan);
 
@@ -103,6 +108,22 @@ export async function GET(request: NextRequest) {
         teamId: org?.id || null,
         teamName: org?.name || null,
         source: stripeValid ? 'stripe' : (appleValid ? 'apple' : 'none'),
+      },
+      subscription: {
+        individual: {
+          active: appleValid,
+          plan: individualPlan,
+          source: appleValid ? 'apple' : 'none',
+          expiresAt: zkUser.appleExpiresDate?.toISOString() || null,
+        },
+        organization: {
+          active: stripeValid,
+          plan: orgPlan,
+          orgId: org?.id || null,
+          orgName: org?.name || null,
+        },
+        effectivePlan,
+        hasRedundantSubscription,
       },
       features: features,
       limits: getPlanLimits(effectivePlan),
