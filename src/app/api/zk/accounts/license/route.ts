@@ -8,6 +8,7 @@ import {
   addCorsHeaders,
 } from '@/lib/zk';
 import { getLimitsForPlan, getFeaturesForPlan } from '@/lib/plan-limits';
+import { getApplePlan } from '@/lib/zk/apple-plan';
 
 export async function OPTIONS() {
   return handleCorsPreflightRequest();
@@ -66,13 +67,13 @@ export async function GET(request: NextRequest) {
     const hasValidLicense = stripeValid || appleValid;
     
     // Determine effective plan (prefer higher tier)
-    let effectivePlan = 'starter';
-    if (stripeValid && org?.plan) {
-      effectivePlan = org.plan;
-    }
-    if (appleValid && applePlan) {
-      effectivePlan = getPlanPriority(applePlan) > getPlanPriority(effectivePlan) ? applePlan : effectivePlan;
-    }
+    // Organization plan (via Stripe on Organization model)
+    const orgPlan = (stripeValid && org?.plan) ? org.plan : 'starter';
+    // Individual plan (via Apple IAP on ZKUser)
+    const individualPlan = (appleValid && applePlan) ? applePlan : 'starter';
+    // Effective = max(org, individual)
+    const effectivePlan = getPlanPriority(orgPlan) >= getPlanPriority(individualPlan)
+      ? orgPlan : individualPlan;
 
     // Determine expiration date (latest of the two)
     let expiresAt: Date | null = null;
@@ -82,6 +83,11 @@ export async function GET(request: NextRequest) {
         expiresAt = zkUser.appleExpiresDate;
       }
     }
+
+    // Detect redundant subscription: user has BOTH an active individual sub
+    // AND an org sub where org plan >= individual plan
+    const hasRedundantSubscription = appleValid && stripeValid
+      && getPlanPriority(orgPlan) >= getPlanPriority(individualPlan);
 
     const features = getPlanFeatures(effectivePlan);
 
@@ -104,6 +110,22 @@ export async function GET(request: NextRequest) {
         teamName: org?.name || null,
         source: stripeValid ? 'stripe' : (appleValid ? 'apple' : 'none'),
       },
+      subscription: {
+        individual: {
+          active: appleValid,
+          plan: individualPlan,
+          source: appleValid ? 'apple' : 'none',
+          expiresAt: zkUser.appleExpiresDate?.toISOString() || null,
+        },
+        organization: {
+          active: stripeValid,
+          plan: orgPlan,
+          orgId: org?.id || null,
+          orgName: org?.name || null,
+        },
+        effectivePlan,
+        hasRedundantSubscription,
+      },
       features: features,
       limits: getPlanLimits(effectivePlan),
     });
@@ -115,16 +137,7 @@ export async function GET(request: NextRequest) {
   }
 }
 
-// Map Apple product IDs to plan names
-function getApplePlan(productId: string): string {
-  const mapping: Record<string, string> = {
-    'com.deepterm.pro.monthly': 'pro',
-    'com.deepterm.pro.yearly': 'pro',
-    'com.deepterm.team.monthly': 'team',
-    'com.deepterm.team.yearly': 'team',
-  };
-  return mapping[productId] || 'pro';
-}
+// getApplePlan is imported from @/lib/zk/apple-plan
 
 // Get plan priority for comparison
 function getPlanPriority(plan: string): number {
@@ -133,7 +146,7 @@ function getPlanPriority(plan: string): number {
     pro: 1,
     team: 2,
     business: 3,
-    enterprise: 3,
+    enterprise: 4,
   };
   return priorities[plan] || 0;
 }

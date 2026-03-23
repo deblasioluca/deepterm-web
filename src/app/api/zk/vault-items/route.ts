@@ -195,8 +195,8 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Check vault item limit before creating
-    const limitCheck = await checkVaultItemLimit(auth.userId);
+    // Check vault item limit before creating (scoped by vault owner)
+    const limitCheck = await checkVaultItemLimit(auth.userId, vaultId);
     if (!limitCheck.allowed) {
       return errorResponse(
         `Vault item limit reached (${limitCheck.maxVaultItems} items on ${limitCheck.plan} plan). Upgrade for more.`,

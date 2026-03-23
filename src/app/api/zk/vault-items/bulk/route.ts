@@ -93,37 +93,65 @@ export async function POST(request: NextRequest) {
     };
 
     // Enforce vault item limits for creates (only count truly new items, not upserts)
+    // Group by vaultId so each vault gets the correct limit applied
     if (create.length > 0) {
-      const limitCheck = await checkVaultItemLimit(auth.userId);
-      if (limitCheck.remaining !== -1) {
-        // Determine which create items already exist (upserts don't consume slots)
-        const itemsWithId = create.filter((item: BulkCreateItem) => item.id);
-        const existingIdSet = new Set<string>();
-        if (itemsWithId.length > 0) {
-          const existing = await prisma.zKVaultItem.findMany({
-            where: {
-              id: { in: itemsWithId.map((item: BulkCreateItem) => item.id!) },
-              userId: auth.userId,
-            },
-            select: { id: true },
-          });
-          for (const e of existing) existingIdSet.add(e.id);
+      // Pre-fetch which items already exist (upserts don't consume slots)
+      const itemsWithId = create.filter((item: BulkCreateItem) => item.id);
+      const existingIdSet = new Set<string>();
+      if (itemsWithId.length > 0) {
+        const existing = await prisma.zKVaultItem.findMany({
+          where: {
+            id: { in: itemsWithId.map((item: BulkCreateItem) => item.id!) },
+            userId: auth.userId,
+          },
+          select: { id: true },
+        });
+        for (const e of existing) existingIdSet.add(e.id);
+      }
+
+      // Group create items by vaultId
+      const byVault = new Map<string, BulkCreateItem[]>();
+      for (const item of create) {
+        const vid = item.vaultId;
+        if (!byVault.has(vid)) byVault.set(vid, []);
+        byVault.get(vid)!.push(item);
+      }
+
+      // Track how many new items have been approved per limit scope so that
+      // multiple vaults sharing the same scope (e.g. two org vaults from the
+      // same org) don't each independently allow up to `remaining`.
+      const approvedPerScope = new Map<string, number>();
+
+      const keptItems: BulkCreateItem[] = [];
+      for (const [vid, items] of Array.from(byVault.entries())) {
+        const limitCheck = await checkVaultItemLimit(auth.userId, vid);
+        if (limitCheck.remaining === -1) {
+          // Unlimited — keep all
+          keptItems.push(...items);
+          continue;
         }
-        const trulyNewCount = create.length - existingIdSet.size;
 
-        if (trulyNewCount > 0 && !limitCheck.allowed) {
-          // Only reject truly new items — let upserts through
-          const newItems: typeof create = [];
-          const upsertItems: typeof create = [];
-          for (const item of create) {
-            if (item.id && existingIdSet.has(item.id)) {
-              upsertItems.push(item);
-            } else {
-              newItems.push(item);
-            }
+        // Build a scope key: org vaults share the orgId scope, personal vaults share the userId scope
+        const orgId = vaultOrgMap.get(vid);
+        const scopeKey = orgId ? `org:${orgId}` : `user:${auth.userId}`;
+        const alreadyApproved = approvedPerScope.get(scopeKey) ?? 0;
+        const effectiveRemaining = limitCheck.remaining - alreadyApproved;
+
+        const upsertItems: BulkCreateItem[] = [];
+        const newItems: BulkCreateItem[] = [];
+        for (const item of items) {
+          if (item.id && existingIdSet.has(item.id)) {
+            upsertItems.push(item);
+          } else {
+            newItems.push(item);
           }
+        }
 
-          // Reject all truly new creates
+        // Always keep upserts
+        keptItems.push(...upsertItems);
+
+        if (newItems.length > 0 && effectiveRemaining <= 0) {
+          // Reject all truly new creates for this vault
           for (const item of newItems) {
             results.errors.push({
               clientId: item.clientId,
@@ -131,32 +159,26 @@ export async function POST(request: NextRequest) {
               operation: 'create',
             });
           }
-          // Keep only upsert candidates in the create array
-          create.length = 0;
-          create.push(...upsertItems);
-        } else if (trulyNewCount > 0 && limitCheck.remaining < trulyNewCount) {
-          // Partially reject — allow upserts + up to remaining slots for new items
-          const upsertItems: typeof create = [];
-          const newItems: typeof create = [];
-          for (const item of create) {
-            if (item.id && existingIdSet.has(item.id)) {
-              upsertItems.push(item);
-            } else {
-              newItems.push(item);
-            }
-          }
-          const allowedNew = newItems.splice(0, limitCheck.remaining);
+        } else if (newItems.length > 0 && effectiveRemaining < newItems.length) {
+          // Partially reject — allow up to remaining slots
+          const allowed = newItems.splice(0, effectiveRemaining);
+          keptItems.push(...allowed);
+          approvedPerScope.set(scopeKey, alreadyApproved + allowed.length);
           for (const item of newItems) {
             results.errors.push({
               clientId: item.clientId,
-              error: `Vault item limit (${limitCheck.maxVaultItems}) would be exceeded. ${limitCheck.remaining} slots remaining.`,
+              error: `Vault item limit (${limitCheck.maxVaultItems}) would be exceeded. ${effectiveRemaining} slots remaining.`,
               operation: 'create',
             });
           }
-          create.length = 0;
-          create.push(...upsertItems, ...allowedNew);
+        } else {
+          keptItems.push(...newItems);
+          approvedPerScope.set(scopeKey, alreadyApproved + newItems.length);
         }
       }
+
+      create.length = 0;
+      create.push(...keptItems);
     }
 
     // Process creates

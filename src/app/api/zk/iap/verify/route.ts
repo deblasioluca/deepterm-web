@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getAuthFromRequest } from '@/lib/zk';
+import { getApplePlan } from '@/lib/zk/apple-plan';
 
 // CORS headers for cross-origin requests from the app
 const corsHeaders = {
@@ -212,12 +213,4 @@ function getAppleErrorMessage(status: number): string {
   return errors[status] || `Unknown error (status ${status})`;
 }
 
-function getApplePlan(productId: string): string {
-  const mapping: Record<string, string> = {
-    'com.deepterm.pro.monthly': 'pro',
-    'com.deepterm.pro.yearly': 'pro',
-    'com.deepterm.team.monthly': 'team',
-    'com.deepterm.team.yearly': 'team',
-  };
-  return mapping[productId] || 'pro';
-}
+// getApplePlan is imported from @/lib/zk/apple-plan

@@ -4,6 +4,7 @@ import Stripe from 'stripe';
 import { stripe } from '@/lib/stripe';
 import { prisma } from '@/lib/prisma';
 import { notifyPayment } from '@/lib/node-red';
+import { syncOrgMemberPlans } from '@/lib/zk/sync-org-plans';
 
 const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET!;
 
@@ -509,36 +510,6 @@ function extractPaymentMethodData(paymentMethod: Stripe.PaymentMethod) {
         walletType: null,
         email: paymentMethod.billing_details?.email || null,
       };
-  }
-}
-
-async function syncOrgMemberPlans(
-  organizationId: string,
-  plan: string,
-  stripeCustomerId: string | null,
-  stripeSubscriptionId: string | null
-) {
-  try {
-    // Find all web User IDs linked to this organization's ZK users
-    const orgMembers = await prisma.organizationUser.findMany({
-      where: { organizationId, status: 'confirmed' },
-      include: { user: { include: { webUser: true } } },
-    });
-    const webUserIds = orgMembers
-      .map((m) => m.user?.webUser?.id)
-      .filter((id): id is string => !!id);
-
-    if (webUserIds.length > 0) {
-      await prisma.user.updateMany({
-        where: { id: { in: webUserIds } },
-        data: {
-          plan,
-          stripeSubscriptionId,
-        },
-      });
-    }
-  } catch (err) {
-    console.error('[Stripe Webhook] Failed to sync org member plans:', err);
   }
 }
 

@@ -12,6 +12,7 @@ import {
   addCorsHeaders,
   OrganizationUserStatus,
 } from '@/lib/zk';
+import { clearRemovedMemberPlan } from '@/lib/zk/sync-org-plans';
 
 export async function OPTIONS() {
   return handleCorsPreflightRequest();
@@ -236,6 +237,11 @@ export async function DELETE(
         encryptedOrgKey: null, // Clear the key
       },
     });
+
+    // Clear org plan from removed member (fire-and-forget)
+    if (member.userId) {
+      clearRemovedMemberPlan(member.userId).catch(() => {});
+    }
 
     // Audit log
     await createAuditLog({
