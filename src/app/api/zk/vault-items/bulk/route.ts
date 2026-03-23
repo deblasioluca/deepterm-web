@@ -93,39 +93,54 @@ export async function POST(request: NextRequest) {
     };
 
     // Enforce vault item limits for creates (only count truly new items, not upserts)
-    // Use the first create item's vaultId for scoping limits by vault owner
+    // Group by vaultId so each vault gets the correct limit applied
     if (create.length > 0) {
-      const firstVaultId = create[0]?.vaultId;
-      const limitCheck = await checkVaultItemLimit(auth.userId, firstVaultId);
-      if (limitCheck.remaining !== -1) {
-        // Determine which create items already exist (upserts don't consume slots)
-        const itemsWithId = create.filter((item: BulkCreateItem) => item.id);
-        const existingIdSet = new Set<string>();
-        if (itemsWithId.length > 0) {
-          const existing = await prisma.zKVaultItem.findMany({
-            where: {
-              id: { in: itemsWithId.map((item: BulkCreateItem) => item.id!) },
-              userId: auth.userId,
-            },
-            select: { id: true },
-          });
-          for (const e of existing) existingIdSet.add(e.id);
+      // Pre-fetch which items already exist (upserts don't consume slots)
+      const itemsWithId = create.filter((item: BulkCreateItem) => item.id);
+      const existingIdSet = new Set<string>();
+      if (itemsWithId.length > 0) {
+        const existing = await prisma.zKVaultItem.findMany({
+          where: {
+            id: { in: itemsWithId.map((item: BulkCreateItem) => item.id!) },
+            userId: auth.userId,
+          },
+          select: { id: true },
+        });
+        for (const e of existing) existingIdSet.add(e.id);
+      }
+
+      // Group create items by vaultId
+      const byVault = new Map<string, BulkCreateItem[]>();
+      for (const item of create) {
+        const vid = item.vaultId;
+        if (!byVault.has(vid)) byVault.set(vid, []);
+        byVault.get(vid)!.push(item);
+      }
+
+      const keptItems: BulkCreateItem[] = [];
+      for (const [vid, items] of Array.from(byVault.entries())) {
+        const limitCheck = await checkVaultItemLimit(auth.userId, vid);
+        if (limitCheck.remaining === -1) {
+          // Unlimited — keep all
+          keptItems.push(...items);
+          continue;
         }
-        const trulyNewCount = create.length - existingIdSet.size;
 
-        if (trulyNewCount > 0 && !limitCheck.allowed) {
-          // Only reject truly new items — let upserts through
-          const newItems: typeof create = [];
-          const upsertItems: typeof create = [];
-          for (const item of create) {
-            if (item.id && existingIdSet.has(item.id)) {
-              upsertItems.push(item);
-            } else {
-              newItems.push(item);
-            }
+        const upsertItems: BulkCreateItem[] = [];
+        const newItems: BulkCreateItem[] = [];
+        for (const item of items) {
+          if (item.id && existingIdSet.has(item.id)) {
+            upsertItems.push(item);
+          } else {
+            newItems.push(item);
           }
+        }
 
-          // Reject all truly new creates
+        // Always keep upserts
+        keptItems.push(...upsertItems);
+
+        if (newItems.length > 0 && !limitCheck.allowed) {
+          // Reject all truly new creates for this vault
           for (const item of newItems) {
             results.errors.push({
               clientId: item.clientId,
@@ -133,21 +148,10 @@ export async function POST(request: NextRequest) {
               operation: 'create',
             });
           }
-          // Keep only upsert candidates in the create array
-          create.length = 0;
-          create.push(...upsertItems);
-        } else if (trulyNewCount > 0 && limitCheck.remaining < trulyNewCount) {
-          // Partially reject — allow upserts + up to remaining slots for new items
-          const upsertItems: typeof create = [];
-          const newItems: typeof create = [];
-          for (const item of create) {
-            if (item.id && existingIdSet.has(item.id)) {
-              upsertItems.push(item);
-            } else {
-              newItems.push(item);
-            }
-          }
-          const allowedNew = newItems.splice(0, limitCheck.remaining);
+        } else if (newItems.length > 0 && limitCheck.remaining < newItems.length) {
+          // Partially reject — allow up to remaining slots
+          const allowed = newItems.splice(0, limitCheck.remaining);
+          keptItems.push(...allowed);
           for (const item of newItems) {
             results.errors.push({
               clientId: item.clientId,
@@ -155,10 +159,13 @@ export async function POST(request: NextRequest) {
               operation: 'create',
             });
           }
-          create.length = 0;
-          create.push(...upsertItems, ...allowedNew);
+        } else {
+          keptItems.push(...newItems);
         }
       }
+
+      create.length = 0;
+      create.push(...keptItems);
     }
 
     // Process creates

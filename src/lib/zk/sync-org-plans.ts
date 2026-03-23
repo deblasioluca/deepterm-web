@@ -42,8 +42,8 @@ export async function syncOrgMemberPlans(
           },
         });
       } else {
-        // Org plan downgraded to free — check each member for individual subs
-        // before resetting (mirrors clearRemovedMemberPlan logic)
+        // Org plan downgraded to free — check each member for other org
+        // memberships and individual subs before resetting
         const webUsers = await prisma.user.findMany({
           where: { id: { in: webUserIds } },
           select: {
@@ -51,21 +51,63 @@ export async function syncOrgMemberPlans(
             subscriptionSource: true,
             subscriptionExpiresAt: true,
             subscriptionScope: true,
+            zkUser: { select: { id: true } },
           },
         });
         const now = new Date();
+        const planRank: Record<string, number> = {
+          free: 0, starter: 0, pro: 1, team: 2, business: 3, enterprise: 4,
+        };
         for (const wu of webUsers) {
-          const hasIndividualSub = wu.subscriptionSource === 'appstore'
-            && wu.subscriptionExpiresAt
-            && wu.subscriptionExpiresAt > now;
-          await prisma.user.update({
-            where: { id: wu.id },
-            data: {
-              plan: hasIndividualSub ? 'pro' : 'free',
-              stripeSubscriptionId: null,
-              subscriptionScope: hasIndividualSub ? 'individual' : 'none',
-            },
-          });
+          // Check if user belongs to another org with an active paid plan
+          let bestOtherOrgPlan: string | null = null;
+          let bestOtherOrgSubId: string | null = null;
+          if (wu.zkUser) {
+            const otherOrgMemberships = await prisma.organizationUser.findMany({
+              where: {
+                userId: wu.zkUser.id,
+                status: 'confirmed',
+                organizationId: { not: organizationId },
+              },
+              include: { organization: true },
+            });
+            for (const m of otherOrgMemberships) {
+              const o = m.organization;
+              const active = o.subscriptionStatus === 'active'
+                || o.subscriptionStatus === 'trialing';
+              if (active && o.plan && o.plan !== 'free') {
+                if (!bestOtherOrgPlan || (planRank[o.plan] ?? 0) > (planRank[bestOtherOrgPlan] ?? 0)) {
+                  bestOtherOrgPlan = o.plan;
+                  bestOtherOrgSubId = o.stripeSubscriptionId;
+                }
+              }
+            }
+          }
+
+          if (bestOtherOrgPlan) {
+            // User has another org with an active plan — use that
+            await prisma.user.update({
+              where: { id: wu.id },
+              data: {
+                plan: bestOtherOrgPlan,
+                stripeSubscriptionId: bestOtherOrgSubId,
+                subscriptionScope: 'organization',
+              },
+            });
+          } else {
+            // No other org — fall back to individual sub or free
+            const hasIndividualSub = wu.subscriptionSource === 'appstore'
+              && wu.subscriptionExpiresAt
+              && wu.subscriptionExpiresAt > now;
+            await prisma.user.update({
+              where: { id: wu.id },
+              data: {
+                plan: hasIndividualSub ? 'pro' : 'free',
+                stripeSubscriptionId: null,
+                subscriptionScope: hasIndividualSub ? 'individual' : 'none',
+              },
+            });
+          }
         }
       }
     }
@@ -153,29 +195,58 @@ export async function clearRemovedMemberPlan(userId: string) {
 
     // Only clear if the user's plan was from an org subscription
     if (webUser.subscriptionScope === 'organization') {
-      // Check if user has an active individual subscription to fall back to
-      const hasIndividualSub = webUser.subscriptionSource === 'appstore'
-        && webUser.subscriptionExpiresAt
-        && webUser.subscriptionExpiresAt > new Date();
-
-      // Look up the Apple product to determine fallback plan tier
-      let fallbackPlan = 'pro'; // default for Apple IAP
-      if (hasIndividualSub && zkUser.appleProductId) {
-        // Map Apple product IDs to plan tiers if needed
-        // Currently all Apple IAP products map to 'pro'
-        fallbackPlan = 'pro';
+      // Check if user belongs to another org with an active paid plan
+      const planRank: Record<string, number> = {
+        free: 0, starter: 0, pro: 1, team: 2, business: 3, enterprise: 4,
+      };
+      const otherOrgMemberships = await prisma.organizationUser.findMany({
+        where: {
+          userId,
+          status: 'confirmed',
+        },
+        include: { organization: true },
+      });
+      let bestOtherOrgPlan: string | null = null;
+      let bestOtherOrgSubId: string | null = null;
+      for (const m of otherOrgMemberships) {
+        const o = m.organization;
+        const active = o.subscriptionStatus === 'active'
+          || o.subscriptionStatus === 'trialing';
+        if (active && o.plan && o.plan !== 'free') {
+          if (!bestOtherOrgPlan || (planRank[o.plan] ?? 0) > (planRank[bestOtherOrgPlan] ?? 0)) {
+            bestOtherOrgPlan = o.plan;
+            bestOtherOrgSubId = o.stripeSubscriptionId;
+          }
+        }
       }
 
-      await prisma.user.update({
-        where: { id: webUser.id },
-        data: {
-          plan: hasIndividualSub ? fallbackPlan : 'free',
-          subscriptionScope: hasIndividualSub ? 'individual' : 'none',
-          stripeSubscriptionId: null,
-        },
-      });
+      if (bestOtherOrgPlan) {
+        // User has another org with an active plan — use that
+        await prisma.user.update({
+          where: { id: webUser.id },
+          data: {
+            plan: bestOtherOrgPlan,
+            stripeSubscriptionId: bestOtherOrgSubId,
+            subscriptionScope: 'organization',
+          },
+        });
+        console.log(`[clearRemovedMemberPlan] userId=${userId} fell back to other org plan=${bestOtherOrgPlan}`);
+      } else {
+        // No other org — fall back to individual sub or free
+        const hasIndividualSub = webUser.subscriptionSource === 'appstore'
+          && webUser.subscriptionExpiresAt
+          && webUser.subscriptionExpiresAt > new Date();
 
-      console.log(`[clearRemovedMemberPlan] userId=${userId} cleared org plan, fallback=${hasIndividualSub ? 'individual' : 'free'}`);
+        await prisma.user.update({
+          where: { id: webUser.id },
+          data: {
+            plan: hasIndividualSub ? 'pro' : 'free',
+            subscriptionScope: hasIndividualSub ? 'individual' : 'none',
+            stripeSubscriptionId: null,
+          },
+        });
+        console.log(`[clearRemovedMemberPlan] userId=${userId} cleared org plan, fallback=${hasIndividualSub ? 'individual' : 'free'}`);
+      }
     }
   } catch (err) {
     console.error('[clearRemovedMemberPlan] Failed:', err);

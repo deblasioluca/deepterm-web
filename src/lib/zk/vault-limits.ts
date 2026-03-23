@@ -130,9 +130,11 @@ export async function checkVaultItemLimit(
     };
   }
 
-  // Count existing non-deleted items scoped by vault owner
-  const countWhere = vaultId
-    ? { vaultId, deletedAt: null }
+  // Count existing non-deleted items scoped by owner:
+  //   - Personal vault → count ALL user's items (limit is per-user total)
+  //   - Org vault → count all items across org's vaults (limit is per-org total)
+  const countWhere = scope === 'organization' && vaultOrgId
+    ? { vault: { organizationId: vaultOrgId }, deletedAt: null }
     : { userId, deletedAt: null };
   const currentCount = await prisma.zKVaultItem.count({ where: countWhere });
 
