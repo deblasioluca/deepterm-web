@@ -42,7 +42,12 @@ export async function GET(
         status: 'confirmed',
         ...(sessionOnly
           ? { invitedEmail: auth.email }
-          : { userId: auth.userId }),
+          : {
+              OR: [
+                { userId: auth.userId },
+                ...(auth.email ? [{ invitedEmail: auth.email }] : []),
+              ],
+            }),
       },
     });
 
