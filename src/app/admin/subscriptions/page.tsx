@@ -81,7 +81,7 @@ export default function AdminSubscriptionsPage() {
         activeSubscriptions: stats.totalActive,
         mrr: `$${(stats.totalRevenue / 100).toLocaleString()}`,
         churnRate: `${stats.churnRate?.toFixed(1)}%`,
-        avgSeatsPerTeam: stats.avgSeats?.toFixed(1),
+        avgSeatsPerOrg: stats.avgSeats?.toFixed(1),
         totalSubscriptions: pagination.total,
         statusFilter: statusFilter || 'all',
       } : { loading: true },
@@ -310,7 +310,7 @@ export default function AdminSubscriptionsPage() {
                 <Users className="w-6 h-6 text-blue-500" />
               </div>
               <div>
-                <p className="text-sm text-text-secondary">Avg Seats/Team</p>
+                <p className="text-sm text-text-secondary">Avg Seats/Org</p>
                 <p className="text-2xl font-bold text-text-primary">
                   {stats?.avgSeats?.toFixed(1) || '0'}
                 </p>
@@ -339,7 +339,7 @@ export default function AdminSubscriptionsPage() {
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-text-tertiary" />
               <input
                 type="text"
-                placeholder="Search by team name..."
+                placeholder="Search by organization name..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="w-full pl-10 pr-4 py-2.5 bg-background-tertiary border border-border rounded-lg text-text-primary placeholder:text-text-tertiary focus:outline-none focus:border-accent-primary"
@@ -382,7 +382,7 @@ export default function AdminSubscriptionsPage() {
                 <table className="w-full">
                   <thead>
                     <tr className="border-b border-border">
-                      <th className="text-left py-3 px-4 text-sm font-medium text-text-secondary">Team</th>
+                      <th className="text-left py-3 px-4 text-sm font-medium text-text-secondary">Organization</th>
                       <th className="text-left py-3 px-4 text-sm font-medium text-text-secondary">Plan</th>
                       <th className="text-left py-3 px-4 text-sm font-medium text-text-secondary">Status</th>
                       <th className="text-left py-3 px-4 text-sm font-medium text-text-secondary">Seats</th>
