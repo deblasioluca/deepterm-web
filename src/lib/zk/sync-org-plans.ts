@@ -36,20 +36,33 @@ export async function syncOrgMemberPlans(
       };
       const isOrgActive = plan !== 'free';
       if (isOrgActive) {
-        // Org has an active plan — only upgrade members (never downgrade)
+        // Org has an active plan — sync to members with scope-aware logic:
+        //   - If member's current plan came from an org (scope='organization'), always
+        //     update to the new org plan (handles org tier downgrades like team→pro).
+        //   - If member has a higher individual plan (scope='individual'), keep their
+        //     plan and scope so Apple EXPIRED handler works correctly.
         const orgRank = planRank[plan] ?? 0;
         const webUsers = await prisma.user.findMany({
           where: { id: { in: webUserIds } },
-          select: { id: true, plan: true },
+          select: { id: true, plan: true, subscriptionScope: true },
         });
         for (const wu of webUsers) {
           const currentRank = planRank[wu.plan] ?? 0;
+          const isOrgScoped = wu.subscriptionScope === 'organization';
+          // For org-scoped members: always apply the org plan (handles downgrades).
+          // For individual/none-scoped members: only upgrade, never downgrade.
+          const newPlan = isOrgScoped
+            ? plan
+            : (orgRank > currentRank ? plan : wu.plan);
+          const newScope = isOrgScoped || orgRank > currentRank
+            ? 'organization'
+            : wu.subscriptionScope ?? 'none';
           await prisma.user.update({
             where: { id: wu.id },
             data: {
-              plan: orgRank > currentRank ? plan : wu.plan,
+              plan: newPlan,
               stripeSubscriptionId,
-              subscriptionScope: 'organization',
+              subscriptionScope: newScope,
             },
           });
         }
@@ -169,15 +182,16 @@ export async function syncNewMemberPlan(
     const orgRank = planRank[plan] ?? 0;
 
     if (plan !== 'free') {
-      // Only upgrade the plan if org plan is higher than current;
-      // always set subscriptionScope to 'organization' so the user
-      // is tracked as an org member for expiry logic.
+      // Only upgrade the plan if org plan is higher than current individual plan.
+      // Preserve subscriptionScope='individual' when user keeps their higher plan,
+      // so Apple EXPIRED handler correctly handles their individual sub lifecycle.
+      const shouldUpgrade = orgRank > currentRank;
       await prisma.user.update({
         where: { id: webUser.id },
         data: {
-          plan: orgRank > currentRank ? plan : webUser.plan,
+          plan: shouldUpgrade ? plan : webUser.plan,
           stripeSubscriptionId: org.stripeSubscriptionId,
-          subscriptionScope: 'organization',
+          subscriptionScope: shouldUpgrade ? 'organization' : webUser.subscriptionScope,
         },
       });
     }
