@@ -141,7 +141,7 @@ export async function POST(request: NextRequest) {
           });
         }
 
-        console.log(`App Store: ${user.email} subscribed to ${applePlan} (individual scope)`);
+        console.log(`App Store: ${user.email} subscribed to ${applePlan} (scope: ${isOrgMember ? 'organization' : 'individual'})`);
         await logEvent('appstore-subscribed', applePlan, `App Store subscription (${productId})`);
         notifyPayment('appstore-subscribed', user.email, applePlan, `App Store subscription (${productId})`);
         break;
@@ -181,9 +181,10 @@ export async function POST(request: NextRequest) {
       }
 
       case 'DID_FAIL_TO_RENEW': {
+        const applePlanFail = getApplePlan(productId);
         console.log(`App Store: ${user.email} renewal failed (billing issue)`);
-        await logEvent('appstore-renewal-failed', 'pro', 'Billing issue — in grace period');
-        notifyPayment('appstore-renewal-failed', user.email, 'pro', 'Billing issue — in grace period');
+        await logEvent('appstore-renewal-failed', applePlanFail, 'Billing issue — in grace period');
+        notifyPayment('appstore-renewal-failed', user.email, applePlanFail, 'Billing issue — in grace period');
         break;
       }
 
