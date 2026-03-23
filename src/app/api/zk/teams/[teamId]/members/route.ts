@@ -45,7 +45,7 @@ export async function GET(
     const result = members.map(m => ({
       id: m.id,
       userId: m.userId,
-      email: m.user.email,
+      email: m.user?.email ?? m.invitedEmail ?? '',
       role: m.role,
       joinedAt: m.joinedAt.toISOString(),
     }));

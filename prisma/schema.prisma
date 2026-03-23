@@ -158,17 +158,20 @@ model OrgTeam {
 
 /// Membership of a user in an OrgTeam.
 model OrgTeamMember {
-  id        String   @id @default(cuid())
-  teamId    String
-  userId    String
-  role      String   @default("member")  // owner, admin, member
-  joinedAt  DateTime @default(now())
-  team      OrgTeam  @relation(fields: [teamId], references: [id], onDelete: Cascade)
-  user      ZKUser   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id           String   @id @default(cuid())
+  teamId       String
+  userId       String?
+  invitedEmail String?
+  role         String   @default("member")  // owner, admin, member
+  joinedAt     DateTime @default(now())
+  team         OrgTeam  @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  user         ZKUser?  @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([teamId, userId])
+  @@unique([teamId, invitedEmail])
   @@index([teamId])
   @@index([userId])
+  @@index([invitedEmail])
 }
 
 model ZKVault {
