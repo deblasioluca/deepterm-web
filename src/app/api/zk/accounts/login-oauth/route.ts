@@ -15,6 +15,7 @@ import {
   handleCorsPreflightRequest,
   addCorsHeaders,
 } from '@/lib/zk';
+import { ensureUserDefaults } from '@/lib/zk/ensure-user-defaults';
 
 export async function OPTIONS() {
   return handleCorsPreflightRequest();
@@ -337,20 +338,10 @@ export async function POST(request: NextRequest) {
     );
 
     // -----------------------------------------------------------------------
-    // Find or create default vault
+    // Ensure default org, team, and vault exist for this user
     // -----------------------------------------------------------------------
-    let defaultVault = await prisma.zKVault.findFirst({
-      where: { userId: zkUser.id, isDefault: true },
-    });
-    if (!defaultVault) {
-      defaultVault = await prisma.zKVault.create({
-        data: {
-          userId: zkUser.id,
-          name: '',
-          isDefault: true,
-        },
-      });
-    }
+    const fallbackDisplayName = name ?? normalizedEmail.split('@')[0];
+    const { vaultId: defaultVaultId } = await ensureUserDefaults(zkUser.id, fallbackDisplayName);
 
     const hasKeys = Boolean(zkUser.publicKey && zkUser.encryptedPrivateKey);
 
@@ -370,7 +361,7 @@ export async function POST(request: NextRequest) {
     });
 
     const response = successResponse({
-      defaultVaultId: defaultVault.id,
+      defaultVaultId,
       accessToken: zkAccessToken,
       refreshToken,
       expiresIn,

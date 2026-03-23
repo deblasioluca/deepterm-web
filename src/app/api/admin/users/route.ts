@@ -38,21 +38,48 @@ export async function GET(request: NextRequest) {
           _count: {
             select: { ideas: true },
           },
+          zkUser: {
+            select: {
+              id: true,
+              organizationUsers: {
+                where: { role: 'owner' },
+                take: 1,
+                include: {
+                  organization: {
+                    select: { id: true, name: true, plan: true, subscriptionStatus: true },
+                  },
+                },
+              },
+            },
+          },
         },
       }),
       prisma.user.count({ where }),
     ]);
 
     return NextResponse.json({
-      users: users.map((user) => ({
-        id: user.id,
-        name: user.name,
-        email: user.email,
-        role: user.role,
-        ideaCount: user._count.ideas,
-        createdAt: user.createdAt,
-        updatedAt: user.updatedAt,
-      })),
+      users: users.map((user) => {
+        const orgUser = user.zkUser?.organizationUsers?.[0];
+        return {
+          id: user.id,
+          name: user.name,
+          email: user.email,
+          role: user.role,
+          plan: user.plan,
+          subscriptionScope: user.subscriptionScope,
+          organization: orgUser?.organization
+            ? {
+                id: orgUser.organization.id,
+                name: orgUser.organization.name,
+                plan: orgUser.organization.plan,
+                subscriptionStatus: orgUser.organization.subscriptionStatus,
+              }
+            : null,
+          ideaCount: user._count.ideas,
+          createdAt: user.createdAt,
+          updatedAt: user.updatedAt,
+        };
+      }),
       pagination: {
         page,
         limit,

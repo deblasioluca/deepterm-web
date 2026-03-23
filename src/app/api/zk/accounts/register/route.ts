@@ -14,6 +14,7 @@ import {
   handleCorsPreflightRequest,
   addCorsHeaders,
 } from '@/lib/zk';
+import { ensureUserDefaults } from '@/lib/zk/ensure-user-defaults';
 
 const BCRYPT_ROUNDS = 12;
 
@@ -108,53 +109,9 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    // Create a default organization for the user
-    const org = await prisma.organization.create({
-      data: {
-        name: `${existingWebUser?.name || email.split('@')[0]}'s Organization`,
-        plan: 'starter',
-        seats: 1,
-      },
-    });
-
-    // Add user as organization owner
-    await prisma.organizationUser.create({
-      data: {
-        organizationId: org.id,
-        userId: user.id,
-        role: 'owner',
-        status: 'confirmed',
-      },
-    });
-
-    // Create a default "General" team within the organization
-    const defaultTeam = await prisma.orgTeam.create({
-      data: {
-        organizationId: org.id,
-        name: 'General',
-        description: 'Default team for all organization members',
-        ownerId: user.id,
-        isDefault: true,
-      },
-    });
-
-    // Add user as team owner
-    await prisma.orgTeamMember.create({
-      data: {
-        teamId: defaultTeam.id,
-        userId: user.id,
-        role: 'owner',
-      },
-    });
-
-    // Create a default personal vault
-    const defaultVault = await prisma.zKVault.create({
-      data: {
-        userId: user.id,
-        name: '', // Empty - encrypted name will be set by app on first sync
-        isDefault: true,
-      },
-    });
+    // Create default org, team, and vault via shared helper
+    const displayName = existingWebUser?.name || email.split('@')[0];
+    const { vaultId: defaultVaultId } = await ensureUserDefaults(user.id, displayName);
 
     // Audit log
     await createAuditLog({
@@ -168,7 +125,7 @@ export async function POST(request: NextRequest) {
 
     const response = successResponse({
       id: user.id,
-      defaultVaultId: defaultVault.id,
+      defaultVaultId,
       encryptedSymmetricKey: protectedSymmetricKey,
       encryptedRSAPrivateKey: encryptedPrivateKey,
       rsaPublicKey: publicKey,
