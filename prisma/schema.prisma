@@ -168,6 +168,7 @@ model OrgTeamMember {
   user         ZKUser?  @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([teamId, userId])
+  @@unique([teamId, invitedEmail])
   @@index([teamId])
   @@index([userId])
   @@index([invitedEmail])
