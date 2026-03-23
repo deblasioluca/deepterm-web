@@ -86,13 +86,16 @@ export async function syncNewMemberPlan(
     const currentRank = planRank[webUser.plan] ?? 0;
     const orgRank = planRank[plan] ?? 0;
 
-    if (orgRank > currentRank || plan !== 'free') {
+    if (plan !== 'free') {
+      // Only upgrade the plan if org plan is higher than current;
+      // always set subscriptionScope to 'organization' so the user
+      // is tracked as an org member for expiry logic.
       await prisma.user.update({
         where: { id: webUser.id },
         data: {
-          plan,
+          plan: orgRank > currentRank ? plan : webUser.plan,
           stripeSubscriptionId: org.stripeSubscriptionId,
-          subscriptionScope: plan !== 'free' ? 'organization' : webUser.subscriptionScope,
+          subscriptionScope: 'organization',
         },
       });
     }
@@ -126,10 +129,18 @@ export async function clearRemovedMemberPlan(userId: string) {
         && webUser.subscriptionExpiresAt
         && webUser.subscriptionExpiresAt > new Date();
 
+      // Look up the Apple product to determine fallback plan tier
+      let fallbackPlan = 'pro'; // default for Apple IAP
+      if (hasIndividualSub && zkUser.appleProductId) {
+        // Map Apple product IDs to plan tiers if needed
+        // Currently all Apple IAP products map to 'pro'
+        fallbackPlan = 'pro';
+      }
+
       await prisma.user.update({
         where: { id: webUser.id },
         data: {
-          plan: hasIndividualSub ? 'pro' : 'free',
+          plan: hasIndividualSub ? fallbackPlan : 'free',
           subscriptionScope: hasIndividualSub ? 'individual' : 'none',
           stripeSubscriptionId: null,
         },

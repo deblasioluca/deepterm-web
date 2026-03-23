@@ -93,8 +93,10 @@ export async function POST(request: NextRequest) {
     };
 
     // Enforce vault item limits for creates (only count truly new items, not upserts)
+    // Use the first create item's vaultId for scoping limits by vault owner
     if (create.length > 0) {
-      const limitCheck = await checkVaultItemLimit(auth.userId);
+      const firstVaultId = create[0]?.vaultId;
+      const limitCheck = await checkVaultItemLimit(auth.userId, firstVaultId);
       if (limitCheck.remaining !== -1) {
         // Determine which create items already exist (upserts don't consume slots)
         const itemsWithId = create.filter((item: BulkCreateItem) => item.id);
