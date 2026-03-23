@@ -64,11 +64,9 @@ export async function getAuthFromRequestOrSession(request: NextRequest): Promise
     // No ZKUser yet (user registered via web but hasn't set up vault keys).
     // Return a SessionOnlyAuth so org routes can query by invitedEmail
     // without ever mixing User.id into a ZKUser.id field.
-    return {
-      kind: 'session',
-      webUserId: session.user.id,
-      email: session.user.email || '',
-    };
+    return session.user.email
+      ? { kind: 'session' as const, webUserId: session.user.id, email: session.user.email }
+      : null;
   }
 
   // Get org memberships for the payload
