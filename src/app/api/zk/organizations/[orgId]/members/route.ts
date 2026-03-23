@@ -28,18 +28,21 @@ export async function GET(
   try {
     const auth = await getAuthFromRequestOrSession(request);
 
-    if (!auth || isSessionOnlyAuth(auth)) {
+    if (!auth) {
       return errorResponse('Unauthorized', 401);
     }
 
     const { orgId } = await params;
+    const sessionOnly = isSessionOnlyAuth(auth);
 
-    // Verify membership
+    // Verify membership — session-only users are checked by invitedEmail
     const orgUser = await prisma.organizationUser.findFirst({
       where: {
-        userId: auth.userId,
         organizationId: orgId,
         status: 'confirmed',
+        ...(sessionOnly
+          ? { invitedEmail: auth.email }
+          : { userId: auth.userId }),
       },
     });
 

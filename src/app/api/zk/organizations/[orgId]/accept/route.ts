@@ -71,17 +71,36 @@ export async function POST(
       },
     });
 
-    // Also add user to the default team if one exists
-    // (skip for session-only users — they'll be added when they create vault keys)
-    if (!sessionOnly) {
-      const defaultTeam = await prisma.orgTeam.findFirst({
-        where: {
-          organizationId: orgId,
-          isDefault: true,
-        },
-      });
+    // Also add user to the default team if one exists.
+    // Session-only users are added by invitedEmail (userId stays null).
+    const defaultTeam = await prisma.orgTeam.findFirst({
+      where: {
+        organizationId: orgId,
+        isDefault: true,
+      },
+    });
 
-      if (defaultTeam) {
+    if (defaultTeam) {
+      if (sessionOnly) {
+        // Check by invitedEmail for session-only users
+        const existingTeamMember = await prisma.orgTeamMember.findFirst({
+          where: {
+            teamId: defaultTeam.id,
+            invitedEmail: auth.email,
+          },
+        });
+
+        if (!existingTeamMember) {
+          await prisma.orgTeamMember.create({
+            data: {
+              teamId: defaultTeam.id,
+              invitedEmail: auth.email,
+              role: membership.role,
+            },
+          });
+        }
+      } else {
+        // Check by userId for full JWT users
         const existingTeamMember = await prisma.orgTeamMember.findFirst({
           where: {
             teamId: defaultTeam.id,
