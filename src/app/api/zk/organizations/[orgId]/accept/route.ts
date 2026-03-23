@@ -29,18 +29,28 @@ export async function POST(
   try {
     const auth = await getAuthFromRequestOrSession(request);
 
-    if (!auth || isSessionOnlyAuth(auth)) {
+    if (!auth) {
       return errorResponse('Unauthorized', 401);
     }
 
     const { orgId } = await params;
+    const sessionOnly = isSessionOnlyAuth(auth);
 
-    // Find the user's pending invitation for this org
+    // Find the user's pending invitation for this org.
+    // Session-only users (no ZKUser) are matched by invitedEmail;
+    // full JWT users are matched by userId with email fallback.
     const membership = await prisma.organizationUser.findFirst({
       where: {
-        userId: auth.userId,
         organizationId: orgId,
         status: 'invited',
+        ...(sessionOnly
+          ? { invitedEmail: auth.email }
+          : {
+              OR: [
+                { userId: auth.userId },
+                ...(auth.email ? [{ invitedEmail: auth.email }] : []),
+              ],
+            }),
       },
     });
 
@@ -48,51 +58,57 @@ export async function POST(
       return errorResponse('No pending invitation found for this organization', 404);
     }
 
-    // Update status to confirmed and clear the invitation token
+    // Update status to confirmed and clear the invitation token.
+    // For session-only users, userId stays null until they create vault keys.
     await prisma.organizationUser.update({
       where: { id: membership.id },
       data: {
         status: OrganizationUserStatus.CONFIRMED,
         confirmedAt: new Date(),
         token: null,
+        // Link ZKUser.id if available (not for session-only users)
+        ...(!sessionOnly && !membership.userId ? { userId: auth.userId } : {}),
       },
     });
 
     // Also add user to the default team if one exists
-    const defaultTeam = await prisma.orgTeam.findFirst({
-      where: {
-        organizationId: orgId,
-        isDefault: true,
-      },
-    });
-
-    if (defaultTeam) {
-      // Check if already a member
-      const existingTeamMember = await prisma.orgTeamMember.findFirst({
+    // (skip for session-only users — they'll be added when they create vault keys)
+    if (!sessionOnly) {
+      const defaultTeam = await prisma.orgTeam.findFirst({
         where: {
-          teamId: defaultTeam.id,
-          userId: auth.userId,
+          organizationId: orgId,
+          isDefault: true,
         },
       });
 
-      if (!existingTeamMember) {
-        await prisma.orgTeamMember.create({
-          data: {
+      if (defaultTeam) {
+        const existingTeamMember = await prisma.orgTeamMember.findFirst({
+          where: {
             teamId: defaultTeam.id,
             userId: auth.userId,
-            role: membership.role,
           },
         });
+
+        if (!existingTeamMember) {
+          await prisma.orgTeamMember.create({
+            data: {
+              teamId: defaultTeam.id,
+              userId: auth.userId,
+              role: membership.role,
+            },
+          });
+        }
       }
     }
 
     // Audit log
+    const auditUserId = sessionOnly ? auth.webUserId : auth.userId;
     await createAuditLog({
-      userId: auth.userId,
+      userId: auditUserId,
       organizationId: orgId,
       eventType: 'invitation_accepted',
       targetType: 'user',
-      targetId: auth.userId,
+      targetId: auditUserId,
       ipAddress: getClientIP(request),
       userAgent: request.headers.get('user-agent') || undefined,
     });
