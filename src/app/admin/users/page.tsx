@@ -27,7 +27,9 @@ interface User {
   name: string;
   email: string;
   role: string;
-  team: { id: string; name: string; plan: string } | null;
+  plan: string;
+  subscriptionScope: string;
+  organization: { id: string; name: string; plan: string; subscriptionStatus: string | null } | null;
   ideaCount: number;
   createdAt: string;
 }
@@ -308,9 +310,11 @@ export default function AdminUsersPage() {
                         Role
                       </th>
                       <th className="text-left py-3 px-4 text-sm font-medium text-text-secondary">
-                        Team
+                        Plan
                       </th>
-
+                      <th className="text-left py-3 px-4 text-sm font-medium text-text-secondary">
+                        Organization
+                      </th>
                       <th className="text-left py-3 px-4 text-sm font-medium text-text-secondary">
                         Joined
                       </th>
@@ -349,9 +353,29 @@ export default function AdminUsersPage() {
                           </Badge>
                         </td>
                         <td className="py-3 px-4">
-                          <span className="text-text-tertiary">-</span>
+                          <div className="flex items-center gap-2">
+                            <Badge variant={user.plan === 'free' ? 'secondary' : 'success'}>
+                              {user.plan}
+                            </Badge>
+                            {user.subscriptionScope !== 'none' && (
+                              <span className="text-xs text-text-tertiary">
+                                ({user.subscriptionScope})
+                              </span>
+                            )}
+                          </div>
                         </td>
-
+                        <td className="py-3 px-4">
+                          {user.organization ? (
+                            <div className="flex items-center gap-2">
+                              <Building2 className="w-4 h-4 text-text-tertiary" />
+                              <span className="text-text-primary text-sm">
+                                {user.organization.name}
+                              </span>
+                            </div>
+                          ) : (
+                            <span className="text-text-tertiary">No org</span>
+                          )}
+                        </td>
                         <td className="py-3 px-4 text-text-secondary">
                           {new Date(user.createdAt).toLocaleDateString()}
                         </td>
