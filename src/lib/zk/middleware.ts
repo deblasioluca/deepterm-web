@@ -4,6 +4,17 @@ import { getClientIP } from './rate-limit';
 import { auth } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 
+/**
+ * Auth payload for session-only users (web login without ZKUser/vault keys).
+ * Kept separate from JWTPayload so callers never mistake a NextAuth User.id
+ * for a ZKUser.id — the two live in different ID spaces.
+ */
+export interface SessionOnlyAuth {
+  kind: 'session';
+  webUserId: string;   // NextAuth User.id — NOT a ZKUser.id
+  email: string;
+}
+
 export interface AuthenticatedRequest extends NextRequest {
   auth: JWTPayload;
 }
@@ -27,7 +38,7 @@ export function getAuthFromRequest(request: NextRequest): JWTPayload | null {
  * Falls back to session-based auth when no Bearer token is present,
  * looking up the linked ZKUser to produce a compatible JWTPayload.
  */
-export async function getAuthFromRequestOrSession(request: NextRequest): Promise<JWTPayload | null> {
+export async function getAuthFromRequestOrSession(request: NextRequest): Promise<JWTPayload | SessionOnlyAuth | null> {
   // If a Bearer header is present, it MUST be valid — don't fall through to session
   const authHeader = request.headers.get('authorization');
   if (authHeader && authHeader.startsWith('Bearer ')) {
@@ -46,11 +57,12 @@ export async function getAuthFromRequestOrSession(request: NextRequest): Promise
 
   if (!zkUser) {
     // No ZKUser yet (user registered via web but hasn't set up vault keys).
-    // Return a session-only payload so org routes can still match by invitedEmail.
+    // Return a SessionOnlyAuth so org routes can query by invitedEmail
+    // without ever mixing User.id into a ZKUser.id field.
     return {
-      userId: session.user.id,
+      kind: 'session',
+      webUserId: session.user.id,
       email: session.user.email || '',
-      orgIds: [],
     };
   }
 
