@@ -101,8 +101,9 @@ export async function POST(
       }
     }
 
-    // Audit log
-    const auditUserId = sessionOnly ? auth.webUserId : auth.userId;
+    // Audit log — skip userId/targetId for session-only users to avoid
+    // writing a NextAuth User.id into the ZKUser.id FK column.
+    const auditUserId = sessionOnly ? undefined : auth.userId;
     await createAuditLog({
       userId: auditUserId,
       organizationId: orgId,
