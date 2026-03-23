@@ -45,7 +45,7 @@ const navItems = [
   { label: 'GitHub',       href: '/admin/github',       icon: GithubIcon },
   { label: 'Users',        href: '/admin/users',        icon: Users },
   { label: 'Vault',        href: '/admin/vault',        icon: Shield },
-  { label: 'Teams',        href: '/admin/teams',        icon: Building2 },
+  { label: 'Organizations', href: '/admin/teams',        icon: Building2 },
   { label: 'Licenses',     href: '/admin/licenses',     icon: Key },
   { label: 'Subscriptions',href: '/admin/subscriptions',icon: CreditCard },
   { label: 'Analytics',    href: '/admin/analytics',    icon: BarChart3 },

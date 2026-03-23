@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 
-// GET - List all organizations with pagination
+// GET - List all organizations with nested OrgTeams and pagination
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
@@ -24,7 +24,7 @@ export async function GET(request: NextRequest) {
       where.plan = plan;
     }
 
-    const [teams, total] = await Promise.all([
+    const [organizations, total] = await Promise.all([
       prisma.organization.findMany({
         where,
         skip,
@@ -34,22 +34,43 @@ export async function GET(request: NextRequest) {
           _count: {
             select: { members: true },
           },
+          orgTeams: {
+            include: {
+              _count: {
+                select: { members: true },
+              },
+            },
+            orderBy: { createdAt: 'asc' },
+          },
         },
       }),
       prisma.organization.count({ where }),
     ]);
 
     return NextResponse.json({
-      teams: teams.map((team) => ({
-        id: team.id,
-        name: team.name,
-        plan: team.plan,
-        seats: team.seats,
-        memberCount: team._count.members,
-        subscriptionStatus: team.subscriptionStatus,
-        currentPeriodEnd: team.currentPeriodEnd,
-        ssoEnabled: team.ssoEnabled,
-        createdAt: team.createdAt,
+      teams: organizations.map((org) => ({
+        id: org.id,
+        name: org.name,
+        plan: org.plan,
+        seats: org.seats,
+        memberCount: org._count.members,
+        subscriptionStatus: org.subscriptionStatus,
+        currentPeriodEnd: org.currentPeriodEnd,
+        ssoEnabled: org.ssoEnabled,
+        stripeCustomerId: org.stripeCustomerId,
+        stripeSubscriptionId: org.stripeSubscriptionId,
+        cancelAtPeriodEnd: org.cancelAtPeriodEnd,
+        billingEmail: org.billingEmail,
+        createdAt: org.createdAt,
+        orgTeams: org.orgTeams.map((team) => ({
+          id: team.id,
+          name: team.name,
+          description: team.description,
+          isDefault: team.isDefault,
+          allowFederation: team.allowFederation,
+          memberCount: team._count.members,
+          createdAt: team.createdAt,
+        })),
       })),
       pagination: {
         page,
@@ -59,9 +80,9 @@ export async function GET(request: NextRequest) {
       },
     });
   } catch (error) {
-    console.error('Failed to fetch teams:', error);
+    console.error('Failed to fetch organizations:', error);
     return NextResponse.json(
-      { error: 'Failed to fetch teams' },
+      { error: 'Failed to fetch organizations' },
       { status: 500 }
     );
   }
@@ -80,15 +101,15 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const team = await prisma.organization.create({
+    const organization = await prisma.organization.create({
       data: {
         name,
-        plan: plan || 'starter',
+        plan: plan || 'free',
         seats: seats || 1,
       },
     });
 
-    return NextResponse.json(team);
+    return NextResponse.json(organization);
   } catch (error) {
     console.error('Failed to create organization:', error);
     return NextResponse.json(
