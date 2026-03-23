@@ -71,11 +71,10 @@ export async function POST(
       },
     });
 
-    // Also add user to the default team (or first team) if one exists.
+    // Also add user to the default team if one exists.
     // Session-only users are added by invitedEmail (userId stays null).
     const defaultTeam = await prisma.orgTeam.findFirst({
-      where: { organizationId: orgId },
-      orderBy: [{ isDefault: 'desc' }, { createdAt: 'asc' }],
+      where: { organizationId: orgId, isDefault: true },
     });
 
     if (defaultTeam) {
