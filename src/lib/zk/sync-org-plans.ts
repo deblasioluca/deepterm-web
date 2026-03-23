@@ -8,6 +8,7 @@
  */
 
 import { prisma } from '@/lib/prisma';
+import { getApplePlan } from './apple-plan';
 
 /**
  * Sync the organization's plan to all confirmed members' User records.
@@ -30,17 +31,28 @@ export async function syncOrgMemberPlans(
       .filter((id): id is string => !!id);
 
     if (webUserIds.length > 0) {
+      const planRank: Record<string, number> = {
+        free: 0, starter: 0, pro: 1, team: 2, business: 3, enterprise: 4,
+      };
       const isOrgActive = plan !== 'free';
       if (isOrgActive) {
-        // Org has an active plan — upgrade all members
-        await prisma.user.updateMany({
+        // Org has an active plan — only upgrade members (never downgrade)
+        const orgRank = planRank[plan] ?? 0;
+        const webUsers = await prisma.user.findMany({
           where: { id: { in: webUserIds } },
-          data: {
-            plan,
-            stripeSubscriptionId,
-            subscriptionScope: 'organization',
-          },
+          select: { id: true, plan: true },
         });
+        for (const wu of webUsers) {
+          const currentRank = planRank[wu.plan] ?? 0;
+          await prisma.user.update({
+            where: { id: wu.id },
+            data: {
+              plan: orgRank > currentRank ? plan : wu.plan,
+              stripeSubscriptionId,
+              subscriptionScope: 'organization',
+            },
+          });
+        }
       } else {
         // Org plan downgraded to free — check each member for other org
         // memberships and individual subs before resetting
@@ -51,13 +63,10 @@ export async function syncOrgMemberPlans(
             subscriptionSource: true,
             subscriptionExpiresAt: true,
             subscriptionScope: true,
-            zkUser: { select: { id: true } },
+            zkUser: { select: { id: true, appleProductId: true } },
           },
         });
         const now = new Date();
-        const planRank: Record<string, number> = {
-          free: 0, starter: 0, pro: 1, team: 2, business: 3, enterprise: 4,
-        };
         for (const wu of webUsers) {
           // Check if user belongs to another org with an active paid plan
           let bestOtherOrgPlan: string | null = null;
@@ -102,7 +111,9 @@ export async function syncOrgMemberPlans(
             await prisma.user.update({
               where: { id: wu.id },
               data: {
-                plan: hasIndividualSub ? 'pro' : 'free',
+                plan: hasIndividualSub
+                  ? getApplePlan(wu.zkUser?.appleProductId ?? '')
+                  : 'free',
                 stripeSubscriptionId: null,
                 subscriptionScope: hasIndividualSub ? 'individual' : 'none',
               },
@@ -186,7 +197,7 @@ export async function clearRemovedMemberPlan(userId: string) {
   try {
     const zkUser = await prisma.zKUser.findUnique({
       where: { id: userId },
-      include: { webUser: true },
+      select: { id: true, appleProductId: true, webUser: true },
     });
 
     if (!zkUser?.webUser) return;
@@ -240,7 +251,9 @@ export async function clearRemovedMemberPlan(userId: string) {
         await prisma.user.update({
           where: { id: webUser.id },
           data: {
-            plan: hasIndividualSub ? 'pro' : 'free',
+            plan: hasIndividualSub
+              ? getApplePlan(zkUser.appleProductId ?? '')
+              : 'free',
             subscriptionScope: hasIndividualSub ? 'individual' : 'none',
             stripeSubscriptionId: null,
           },

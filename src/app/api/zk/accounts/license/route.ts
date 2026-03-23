@@ -8,6 +8,7 @@ import {
   addCorsHeaders,
 } from '@/lib/zk';
 import { getLimitsForPlan, getFeaturesForPlan } from '@/lib/plan-limits';
+import { getApplePlan } from '@/lib/zk/apple-plan';
 
 export async function OPTIONS() {
   return handleCorsPreflightRequest();
@@ -136,16 +137,7 @@ export async function GET(request: NextRequest) {
   }
 }
 
-// Map Apple product IDs to plan names
-function getApplePlan(productId: string): string {
-  const mapping: Record<string, string> = {
-    'com.deepterm.pro.monthly': 'pro',
-    'com.deepterm.pro.yearly': 'pro',
-    'com.deepterm.team.monthly': 'team',
-    'com.deepterm.team.yearly': 'team',
-  };
-  return mapping[productId] || 'pro';
-}
+// getApplePlan is imported from @/lib/zk/apple-plan
 
 // Get plan priority for comparison
 function getPlanPriority(plan: string): number {
