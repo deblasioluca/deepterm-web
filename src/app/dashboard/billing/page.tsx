@@ -18,6 +18,10 @@ import {
   Trash2,
   Plus,
   Star,
+  AlertTriangle,
+  Building2,
+  User,
+  Crown,
 } from 'lucide-react';
 
 interface PaymentMethodData {
@@ -66,6 +70,31 @@ interface SubscriptionData {
     expMonth: number;
     expYear: number;
   } | null;
+}
+
+/** License/subscription breakdown from /api/zk/accounts/license */
+interface LicenseData {
+  subscription: {
+    individual: {
+      active: boolean;
+      plan: string;
+      source: string;
+      expiresAt: string | null;
+    };
+    organization: {
+      active: boolean;
+      plan: string;
+      orgId: string | null;
+      orgName: string | null;
+    };
+    effectivePlan: string;
+    hasRedundantSubscription: boolean;
+  };
+  license: {
+    valid: boolean;
+    plan: string;
+    source: string;
+  };
 }
 
 const plans = [
@@ -126,6 +155,10 @@ const planFeatures: Record<string, string[]> = {
     'SLA guarantee',
   ],
 };
+
+function capitalize(s: string): string {
+  return s.charAt(0).toUpperCase() + s.slice(1);
+}
 
 // Helper function to get payment method display info
 function getPaymentMethodDisplay(method: PaymentMethodData) {
@@ -245,6 +278,7 @@ export default function BillingPage() {
   const [paymentMethods, setPaymentMethods] = useState<PaymentMethodData[]>([]);
   const [selectedPlan, setSelectedPlan] = useState<string | null>(null);
   const [billingPeriod, setBillingPeriod] = useState<'monthly' | 'yearly'>('yearly');
+  const [licenseData, setLicenseData] = useState<LicenseData | null>(null);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -288,10 +322,22 @@ export default function BillingPage() {
     }
   }, []);
 
+  const fetchLicenseData = useCallback(async () => {
+    try {
+      const response = await fetch('/api/zk/accounts/license');
+      if (!response.ok) return;
+      const result = await response.json();
+      setLicenseData(result);
+    } catch {
+      // License data is supplementary — don't block on failure
+    }
+  }, []);
+
   useEffect(() => {
     fetchSubscriptionData();
     fetchPaymentMethods();
-  }, [fetchSubscriptionData, fetchPaymentMethods]);
+    fetchLicenseData();
+  }, [fetchSubscriptionData, fetchPaymentMethods, fetchLicenseData]);
 
   const handleAddPaymentMethod = async () => {
     try {
@@ -482,6 +528,39 @@ export default function BillingPage() {
           </Button>
         </div>
 
+        {/* Redundant Subscription Banner */}
+        {licenseData?.subscription?.hasRedundantSubscription && (
+          <motion.div
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="mb-6 p-4 bg-amber-500/10 border border-amber-500/30 rounded-lg"
+          >
+            <div className="flex items-start gap-3">
+              <AlertTriangle className="w-5 h-5 text-amber-500 flex-shrink-0 mt-0.5" />
+              <div className="flex-1">
+                <p className="font-medium text-amber-400">You have overlapping subscriptions</p>
+                <p className="text-sm text-text-secondary mt-1">
+                  You have both a personal <span className="font-medium text-text-primary">{capitalize(licenseData.subscription.individual.plan)}</span> subscription
+                  {licenseData.subscription.individual.source === 'apple' && ' (via App Store)'}
+                  {' '}and an organization <span className="font-medium text-text-primary">{capitalize(licenseData.subscription.organization.plan)}</span> plan
+                  {licenseData.subscription.organization.orgName && ` from ${licenseData.subscription.organization.orgName}`}.
+                  Your organization plan already covers all features — you can cancel your personal subscription to avoid double-paying.
+                </p>
+                {licenseData.subscription.individual.source === 'apple' && (
+                  <a
+                    href="https://apps.apple.com/account/subscriptions"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1.5 mt-3 px-3 py-1.5 bg-amber-500/20 hover:bg-amber-500/30 text-amber-400 rounded-md text-sm font-medium transition-colors"
+                  >
+                    Cancel in App Store <ExternalLink className="w-3.5 h-3.5" />
+                  </a>
+                )}
+              </div>
+            </div>
+          </motion.div>
+        )}
+
         {successMessage && (
           <motion.div
             initial={{ opacity: 0, y: -10 }}
@@ -506,21 +585,24 @@ export default function BillingPage() {
           </motion.div>
         )}
 
+        {/* Effective Plan Card */}
         <Card className="mb-6">
           <div className="flex items-start justify-between mb-6">
             <div className="flex items-center gap-4">
               <div className="p-3 bg-accent-primary/20 rounded-xl">
-                <Zap className="w-6 h-6 text-accent-primary" />
+                <Crown className="w-6 h-6 text-accent-primary" />
               </div>
               <div>
                 <div className="flex items-center gap-2">
-                  <h2 className="text-xl font-bold text-text-primary">{currentPlanDetails.name} Plan</h2>
-                  <Badge variant="primary">Current</Badge>
+                  <h2 className="text-xl font-bold text-text-primary">
+                    {licenseData ? capitalize(licenseData.subscription.effectivePlan) : currentPlanDetails.name} Plan
+                  </h2>
+                  <Badge variant="primary">Effective</Badge>
                   {data?.subscription?.cancelAtPeriodEnd && <Badge variant="warning">Canceling</Badge>}
                   {data?.subscription?.status === 'past_due' && <Badge variant="danger">Past Due</Badge>}
                 </div>
                 <p className="text-text-secondary">
-                  {currentPlan === 'starter' ? 'Free forever' : (
+                  {currentPlan === 'starter' && !licenseData?.subscription?.organization?.active ? 'Free forever' : (
                     billingPeriod === 'yearly' ? (
                       <>
                         ${(currentPlanDetails as any).yearlyPrice}/user/month • <span className="text-accent-primary font-medium">${(currentPlanDetails as any).yearlyPrice * 12}/year</span>
@@ -539,6 +621,80 @@ export default function BillingPage() {
               {currentPlan === 'starter' ? 'Upgrade' : 'Change Plan'}
             </Button>
           </div>
+
+          {/* Subscription Sources Breakdown */}
+          {licenseData?.subscription && (
+            <div className="grid md:grid-cols-2 gap-4 mb-6">
+              {/* Personal Subscription */}
+              <div className={`p-4 rounded-lg border ${
+                licenseData.subscription.individual.active
+                  ? 'bg-blue-500/5 border-blue-500/20'
+                  : 'bg-background-tertiary border-border/50'
+              }`}>
+                <div className="flex items-center gap-2 mb-3">
+                  <User className="w-4 h-4 text-blue-400" />
+                  <span className="text-sm font-medium text-text-secondary">Personal Subscription</span>
+                </div>
+                {licenseData.subscription.individual.active ? (
+                  <>
+                    <div className="flex items-center gap-2">
+                      <span className="text-lg font-bold text-text-primary">
+                        {capitalize(licenseData.subscription.individual.plan)}
+                      </span>
+                      <Badge variant="success">Active</Badge>
+                    </div>
+                    <p className="text-xs text-text-tertiary mt-1">
+                      via {licenseData.subscription.individual.source === 'apple' ? 'App Store' : capitalize(licenseData.subscription.individual.source)}
+                      {licenseData.subscription.individual.expiresAt && (
+                        <> • Renews {new Date(licenseData.subscription.individual.expiresAt).toLocaleDateString()}</>
+                      )}
+                    </p>
+                    {licenseData.subscription.individual.source === 'apple' && (
+                      <a
+                        href="https://apps.apple.com/account/subscriptions"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1 mt-2 text-xs text-blue-400 hover:text-blue-300 transition-colors"
+                      >
+                        Manage in App Store <ExternalLink className="w-3 h-3" />
+                      </a>
+                    )}
+                  </>
+                ) : (
+                  <p className="text-sm text-text-tertiary">No personal subscription</p>
+                )}
+              </div>
+
+              {/* Organization Subscription */}
+              <div className={`p-4 rounded-lg border ${
+                licenseData.subscription.organization.active
+                  ? 'bg-purple-500/5 border-purple-500/20'
+                  : 'bg-background-tertiary border-border/50'
+              }`}>
+                <div className="flex items-center gap-2 mb-3">
+                  <Building2 className="w-4 h-4 text-purple-400" />
+                  <span className="text-sm font-medium text-text-secondary">Organization Plan</span>
+                </div>
+                {licenseData.subscription.organization.active ? (
+                  <>
+                    <div className="flex items-center gap-2">
+                      <span className="text-lg font-bold text-text-primary">
+                        {capitalize(licenseData.subscription.organization.plan)}
+                      </span>
+                      <Badge variant="success">Active</Badge>
+                    </div>
+                    {licenseData.subscription.organization.orgName && (
+                      <p className="text-xs text-text-tertiary mt-1">
+                        from {licenseData.subscription.organization.orgName}
+                      </p>
+                    )}
+                  </>
+                ) : (
+                  <p className="text-sm text-text-tertiary">Not part of a paid organization</p>
+                )}
+              </div>
+            </div>
+          )}
 
           <div className="grid md:grid-cols-2 gap-6">
             <div className="p-4 bg-background-tertiary rounded-lg">
