@@ -2,7 +2,7 @@ import { NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import {
   getAuthFromRequestOrSession,
-  SessionOnlyAuth,
+  isSessionOnlyAuth,
   errorResponse,
   successResponse,
   handleCorsPreflightRequest,
@@ -26,18 +26,14 @@ export async function GET(request: NextRequest) {
       return errorResponse('Unauthorized', 401);
     }
 
-    const isSessionOnly = (auth as SessionOnlyAuth).kind === 'session';
-    const sessionAuth = auth as SessionOnlyAuth;
-    const jwtAuth = auth as { userId: string; email: string };
-
     const pendingInvitations = await prisma.organizationUser.findMany({
       where: {
-        ...(isSessionOnly
-          ? { invitedEmail: sessionAuth.email }
+        ...(isSessionOnlyAuth(auth)
+          ? { invitedEmail: auth.email }
           : {
               OR: [
-                { userId: jwtAuth.userId },
-                ...(jwtAuth.email ? [{ invitedEmail: jwtAuth.email }] : []),
+                { userId: auth.userId },
+                ...(auth.email ? [{ invitedEmail: auth.email }] : []),
               ],
             }),
         status: 'invited',

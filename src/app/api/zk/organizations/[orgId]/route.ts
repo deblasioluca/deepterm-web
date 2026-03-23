@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma';
 import {
   getAuthFromRequest,
   getAuthFromRequestOrSession,
+  isSessionOnlyAuth,
   createAuditLog,
   getClientIP,
   errorResponse,
@@ -26,7 +27,7 @@ export async function GET(
   try {
     const auth = await getAuthFromRequestOrSession(request);
 
-    if (!auth) {
+    if (!auth || isSessionOnlyAuth(auth)) {
       return errorResponse('Unauthorized', 401);
     }
 
@@ -94,7 +95,7 @@ export async function PUT(
   try {
     const auth = await getAuthFromRequestOrSession(request);
 
-    if (!auth) {
+    if (!auth || isSessionOnlyAuth(auth)) {
       return errorResponse('Unauthorized', 401);
     }
 
@@ -154,7 +155,7 @@ export async function DELETE(
   try {
     const auth = await getAuthFromRequestOrSession(request);
 
-    if (!auth) {
+    if (!auth || isSessionOnlyAuth(auth)) {
       return errorResponse('Unauthorized', 401);
     }
 

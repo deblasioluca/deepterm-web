@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma';
 import {
   getAuthFromRequest,
   getAuthFromRequestOrSession,
+  isSessionOnlyAuth,
   getOrganizationAuditLogs,
   errorResponse,
   successResponse,
@@ -26,7 +27,7 @@ export async function GET(
   try {
     const auth = await getAuthFromRequestOrSession(request);
 
-    if (!auth) {
+    if (!auth || isSessionOnlyAuth(auth)) {
       return errorResponse('Unauthorized', 401);
     }
 

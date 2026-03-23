@@ -15,6 +15,11 @@ export interface SessionOnlyAuth {
   email: string;
 }
 
+/** Type guard: returns true when the auth payload is session-only (no ZKUser). */
+export function isSessionOnlyAuth(auth: JWTPayload | SessionOnlyAuth): auth is SessionOnlyAuth {
+  return (auth as SessionOnlyAuth).kind === 'session';
+}
+
 export interface AuthenticatedRequest extends NextRequest {
   auth: JWTPayload;
 }

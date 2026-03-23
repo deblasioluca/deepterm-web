@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma';
 import {
   getAuthFromRequest,
   getAuthFromRequestOrSession,
+  isSessionOnlyAuth,
   errorResponse,
   successResponse,
   handleCorsPreflightRequest,
@@ -25,7 +26,7 @@ export async function GET(
 ) {
   try {
     const auth = await getAuthFromRequestOrSession(request);
-    if (!auth) return errorResponse('Unauthorized', 401);
+    if (!auth || isSessionOnlyAuth(auth)) return errorResponse('Unauthorized', 401);
 
     const { orgId } = await params;
 
@@ -69,7 +70,7 @@ export async function POST(
 ) {
   try {
     const auth = await getAuthFromRequestOrSession(request);
-    if (!auth) return errorResponse('Unauthorized', 401);
+    if (!auth || isSessionOnlyAuth(auth)) return errorResponse('Unauthorized', 401);
 
     const { orgId } = await params;
 

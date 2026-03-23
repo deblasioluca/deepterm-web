@@ -3,7 +3,7 @@ import { prisma } from '@/lib/prisma';
 import {
   getAuthFromRequest,
   getAuthFromRequestOrSession,
-  SessionOnlyAuth,
+  isSessionOnlyAuth,
   createAuditLog,
   getClientIP,
   errorResponse,
@@ -33,17 +33,13 @@ export async function GET(request: NextRequest) {
 
     // Session-only users (no ZKUser) can only be found by invitedEmail.
     // Full JWTPayload users are found by ZKUser.id, with email as fallback.
-    const isSessionOnly = (auth as SessionOnlyAuth).kind === 'session';
-    const sessionAuth = auth as SessionOnlyAuth;
-    const jwtAuth = auth as { userId: string; email: string };
-
     const orgUsers = await prisma.organizationUser.findMany({
-      where: isSessionOnly
-        ? { invitedEmail: sessionAuth.email }
+      where: isSessionOnlyAuth(auth)
+        ? { invitedEmail: auth.email }
         : {
             OR: [
-              { userId: jwtAuth.userId },
-              ...(jwtAuth.email ? [{ invitedEmail: jwtAuth.email }] : []),
+              { userId: auth.userId },
+              ...(auth.email ? [{ invitedEmail: auth.email }] : []),
             ],
           },
       include: {
