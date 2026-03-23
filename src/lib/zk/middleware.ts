@@ -28,11 +28,13 @@ export function getAuthFromRequest(request: NextRequest): JWTPayload | null {
  * looking up the linked ZKUser to produce a compatible JWTPayload.
  */
 export async function getAuthFromRequestOrSession(request: NextRequest): Promise<JWTPayload | null> {
-  // Try Bearer token first (macOS app)
-  const bearerAuth = getAuthFromRequest(request);
-  if (bearerAuth) return bearerAuth;
+  // If a Bearer header is present, it MUST be valid — don't fall through to session
+  const authHeader = request.headers.get('authorization');
+  if (authHeader && authHeader.startsWith('Bearer ')) {
+    return getAuthFromRequest(request);
+  }
 
-  // Fall back to NextAuth session (web dashboard)
+  // No Bearer header — fall back to NextAuth session (web dashboard)
   const session = await auth();
   if (!session?.user?.id) return null;
 

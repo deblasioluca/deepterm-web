@@ -52,6 +52,10 @@ export async function GET() {
         configured: airflowConfigured,
         url: airflowUrl,
       },
+      msTeams: {
+        configured: !!process.env.MS_TEAMS_WEBHOOK_URL,
+        url: process.env.MS_TEAMS_WEBHOOK_URL ? '(configured)' : null,
+      },
     });
   } catch (error) {
     console.error('Integration status error:', error);

@@ -100,7 +100,7 @@ export default function InviteAcceptPage() {
 
       const displayName = invite?.orgName || invite?.teamName || 'the organization';
       setSuccess(data.message || `You have joined ${displayName}`);
-      setTimeout(() => router.push('/dashboard/team'), 2000);
+      setTimeout(() => router.push('/dashboard/organization'), 2000);
     } catch {
       setError('Failed to accept invitation');
     } finally {
@@ -152,7 +152,7 @@ export default function InviteAcceptPage() {
               </div>
               <h2 className="text-xl font-semibold text-text-primary mb-2">Welcome!</h2>
               <p className="text-text-secondary mb-2">{success}</p>
-              <p className="text-text-tertiary text-sm">Redirecting to your team dashboard...</p>
+              <p className="text-text-tertiary text-sm">Redirecting to your organization dashboard...</p>
             </div>
           ) : invite ? (
             <div>

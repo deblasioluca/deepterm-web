@@ -1034,7 +1034,7 @@ export const DOC_CATEGORIES: DocCategory[] = [
         content: `
 <h3>Create a Team</h3>
 <ol>
-  <li>Go to <a href="/dashboard/team">Dashboard → Team</a>.</li>
+  <li>Go to <a href="/dashboard/organization">Dashboard → Organization</a>.</li>
   <li>Click <strong>Create Team</strong> and enter a name.</li>
   <li>You are automatically the team owner.</li>
 </ol>

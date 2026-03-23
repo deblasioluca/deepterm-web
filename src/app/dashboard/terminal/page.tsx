@@ -67,15 +67,23 @@ export default function TerminalPage() {
       const data = await res.json();
       if (data) {
         setWsAuth(data);
-        // Fetch org details for each orgId
-        const orgDetails: { id: string; name: string }[] = [];
-        for (const orgId of data.orgIds || []) {
-          try {
-            // We need to fetch org info — use a simple approach
-            orgDetails.push({ id: orgId, name: orgId.substring(0, 8) + '...' });
-          } catch {
-            // skip
+        // Fetch org details from the organizations API
+        let orgDetails: { id: string; name: string }[] = [];
+        try {
+          const orgsRes = await fetch('/api/zk/organizations');
+          if (orgsRes.ok) {
+            const orgsData = await orgsRes.json();
+            const rawOrgs = Array.isArray(orgsData) ? orgsData : (orgsData.organizations || []);
+            orgDetails = rawOrgs
+              .filter((o: { status?: string }) => o.status === 'confirmed')
+              .map((o: { id: string; name: string }) => ({ id: o.id, name: o.name }));
           }
+        } catch {
+          // ignore
+        }
+        if (orgDetails.length === 0) {
+          // Fall back to orgIds from token
+          orgDetails = (data.orgIds || []).map((id: string) => ({ id, name: id.substring(0, 8) + '...' }));
         }
         setOrgs(orgDetails);
         if (orgDetails.length > 0) {

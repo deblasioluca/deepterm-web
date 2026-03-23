@@ -127,6 +127,26 @@ export async function POST(request: NextRequest) {
       },
     });
 
+    // Create a default "General" team within the organization
+    const defaultTeam = await prisma.orgTeam.create({
+      data: {
+        organizationId: org.id,
+        name: 'General',
+        description: 'Default team for all organization members',
+        ownerId: user.id,
+        isDefault: true,
+      },
+    });
+
+    // Add user as team owner
+    await prisma.orgTeamMember.create({
+      data: {
+        teamId: defaultTeam.id,
+        userId: user.id,
+        role: 'owner',
+      },
+    });
+
     // Create a default personal vault
     const defaultVault = await prisma.zKVault.create({
       data: {

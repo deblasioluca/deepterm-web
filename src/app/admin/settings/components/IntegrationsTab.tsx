@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { Card, Button } from '@/components/ui';
-import { GitBranch, Radio, Cpu, Loader2, CheckCircle, XCircle, RefreshCw, Workflow, Save, Eye, EyeOff, Server, Globe } from 'lucide-react';
+import { GitBranch, Radio, Cpu, Loader2, CheckCircle, XCircle, RefreshCw, Workflow, Save, Eye, EyeOff, Server, Globe, MessageSquare } from 'lucide-react';
 
 type IntegrationStatus = {
   pi: { configured: boolean; address: string; detail: string };
@@ -12,6 +12,7 @@ type IntegrationStatus = {
   nodeRed: { configured: boolean; url: string | null; reachable: boolean | null };
   aiDev: { configured: boolean };
   airflow: { configured: boolean; url: string | null };
+  msTeams: { configured: boolean; url: string | null };
 };
 
 export default function IntegrationsTab() {
@@ -179,6 +180,18 @@ export default function IntegrationsTab() {
       details: status?.nodeRed.url
         ? `URL: ${status.nodeRed.url}${status.nodeRed.reachable === true ? ' \u2022 Reachable' : status.nodeRed.reachable === false ? ' \u2022 Unreachable' : ''}`
         : 'NODE_RED_URL not set in environment',
+    },
+    {
+      key: 'ms-teams',
+      label: 'MS Teams',
+      description: 'Incoming webhook for collaboration notifications (member events, terminals, audio calls)',
+      icon: MessageSquare,
+      color: 'text-indigo-400',
+      bgColor: 'bg-indigo-500/20',
+      configured: status?.msTeams?.configured ?? false,
+      details: status?.msTeams?.configured
+        ? 'Webhook URL configured (MS_TEAMS_WEBHOOK_URL)'
+        : 'MS_TEAMS_WEBHOOK_URL not set in environment',
     },
     {
       key: 'ai-dev',

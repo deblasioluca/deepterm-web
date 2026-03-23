@@ -56,6 +56,9 @@ const envSchema = z.object({
   GITHUB_TOKEN: z.string().optional(),
   AI_DEV_API_KEY: z.string().optional(),
   NODE_RED_API_KEY: z.string().optional(),
+
+  // ── MS Teams ───────────────────────────────────────────────
+  MS_TEAMS_WEBHOOK_URL: z.string().url().optional(),
 });
 
 export type Env = z.infer<typeof envSchema>;
