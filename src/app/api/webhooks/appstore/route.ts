@@ -11,6 +11,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { getApplePlan } from '@/lib/zk/apple-plan';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -111,11 +112,12 @@ export async function POST(request: NextRequest) {
         // Fallback: treat user as org-scoped if stripeSubscriptionId is set,
         // covering existing users whose subscriptionScope hasn't been backfilled yet.
         const isOrgMember = user.subscriptionScope === 'organization' || !!user.stripeSubscriptionId;
+        const applePlan = getApplePlan(productId);
         await prisma.user.update({
           where: { id: user.id },
           data: {
             // Don't downgrade plan if user has a higher-tier org plan
-            plan: isOrgMember ? user.plan : 'pro',
+            plan: isOrgMember ? user.plan : applePlan,
             subscriptionScope: isOrgMember ? 'organization' : 'individual',
             subscriptionSource: 'appstore',
             subscriptionExpiresAt: expiresDate,
@@ -139,9 +141,9 @@ export async function POST(request: NextRequest) {
           });
         }
 
-        console.log(`App Store: ${user.email} subscribed to Pro (individual scope)`);
-        await logEvent('appstore-subscribed', 'pro', `App Store subscription (${productId})`);
-        notifyPayment('appstore-subscribed', user.email, 'pro', `App Store subscription (${productId})`);
+        console.log(`App Store: ${user.email} subscribed to ${applePlan} (individual scope)`);
+        await logEvent('appstore-subscribed', applePlan, `App Store subscription (${productId})`);
+        notifyPayment('appstore-subscribed', user.email, applePlan, `App Store subscription (${productId})`);
         break;
       }
 
@@ -149,10 +151,11 @@ export async function POST(request: NextRequest) {
         // Renew Apple IAP tracking. Preserve org scope if user is an org member.
         // Fallback: treat user as org-scoped if stripeSubscriptionId is set.
         const isOrgMemberRenew = user.subscriptionScope === 'organization' || !!user.stripeSubscriptionId;
+        const applePlanRenew = getApplePlan(productId);
         await prisma.user.update({
           where: { id: user.id },
           data: {
-            plan: isOrgMemberRenew ? user.plan : 'pro',
+            plan: isOrgMemberRenew ? user.plan : applePlanRenew,
             subscriptionScope: isOrgMemberRenew ? 'organization' : 'individual',
             subscriptionExpiresAt: expiresDate,
           },
@@ -171,9 +174,9 @@ export async function POST(request: NextRequest) {
           });
         }
 
-        console.log(`App Store: ${user.email} renewed Pro (expires: ${expiresDate})`);
-        await logEvent('appstore-renewed', 'pro', `Renewed until ${expiresDate?.toISOString()}`);
-        notifyPayment('appstore-renewed', user.email, 'pro', `Renewed until ${expiresDate?.toISOString()}`);
+        console.log(`App Store: ${user.email} renewed ${applePlanRenew} (expires: ${expiresDate})`);
+        await logEvent('appstore-renewed', applePlanRenew, `Renewed until ${expiresDate?.toISOString()}`);
+        notifyPayment('appstore-renewed', user.email, applePlanRenew, `Renewed until ${expiresDate?.toISOString()}`);
         break;
       }
 

@@ -146,7 +146,7 @@ function getPlanPriority(plan: string): number {
     pro: 1,
     team: 2,
     business: 3,
-    enterprise: 3,
+    enterprise: 4,
   };
   return priorities[plan] || 0;
 }
