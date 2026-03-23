@@ -105,14 +105,16 @@ export async function POST(request: NextRequest) {
     // Handle notification types
     switch (notificationType) {
       case 'SUBSCRIBED': {
-        // Store Apple IAP info on User for tracking, but set subscriptionScope
-        // to 'individual' — the effective plan is calculated at runtime by the
-        // license API (max of individual + org plans).
+        // Store Apple IAP tracking fields. Only set subscriptionScope to
+        // 'individual' if user doesn't already have an org subscription —
+        // otherwise preserve the org scope so expiry logic works correctly.
+        const isOrgMember = user.subscriptionScope === 'organization';
         await prisma.user.update({
           where: { id: user.id },
           data: {
-            plan: 'pro',
-            subscriptionScope: 'individual',
+            // Don't downgrade plan if user has a higher-tier org plan
+            plan: isOrgMember ? user.plan : 'pro',
+            subscriptionScope: isOrgMember ? 'organization' : 'individual',
             subscriptionSource: 'appstore',
             subscriptionExpiresAt: expiresDate,
             appStoreOriginalTransactionId: originalTransactionId,
@@ -142,11 +144,13 @@ export async function POST(request: NextRequest) {
       }
 
       case 'DID_RENEW': {
+        // Renew Apple IAP tracking. Preserve org scope if user is an org member.
+        const isOrgMemberRenew = user.subscriptionScope === 'organization';
         await prisma.user.update({
           where: { id: user.id },
           data: {
-            plan: 'pro',
-            subscriptionScope: 'individual',
+            plan: isOrgMemberRenew ? user.plan : 'pro',
+            subscriptionScope: isOrgMemberRenew ? 'organization' : 'individual',
             subscriptionExpiresAt: expiresDate,
           },
         });

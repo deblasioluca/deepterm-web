@@ -31,14 +31,43 @@ export async function syncOrgMemberPlans(
 
     if (webUserIds.length > 0) {
       const isOrgActive = plan !== 'free';
-      await prisma.user.updateMany({
-        where: { id: { in: webUserIds } },
-        data: {
-          plan,
-          stripeSubscriptionId,
-          subscriptionScope: isOrgActive ? 'organization' : 'none',
-        },
-      });
+      if (isOrgActive) {
+        // Org has an active plan — upgrade all members
+        await prisma.user.updateMany({
+          where: { id: { in: webUserIds } },
+          data: {
+            plan,
+            stripeSubscriptionId,
+            subscriptionScope: 'organization',
+          },
+        });
+      } else {
+        // Org plan downgraded to free — check each member for individual subs
+        // before resetting (mirrors clearRemovedMemberPlan logic)
+        const webUsers = await prisma.user.findMany({
+          where: { id: { in: webUserIds } },
+          select: {
+            id: true,
+            subscriptionSource: true,
+            subscriptionExpiresAt: true,
+            subscriptionScope: true,
+          },
+        });
+        const now = new Date();
+        for (const wu of webUsers) {
+          const hasIndividualSub = wu.subscriptionSource === 'appstore'
+            && wu.subscriptionExpiresAt
+            && wu.subscriptionExpiresAt > now;
+          await prisma.user.update({
+            where: { id: wu.id },
+            data: {
+              plan: hasIndividualSub ? 'pro' : 'free',
+              stripeSubscriptionId: null,
+              subscriptionScope: hasIndividualSub ? 'individual' : 'none',
+            },
+          });
+        }
+      }
     }
   } catch (err) {
     console.error('[syncOrgMemberPlans] Failed:', err);
