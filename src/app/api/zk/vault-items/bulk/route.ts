@@ -117,6 +117,11 @@ export async function POST(request: NextRequest) {
         byVault.get(vid)!.push(item);
       }
 
+      // Track how many new items have been approved per limit scope so that
+      // multiple vaults sharing the same scope (e.g. two org vaults from the
+      // same org) don't each independently allow up to `remaining`.
+      const approvedPerScope = new Map<string, number>();
+
       const keptItems: BulkCreateItem[] = [];
       for (const [vid, items] of Array.from(byVault.entries())) {
         const limitCheck = await checkVaultItemLimit(auth.userId, vid);
@@ -125,6 +130,12 @@ export async function POST(request: NextRequest) {
           keptItems.push(...items);
           continue;
         }
+
+        // Build a scope key: org vaults share the orgId scope, personal vaults share the userId scope
+        const orgId = vaultOrgMap.get(vid);
+        const scopeKey = orgId ? `org:${orgId}` : `user:${auth.userId}`;
+        const alreadyApproved = approvedPerScope.get(scopeKey) ?? 0;
+        const effectiveRemaining = limitCheck.remaining - alreadyApproved;
 
         const upsertItems: BulkCreateItem[] = [];
         const newItems: BulkCreateItem[] = [];
@@ -139,7 +150,7 @@ export async function POST(request: NextRequest) {
         // Always keep upserts
         keptItems.push(...upsertItems);
 
-        if (newItems.length > 0 && !limitCheck.allowed) {
+        if (newItems.length > 0 && effectiveRemaining <= 0) {
           // Reject all truly new creates for this vault
           for (const item of newItems) {
             results.errors.push({
@@ -148,19 +159,21 @@ export async function POST(request: NextRequest) {
               operation: 'create',
             });
           }
-        } else if (newItems.length > 0 && limitCheck.remaining < newItems.length) {
+        } else if (newItems.length > 0 && effectiveRemaining < newItems.length) {
           // Partially reject — allow up to remaining slots
-          const allowed = newItems.splice(0, limitCheck.remaining);
+          const allowed = newItems.splice(0, effectiveRemaining);
           keptItems.push(...allowed);
+          approvedPerScope.set(scopeKey, alreadyApproved + allowed.length);
           for (const item of newItems) {
             results.errors.push({
               clientId: item.clientId,
-              error: `Vault item limit (${limitCheck.maxVaultItems}) would be exceeded. ${limitCheck.remaining} slots remaining.`,
+              error: `Vault item limit (${limitCheck.maxVaultItems}) would be exceeded. ${effectiveRemaining} slots remaining.`,
               operation: 'create',
             });
           }
         } else {
           keptItems.push(...newItems);
+          approvedPerScope.set(scopeKey, alreadyApproved + newItems.length);
         }
       }
 

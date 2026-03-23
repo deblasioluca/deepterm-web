@@ -57,12 +57,16 @@ export async function syncOrgMemberPlans(
           const newScope = isOrgScoped || orgRank > currentRank
             ? 'organization'
             : wu.subscriptionScope ?? 'none';
+          const applyingOrgPlan = isOrgScoped || orgRank > currentRank;
           await prisma.user.update({
             where: { id: wu.id },
             data: {
               plan: newPlan,
-              stripeSubscriptionId,
               subscriptionScope: newScope,
+              // Only overwrite stripeSubscriptionId when the org plan is actually applied.
+              // For individual-scoped members keeping their higher plan, preserve their
+              // existing stripeSubscriptionId to avoid corrupting subscriptionSource detection.
+              ...(applyingOrgPlan ? { stripeSubscriptionId } : {}),
             },
           });
         }
@@ -190,8 +194,11 @@ export async function syncNewMemberPlan(
         where: { id: webUser.id },
         data: {
           plan: shouldUpgrade ? plan : webUser.plan,
-          stripeSubscriptionId: org.stripeSubscriptionId,
           subscriptionScope: shouldUpgrade ? 'organization' : webUser.subscriptionScope,
+          // Only overwrite stripeSubscriptionId when the org plan actually wins.
+          // Otherwise we'd corrupt an Apple IAP user's subscriptionSource detection
+          // (stripeSubscriptionId present → treated as Stripe instead of appstore).
+          ...(shouldUpgrade ? { stripeSubscriptionId: org.stripeSubscriptionId } : {}),
         },
       });
     }
