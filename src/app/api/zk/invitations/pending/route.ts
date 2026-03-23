@@ -2,6 +2,7 @@ import { NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import {
   getAuthFromRequest,
+  getAuthFromRequestOrSession,
   errorResponse,
   successResponse,
   handleCorsPreflightRequest,
@@ -19,7 +20,7 @@ export async function OPTIONS() {
  */
 export async function GET(request: NextRequest) {
   try {
-    const auth = getAuthFromRequest(request);
+    const auth = await getAuthFromRequestOrSession(request);
 
     if (!auth) {
       return errorResponse('Unauthorized', 401);
@@ -27,7 +28,10 @@ export async function GET(request: NextRequest) {
 
     const pendingInvitations = await prisma.organizationUser.findMany({
       where: {
-        userId: auth.userId,
+        OR: [
+          { userId: auth.userId },
+          ...(auth.email ? [{ invitedEmail: auth.email }] : []),
+        ],
         status: 'invited',
       },
       include: {

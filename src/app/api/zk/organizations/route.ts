@@ -30,8 +30,14 @@ export async function GET(request: NextRequest) {
       return errorResponse('Unauthorized', 401);
     }
 
+    // Query by userId OR by invitedEmail (for users without a ZKUser who have pending invites)
     const orgUsers = await prisma.organizationUser.findMany({
-      where: { userId: auth.userId },
+      where: {
+        OR: [
+          { userId: auth.userId },
+          ...(auth.email ? [{ invitedEmail: auth.email }] : []),
+        ],
+      },
       include: {
         organization: {
           include: {

@@ -44,7 +44,15 @@ export async function getAuthFromRequestOrSession(request: NextRequest): Promise
     select: { id: true, email: true },
   });
 
-  if (!zkUser) return null;
+  if (!zkUser) {
+    // No ZKUser yet (user registered via web but hasn't set up vault keys).
+    // Return a session-only payload so org routes can still match by invitedEmail.
+    return {
+      userId: session.user.id,
+      email: session.user.email || '',
+      orgIds: [],
+    };
+  }
 
   // Get org memberships for the payload
   const orgUsers = await prisma.organizationUser.findMany({
