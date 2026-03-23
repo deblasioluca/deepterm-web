@@ -108,7 +108,9 @@ export async function POST(request: NextRequest) {
         // Store Apple IAP tracking fields. Only set subscriptionScope to
         // 'individual' if user doesn't already have an org subscription —
         // otherwise preserve the org scope so expiry logic works correctly.
-        const isOrgMember = user.subscriptionScope === 'organization';
+        // Fallback: treat user as org-scoped if stripeSubscriptionId is set,
+        // covering existing users whose subscriptionScope hasn't been backfilled yet.
+        const isOrgMember = user.subscriptionScope === 'organization' || !!user.stripeSubscriptionId;
         await prisma.user.update({
           where: { id: user.id },
           data: {
@@ -145,7 +147,8 @@ export async function POST(request: NextRequest) {
 
       case 'DID_RENEW': {
         // Renew Apple IAP tracking. Preserve org scope if user is an org member.
-        const isOrgMemberRenew = user.subscriptionScope === 'organization';
+        // Fallback: treat user as org-scoped if stripeSubscriptionId is set.
+        const isOrgMemberRenew = user.subscriptionScope === 'organization' || !!user.stripeSubscriptionId;
         await prisma.user.update({
           where: { id: user.id },
           data: {
@@ -185,11 +188,14 @@ export async function POST(request: NextRequest) {
         // Clear individual Apple subscription — the user's effective plan
         // will be recalculated by the license API. If they have an org plan,
         // they keep that tier. Only the individual scope is cleared.
+        // Fallback: treat user as org-scoped if stripeSubscriptionId is set,
+        // covering existing users whose subscriptionScope hasn't been backfilled yet.
+        const hasOrgSubExpired = user.subscriptionScope === 'organization' || !!user.stripeSubscriptionId;
         await prisma.user.update({
           where: { id: user.id },
           data: {
-            plan: user.subscriptionScope === 'organization' ? user.plan : 'free',
-            subscriptionScope: user.subscriptionScope === 'organization' ? 'organization' : 'none',
+            plan: hasOrgSubExpired ? user.plan : 'free',
+            subscriptionScope: hasOrgSubExpired ? 'organization' : 'none',
             subscriptionSource: 'none',
             subscriptionExpiresAt: null,
           },
@@ -211,11 +217,12 @@ export async function POST(request: NextRequest) {
       }
 
       case 'GRACE_PERIOD_EXPIRED': {
+        const hasOrgSubGrace = user.subscriptionScope === 'organization' || !!user.stripeSubscriptionId;
         await prisma.user.update({
           where: { id: user.id },
           data: {
-            plan: user.subscriptionScope === 'organization' ? user.plan : 'free',
-            subscriptionScope: user.subscriptionScope === 'organization' ? 'organization' : 'none',
+            plan: hasOrgSubGrace ? user.plan : 'free',
+            subscriptionScope: hasOrgSubGrace ? 'organization' : 'none',
             subscriptionSource: 'none',
             subscriptionExpiresAt: null,
           },
@@ -236,11 +243,12 @@ export async function POST(request: NextRequest) {
       }
 
       case 'REVOKE': {
+        const hasOrgSubRevoke = user.subscriptionScope === 'organization' || !!user.stripeSubscriptionId;
         await prisma.user.update({
           where: { id: user.id },
           data: {
-            plan: user.subscriptionScope === 'organization' ? user.plan : 'free',
-            subscriptionScope: user.subscriptionScope === 'organization' ? 'organization' : 'none',
+            plan: hasOrgSubRevoke ? user.plan : 'free',
+            subscriptionScope: hasOrgSubRevoke ? 'organization' : 'none',
             subscriptionSource: 'none',
             subscriptionExpiresAt: null,
             appStoreOriginalTransactionId: null,

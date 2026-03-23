@@ -54,10 +54,13 @@ export async function syncOrgMemberPlans(
           const newPlan = isOrgScoped
             ? plan
             : (orgRank > currentRank ? plan : wu.plan);
-          const newScope = isOrgScoped || orgRank > currentRank
+          // Use >= for scope assignment so equal-rank plans still get 'organization' scope.
+          // This ensures existing users whose plan matches the org plan get properly scoped
+          // after sync, protecting them from incorrect downgrades on Apple IAP expiry.
+          const newScope = isOrgScoped || orgRank >= currentRank
             ? 'organization'
             : wu.subscriptionScope ?? 'none';
-          const applyingOrgPlan = isOrgScoped || orgRank > currentRank;
+          const applyingOrgPlan = isOrgScoped || orgRank >= currentRank;
           await prisma.user.update({
             where: { id: wu.id },
             data: {
@@ -189,7 +192,9 @@ export async function syncNewMemberPlan(
       // Only upgrade the plan if org plan is higher than current individual plan.
       // Preserve subscriptionScope='individual' when user keeps their higher plan,
       // so Apple EXPIRED handler correctly handles their individual sub lifecycle.
-      const shouldUpgrade = orgRank > currentRank;
+      // Use >= so equal-rank plans still set subscriptionScope to 'organization'.
+      // This protects users from incorrect downgrades when Apple IAP expires.
+      const shouldUpgrade = orgRank >= currentRank;
       await prisma.user.update({
         where: { id: webUser.id },
         data: {
