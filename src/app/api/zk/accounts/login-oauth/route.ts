@@ -343,6 +343,17 @@ export async function POST(request: NextRequest) {
     const fallbackDisplayName = name ?? normalizedEmail.split('@')[0];
     const { vaultId: defaultVaultId } = await ensureUserDefaults(zkUser.id, fallbackDisplayName);
 
+    // Link any pending org invitations (by invitedEmail) to this ZKUser
+    await prisma.organizationUser.updateMany({
+      where: {
+        invitedEmail: normalizedEmail,
+        userId: null,
+      },
+      data: {
+        userId: zkUser.id,
+      },
+    });
+
     const hasKeys = Boolean(zkUser.publicKey && zkUser.encryptedPrivateKey);
 
     await createAuditLog({

@@ -113,6 +113,17 @@ export async function POST(request: NextRequest) {
     const displayName = existingWebUser?.name || email.split('@')[0];
     const { vaultId: defaultVaultId } = await ensureUserDefaults(user.id, displayName);
 
+    // Link any pending org invitations (by invitedEmail) to the newly-created ZKUser
+    await prisma.organizationUser.updateMany({
+      where: {
+        invitedEmail: email.toLowerCase(),
+        userId: null,
+      },
+      data: {
+        userId: user.id,
+      },
+    });
+
     // Audit log
     await createAuditLog({
       userId: user.id,
