@@ -68,7 +68,7 @@ export async function POST(
         include: {
           _count: {
             select: {
-              members: { where: { status: 'confirmed' } },
+              members: { where: { status: { in: ['confirmed', 'invited'] } } },
             },
           },
         },
