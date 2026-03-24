@@ -236,19 +236,29 @@ function MembersView({ orgId, orgRole }: { orgId: string; orgRole: string }) {
     fetchMembers();
   }, [fetchMembers]);
 
-  const handleInvite = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const sendInvite = async (coverSeat?: boolean) => {
     setSubmitting(true);
     setError('');
     try {
+      const payload: Record<string, unknown> = { email: inviteEmail, role: inviteRole };
+      if (coverSeat) payload.coverSeat = true;
       const res = await fetch(`/api/zk/organizations/${orgId}/members/invite`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: inviteEmail, role: inviteRole }),
+        body: JSON.stringify(payload),
       });
       if (!res.ok) {
         const data = await res.json();
-        throw new Error(data.error || 'Failed to send invitation');
+        // Handle 402 seat coverage confirmation (hybrid billing mode)
+        if (res.status === 402 && data.requiresCoverSeat) {
+          if (confirm(data.message + '\n\nCover this seat?')) {
+            setSubmitting(false);
+            return sendInvite(true);
+          }
+          setSubmitting(false);
+          return;
+        }
+        throw new Error(data.message || data.error || 'Failed to send invitation');
       }
       setInviteEmail('');
       setShowInvite(false);
@@ -258,6 +268,11 @@ function MembersView({ orgId, orgRole }: { orgId: string; orgRole: string }) {
     } finally {
       setSubmitting(false);
     }
+  };
+
+  const handleInvite = async (e: React.FormEvent) => {
+    e.preventDefault();
+    sendInvite();
   };
 
   const handleRemove = async (memberId: string) => {

@@ -112,12 +112,33 @@ export async function POST(
     const inviteeIsOnFreePlan = inviteePlan === 'free' || inviteePlan === 'starter';
     const orgHasPaidPlan = org.plan !== 'free' && org.plan !== 'starter';
 
-    // Determine if the org needs to cover this seat
+    // Determine if the org needs to cover this seat.
+    // Consult org.memberBillingMode to decide behavior:
+    //   'org_covers' (default) → auto-cover, no client confirmation needed
+    //   'hybrid' → client must send coverSeat: true to confirm
+    //   'self_pay' → never cover seats (invitee must have own paid plan)
     let seatCoveredByOrg = false;
 
     if (orgHasPaidPlan && inviteeIsOnFreePlan) {
-      // Invitee is on a free plan and org has a paid plan.
-      // The inviter must explicitly accept covering the seat cost.
+      const billingMode = org.memberBillingMode || 'org_covers';
+
+      if (billingMode === 'self_pay') {
+        // Self-pay mode: org doesn't cover seats — invitee must upgrade first
+        const response = NextResponse.json(
+          {
+            error: 'subscription_required',
+            message: `${normalizedEmail} is on the ${inviteePlan === 'free' ? 'Free' : 'Starter'} plan. ` +
+              `Your organization requires members to have their own paid subscription. ` +
+              `Ask them to upgrade before inviting.`,
+            inviteePlan,
+            orgPlan: org.plan,
+            requiresCoverSeat: false,
+          },
+          { status: 402 }
+        );
+        return addCorsHeaders(response);
+      }
+
       // Count only org-covered seats (self-paying members don't consume org seats)
       const orgCoveredSeats = await prisma.organizationUser.count({
         where: {
@@ -127,7 +148,8 @@ export async function POST(
         },
       });
 
-      if (coverSeat !== true) {
+      if (billingMode === 'hybrid' && coverSeat !== true) {
+        // Hybrid mode: client must explicitly confirm seat coverage
         const response = NextResponse.json(
           {
             error: 'subscription_required',
@@ -146,7 +168,7 @@ export async function POST(
         return addCorsHeaders(response);
       }
 
-      // Inviter accepted — check seat availability
+      // org_covers or hybrid (with coverSeat confirmed) — check seat availability
       if (orgCoveredSeats >= org.seats) {
         const response = NextResponse.json(
           {

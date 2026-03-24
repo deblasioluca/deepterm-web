@@ -672,16 +672,17 @@ function InviteMemberModal({
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
 
-  const handleInvite = async () => {
-    if (!email.trim()) return;
+  const sendInvite = async (coverSeat?: boolean) => {
     setInviting(true);
     setError('');
     setSuccess('');
     try {
+      const payload: Record<string, unknown> = { email: email.trim(), role };
+      if (coverSeat) payload.coverSeat = true;
       const res = await fetch(`/api/zk/organizations/${orgId}/members/invite`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: email.trim(), role }),
+        body: JSON.stringify(payload),
       });
       if (res.ok) {
         setSuccess(`Invitation sent to ${email.trim()}`);
@@ -689,6 +690,15 @@ function InviteMemberModal({
         setTimeout(() => onInvited(), 1500);
       } else {
         const data = await res.json().catch(() => ({}));
+        // Handle 402 seat coverage confirmation (hybrid billing mode)
+        if (res.status === 402 && data.requiresCoverSeat) {
+          if (confirm(data.message + '\n\nCover this seat?')) {
+            setInviting(false);
+            return sendInvite(true);
+          }
+          setInviting(false);
+          return;
+        }
         setError(data.message || data.error || 'Failed to send invitation');
       }
     } catch {
@@ -696,6 +706,11 @@ function InviteMemberModal({
     } finally {
       setInviting(false);
     }
+  };
+
+  const handleInvite = async () => {
+    if (!email.trim()) return;
+    sendInvite();
   };
 
   return (
