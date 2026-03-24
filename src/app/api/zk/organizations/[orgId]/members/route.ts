@@ -94,7 +94,7 @@ export async function GET(
         const invitedCount = members.filter(m => m.status === 'invited').length;
         // Only org-covered members consume paid seats
         const orgCoveredSeats = members.filter(
-          m => m.seatCoveredByOrg && (m.status === 'confirmed' || m.status === 'invited')
+          m => m.seatCoveredByOrg && (m.status === 'confirmed' || m.status === 'active' || m.status === 'invited')
         ).length;
         orgBilling = {
           plan: org.plan,
