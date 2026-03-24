@@ -114,9 +114,42 @@ export async function cascadeDeleteUser(
 }
 
 /**
- * Delete an entire Organization and all its children.
+ * Count the impact of deleting an organization (for confirmation UI).
+ * Returns counts of all data that would be deleted.
  */
-async function deleteOrganization(tx: TransactionClient, orgId: string) {
+export async function getOrgDeleteImpact(
+  tx: TransactionClient,
+  orgId: string,
+): Promise<{
+  members: number;
+  teams: number;
+  vaults: number;
+  vaultItems: number;
+  chatMessages: number;
+  sharedSessions: number;
+  auditLogs: number;
+}> {
+  const [members, teams, vaults, vaultItems, chatMessages, sharedSessions, auditLogs] =
+    await Promise.all([
+      tx.organizationUser.count({ where: { organizationId: orgId } }),
+      tx.orgTeam.count({ where: { organizationId: orgId } }),
+      tx.zKVault.count({ where: { organizationId: orgId } }),
+      tx.zKVaultItem.count({ where: { vault: { organizationId: orgId } } }),
+      tx.chatMessage.count({
+        where: { channel: { organizationId: orgId } },
+      }),
+      tx.sharedTerminalSession.count({ where: { organizationId: orgId } }),
+      tx.zKAuditLog.count({ where: { organizationId: orgId } }),
+    ]);
+
+  return { members, teams, vaults, vaultItems, chatMessages, sharedSessions, auditLogs };
+}
+
+/**
+ * Delete an entire Organization and all its children.
+ * All deletions are explicit (SQLite FK cascades are unreliable).
+ */
+export async function deleteOrganization(tx: TransactionClient, orgId: string) {
   // OrgTeam children
   const orgTeams = await tx.orgTeam.findMany({ where: { organizationId: orgId }, select: { id: true } });
   for (const team of orgTeams) {
