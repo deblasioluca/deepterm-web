@@ -262,7 +262,7 @@ export function SharedTerminal({
       </div>
       <div
         ref={terminalRef}
-        className="w-full h-full rounded-lg overflow-hidden bg-background-primary p-2"
+        className="w-full h-full overflow-hidden bg-background-primary"
       />
     </div>
   );
