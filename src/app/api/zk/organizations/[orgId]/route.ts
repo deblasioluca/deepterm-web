@@ -11,6 +11,7 @@ import {
   handleCorsPreflightRequest,
   addCorsHeaders,
 } from '@/lib/zk';
+import { deleteOrganization, getOrgDeleteImpact } from '@/lib/zk/cascade-delete-user';
 
 export async function OPTIONS() {
   return handleCorsPreflightRequest();
@@ -175,12 +176,25 @@ export async function DELETE(
       return errorResponse('Organization not found or insufficient permissions', 404);
     }
 
-    // Delete organization (cascades will handle members and vaults)
-    await prisma.organization.delete({
-      where: { id: orgId },
+    // Check if ?dryRun=true — return impact counts without deleting
+    const { searchParams } = new URL(request.url);
+    const dryRun = searchParams.get('dryRun') === 'true';
+
+    if (dryRun) {
+      const impact = await prisma.$transaction(async (tx) => {
+        return getOrgDeleteImpact(tx, orgId);
+      });
+      const response = successResponse({ dryRun: true, impact });
+      return addCorsHeaders(response);
+    }
+
+    // Delete organization and ALL children explicitly (SQLite FK cascades are unreliable)
+    await prisma.$transaction(async (tx) => {
+      await deleteOrganization(tx, orgId);
     });
 
-    // Audit log
+    // Audit log AFTER successful deletion — avoids false entries if transaction fails.
+    // createAuditLog stores orgId in metadata (not FK), so it works post-deletion.
     await createAuditLog({
       userId: auth.userId,
       eventType: 'org_deleted',

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { cookies } from 'next/headers';
+import { deleteOrganization } from '@/lib/zk/cascade-delete-user';
 
 // Helper to verify admin session
 async function verifyAdmin() {
@@ -298,14 +299,9 @@ export async function DELETE(
         return NextResponse.json({ error: 'Organization not found' }, { status: 404 });
       }
 
-      // Remove all members from organization
-      await prisma.organizationUser.deleteMany({
-        where: { organizationId: id },
-      });
-
-      // Delete the organization
-      await prisma.organization.delete({
-        where: { id },
+      // Delete organization and ALL children explicitly (SQLite FK cascades are unreliable)
+      await prisma.$transaction(async (tx) => {
+        await deleteOrganization(tx, id);
       });
 
       // Log audit

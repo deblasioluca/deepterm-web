@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { deleteOrganization, getOrgDeleteImpact } from '@/lib/zk/cascade-delete-user';
 
 // GET - Get a single organization with details
 export async function GET(
@@ -122,14 +123,20 @@ export async function DELETE(
       );
     }
 
-    // Remove all members from organization first
-    await prisma.organizationUser.deleteMany({
-      where: { organizationId: id },
-    });
+    // Check if ?dryRun=true — return impact counts without deleting
+    const { searchParams } = new URL(request.url);
+    const dryRun = searchParams.get('dryRun') === 'true';
 
-    // Delete organization
-    await prisma.organization.delete({
-      where: { id },
+    if (dryRun) {
+      const impact = await prisma.$transaction(async (tx) => {
+        return getOrgDeleteImpact(tx, id);
+      });
+      return NextResponse.json({ dryRun: true, impact });
+    }
+
+    // Delete organization and ALL children explicitly (SQLite FK cascades are unreliable)
+    await prisma.$transaction(async (tx) => {
+      await deleteOrganization(tx, id);
     });
 
     return NextResponse.json({ success: true });
