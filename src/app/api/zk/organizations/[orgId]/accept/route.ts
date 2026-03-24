@@ -1,4 +1,4 @@
-import { NextRequest } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import {
   getAuthFromRequest,
@@ -57,6 +57,40 @@ export async function POST(
 
     if (!membership) {
       return errorResponse('No pending invitation found for this organization', 404);
+    }
+
+    // ── Seat re-check (race condition guard) ──
+    // If this invitation was marked as org-covered, re-verify seat availability
+    // in case seats were consumed between invite and accept.
+    if (membership.seatCoveredByOrg) {
+      const org = await prisma.organization.findUnique({
+        where: { id: orgId },
+        select: { seats: true },
+      });
+
+      // Count org-covered seats excluding this membership (it's already counted as 'invited')
+      const orgCoveredSeats = await prisma.organizationUser.count({
+        where: {
+          organizationId: orgId,
+          status: { in: ['confirmed', 'invited'] },
+          seatCoveredByOrg: true,
+          id: { not: membership.id },
+        },
+      });
+
+      if (org && orgCoveredSeats >= org.seats) {
+        const response = NextResponse.json(
+          {
+            error: 'seats_exhausted',
+            message: `All ${org.seats} seats are in use. The organization needs to ` +
+              `purchase additional seats before you can join.`,
+            seatsUsed: orgCoveredSeats,
+            seatsTotal: org.seats,
+          },
+          { status: 402 }
+        );
+        return addCorsHeaders(response);
+      }
     }
 
     // Update status to confirmed and clear the invitation token.
@@ -118,8 +152,9 @@ export async function POST(
       }
     }
 
-    // Sync org plan to the newly accepted member (fire-and-forget)
-    if (!sessionOnly && auth.userId) {
+    // Sync org plan to the newly accepted member (fire-and-forget).
+    // Only sync for org-covered members — self-paying members keep their own plan.
+    if (!sessionOnly && auth.userId && membership.seatCoveredByOrg) {
       syncNewMemberPlan(orgId, auth.userId).catch(() => {});
     }
 
