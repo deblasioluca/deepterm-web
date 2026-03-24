@@ -85,7 +85,7 @@ export default function OrganizationPage() {
       const rawOrgs = Array.isArray(orgsData) ? orgsData : (orgsData.organizations || []);
 
       // Separate confirmed orgs and pending invites
-      const confirmed = rawOrgs.filter((o: { status?: string }) => o.status === 'confirmed');
+      const confirmed = rawOrgs.filter((o: { status?: string }) => o.status === 'confirmed' || o.status === 'active');
       const pending = rawOrgs
         .filter((o: { status?: string }) => o.status === 'invited')
         .map((o: { id: string; name: string; role?: string; invitedAt?: string }) => ({
@@ -141,7 +141,7 @@ export default function OrganizationPage() {
             // silent
           }
 
-          const confirmedMembers = members.filter(m => m.status === 'confirmed');
+          const confirmedMembers = members.filter(m => m.status === 'confirmed' || m.status === 'active');
           const pendingInvites = members.filter(m => m.status === 'invited');
 
           return {

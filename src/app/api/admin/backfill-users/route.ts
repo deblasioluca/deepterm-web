@@ -13,6 +13,14 @@ import { ensureUserDefaults } from '@/lib/zk/ensure-user-defaults';
  */
 export async function POST() {
   try {
+    // ── Phase 0: Normalize invalid 'active' status globally ──────────────
+    // The 'active' status is not in OrganizationUserStatus and causes
+    // memberships to be invisible in the dashboard. Fix all at once.
+    const { count: normalizedCount } = await prisma.organizationUser.updateMany({
+      where: { status: 'active' },
+      data: { status: 'confirmed' },
+    });
+
     const results: { email: string; created: string[] }[] = [];
 
     // ── Phase 1: Create ZKUser for web Users that don't have one ──────────
@@ -122,6 +130,7 @@ export async function POST() {
     }
 
     return NextResponse.json({
+      normalizedActiveMemberships: normalizedCount,
       totalWebUsersBackfilled: webUsersWithoutZK.length,
       totalZKUsersChecked: allZKUsers.length,
       updated: results.length,

@@ -13,6 +13,15 @@ export async function ensureUserDefaults(
   zkUserId: string,
   displayName: string,
 ): Promise<{ orgId: string; teamId: string; vaultId: string }> {
+  // 0. Normalize any 'active' memberships to 'confirmed' for this user.
+  //    The 'active' status is not a valid OrganizationUserStatus and causes
+  //    memberships to be invisible in the dashboard (which filters by
+  //    'confirmed' | 'invited' only).
+  await prisma.organizationUser.updateMany({
+    where: { userId: zkUserId, status: 'active' },
+    data: { status: 'confirmed' },
+  });
+
   // 1. Find or create the user's personal Organization
   const orgMembership = await prisma.organizationUser.findFirst({
     where: { userId: zkUserId, role: 'owner' },
