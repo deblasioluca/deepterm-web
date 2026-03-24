@@ -100,8 +100,9 @@ export async function POST(
       userAgent: request.headers.get('user-agent') || undefined,
     });
 
-    // Sync org plan to the newly confirmed member (fire-and-forget)
-    if (member.userId) {
+    // Sync org plan to the newly confirmed member (fire-and-forget).
+    // Only sync for org-covered members — self-paying members keep their own plan.
+    if (member.userId && member.seatCoveredByOrg) {
       syncNewMemberPlan(orgId, member.userId).catch(() => {});
     }
 

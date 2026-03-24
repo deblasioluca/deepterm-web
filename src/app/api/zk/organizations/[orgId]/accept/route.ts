@@ -152,8 +152,9 @@ export async function POST(
       }
     }
 
-    // Sync org plan to the newly accepted member (fire-and-forget)
-    if (!sessionOnly && auth.userId) {
+    // Sync org plan to the newly accepted member (fire-and-forget).
+    // Only sync for org-covered members — self-paying members keep their own plan.
+    if (!sessionOnly && auth.userId && membership.seatCoveredByOrg) {
       syncNewMemberPlan(orgId, auth.userId).catch(() => {});
     }
 

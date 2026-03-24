@@ -22,8 +22,9 @@ export async function syncOrgMemberPlans(
   stripeSubscriptionId: string | null
 ) {
   try {
+    // Only sync org-covered members — self-paying members keep their own plan
     const orgMembers = await prisma.organizationUser.findMany({
-      where: { organizationId, status: 'confirmed' },
+      where: { organizationId, status: 'confirmed', seatCoveredByOrg: true },
       include: { user: { include: { webUser: true } } },
     });
     const webUserIds = orgMembers
