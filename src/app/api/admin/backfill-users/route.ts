@@ -27,21 +27,42 @@ export async function POST() {
     const phase1WebUserIds = new Set<string>();
 
     for (const webUser of webUsersWithoutZK) {
-      // Re-use the same bcrypt hash so the login-password endpoint can verify
-      const zkUser = await prisma.zKUser.create({
-        data: {
-          email: webUser.email.toLowerCase(),
-          masterPasswordHash: webUser.passwordHash!,
-          protectedSymmetricKey: '',
-          publicKey: '',
-          encryptedPrivateKey: '',
-          webUserId: webUser.id,
-        },
+      // Check if a ZKUser already exists with this email but isn't linked
+      const existingZK = await prisma.zKUser.findUnique({
+        where: { email: webUser.email.toLowerCase() },
       });
 
+      let zkUserId: string;
+      const created: string[] = [];
+
+      if (existingZK) {
+        // Link the existing ZKUser to this web User instead of creating a duplicate
+        await prisma.zKUser.update({
+          where: { id: existingZK.id },
+          data: { webUserId: webUser.id },
+        });
+        zkUserId = existingZK.id;
+        created.push('webUserLink');
+      } else {
+        // Re-use the same bcrypt hash so the login-password endpoint can verify
+        const zkUser = await prisma.zKUser.create({
+          data: {
+            email: webUser.email.toLowerCase(),
+            masterPasswordHash: webUser.passwordHash!,
+            protectedSymmetricKey: '',
+            publicKey: '',
+            encryptedPrivateKey: '',
+            webUserId: webUser.id,
+          },
+        });
+        zkUserId = zkUser.id;
+        created.push('zkUser');
+      }
+
       const displayName = webUser.name || webUser.email.split('@')[0];
-      await ensureUserDefaults(zkUser.id, displayName);
-      results.push({ email: webUser.email, created: ['zkUser', 'organization', 'team', 'vault'] });
+      await ensureUserDefaults(zkUserId, displayName);
+      created.push('organization', 'team', 'vault');
+      results.push({ email: webUser.email, created });
       phase1WebUserIds.add(webUser.id);
     }
 
