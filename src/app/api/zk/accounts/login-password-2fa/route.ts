@@ -14,6 +14,7 @@ import {
   successResponse,
   handleCorsPreflightRequest,
 } from '@/lib/zk';
+import { ensureUserDefaults } from '@/lib/zk/ensure-user-defaults';
 import crypto from 'crypto';
 
 export async function OPTIONS() {
@@ -177,25 +178,25 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    // Find or create default vault
-    let defaultVault = await prisma.zKVault.findFirst({
-      where: { userId: zkUser.id, isDefault: true },
+    // Ensure default org, team, and vault exist for this user
+    const displayName = webUser.name || normalizedEmail.split('@')[0];
+    const { vaultId: defaultVaultId } = await ensureUserDefaults(zkUser.id, displayName);
+
+    // Link any pending org invitations (by invitedEmail) to the newly-created ZKUser
+    await prisma.organizationUser.updateMany({
+      where: {
+        invitedEmail: normalizedEmail,
+        userId: null,
+      },
+      data: {
+        userId: zkUser.id,
+      },
     });
-    
-    if (!defaultVault) {
-      defaultVault = await prisma.zKVault.create({
-        data: {
-          userId: zkUser.id,
-          name: '', // Empty - encrypted name will be set by app on first sync
-          isDefault: true,
-        },
-      });
-    }
 
     const hasKeys = Boolean(zkUser.publicKey && zkUser.encryptedPrivateKey);
 
     return successResponse({
-      defaultVaultId: defaultVault.id,
+      defaultVaultId,
       accessToken,
       refreshToken,
       expiresIn,
