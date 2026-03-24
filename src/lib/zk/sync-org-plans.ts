@@ -93,11 +93,13 @@ export async function syncOrgMemberPlans(
           let bestOtherOrgPlan: string | null = null;
           let bestOtherOrgSubId: string | null = null;
           if (wu.zkUser) {
+            // Only consider memberships where the org actually covers the seat
             const otherOrgMemberships = await prisma.organizationUser.findMany({
               where: {
                 userId: wu.zkUser.id,
                 status: 'confirmed',
                 organizationId: { not: organizationId },
+                seatCoveredByOrg: true,
               },
               include: { organization: true },
             });
@@ -237,10 +239,12 @@ export async function clearRemovedMemberPlan(userId: string) {
       const planRank: Record<string, number> = {
         free: 0, starter: 0, pro: 1, team: 2, business: 3, enterprise: 4,
       };
+      // Only consider memberships where the org actually covers the seat
       const otherOrgMemberships = await prisma.organizationUser.findMany({
         where: {
           userId,
           status: 'confirmed',
+          seatCoveredByOrg: true,
         },
         include: { organization: true },
       });
