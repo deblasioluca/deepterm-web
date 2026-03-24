@@ -3,7 +3,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 // Mock prisma
 vi.mock('@/lib/prisma', () => ({
   prisma: {
-    organizationUser: { findFirst: vi.fn(), create: vi.fn() },
+    organizationUser: { findFirst: vi.fn(), create: vi.fn(), updateMany: vi.fn() },
     organization: { create: vi.fn() },
     orgTeam: { findFirst: vi.fn(), create: vi.fn() },
     orgTeamMember: { findFirst: vi.fn(), create: vi.fn() },
@@ -15,7 +15,7 @@ import { ensureUserDefaults } from '../ensure-user-defaults';
 import { prisma } from '@/lib/prisma';
 
 const mockPrisma = prisma as unknown as {
-  organizationUser: { findFirst: ReturnType<typeof vi.fn>; create: ReturnType<typeof vi.fn> };
+  organizationUser: { findFirst: ReturnType<typeof vi.fn>; create: ReturnType<typeof vi.fn>; updateMany: ReturnType<typeof vi.fn> };
   organization: { create: ReturnType<typeof vi.fn> };
   orgTeam: { findFirst: ReturnType<typeof vi.fn>; create: ReturnType<typeof vi.fn> };
   orgTeamMember: { findFirst: ReturnType<typeof vi.fn>; create: ReturnType<typeof vi.fn> };
@@ -32,6 +32,8 @@ beforeEach(() => {
 
 describe('ensureUserDefaults', () => {
   it('creates org, team, team membership, and vault for new user', async () => {
+    // Normalize active memberships (no-op for new user)
+    mockPrisma.organizationUser.updateMany.mockResolvedValue({ count: 0 });
     // No existing org membership
     mockPrisma.organizationUser.findFirst.mockResolvedValue(null);
     // Create org
@@ -102,7 +104,26 @@ describe('ensureUserDefaults', () => {
     });
   });
 
+  it('normalizes active memberships to confirmed on login', async () => {
+    // Simulate 2 memberships with 'active' status being normalized
+    mockPrisma.organizationUser.updateMany.mockResolvedValue({ count: 2 });
+    // Existing org membership
+    mockPrisma.organizationUser.findFirst.mockResolvedValue({ organizationId: 'org-1' });
+    mockPrisma.orgTeam.findFirst.mockResolvedValue({ id: 'team-1' });
+    mockPrisma.orgTeamMember.findFirst.mockResolvedValue({ id: 'tm-1' });
+    mockPrisma.zKVault.findFirst.mockResolvedValue({ id: 'vault-1' });
+
+    await ensureUserDefaults('user-1', 'Alice');
+
+    // Verify normalization was called with correct params
+    expect(mockPrisma.organizationUser.updateMany).toHaveBeenCalledWith({
+      where: { userId: 'user-1', status: 'active' },
+      data: { status: 'confirmed' },
+    });
+  });
+
   it('reuses existing org when user already owns one', async () => {
+    mockPrisma.organizationUser.updateMany.mockResolvedValue({ count: 0 });
     // Existing org membership
     mockPrisma.organizationUser.findFirst.mockResolvedValue({
       organizationId: 'existing-org',
@@ -124,6 +145,7 @@ describe('ensureUserDefaults', () => {
   });
 
   it('reuses existing team when org already has default team', async () => {
+    mockPrisma.organizationUser.updateMany.mockResolvedValue({ count: 0 });
     mockPrisma.organizationUser.findFirst.mockResolvedValue({
       organizationId: 'org-1',
     });
@@ -142,6 +164,7 @@ describe('ensureUserDefaults', () => {
   });
 
   it('reuses existing vault when user already has default vault', async () => {
+    mockPrisma.organizationUser.updateMany.mockResolvedValue({ count: 0 });
     mockPrisma.organizationUser.findFirst.mockResolvedValue({
       organizationId: 'org-1',
     });
@@ -156,6 +179,7 @@ describe('ensureUserDefaults', () => {
   });
 
   it('is idempotent — calling twice returns same IDs', async () => {
+    mockPrisma.organizationUser.updateMany.mockResolvedValue({ count: 0 });
     // First call: everything exists
     mockPrisma.organizationUser.findFirst.mockResolvedValue({ organizationId: 'org-1' });
     mockPrisma.orgTeam.findFirst.mockResolvedValue({ id: 'team-1' });
@@ -172,6 +196,7 @@ describe('ensureUserDefaults', () => {
   });
 
   it('adds user to team if not already a member', async () => {
+    mockPrisma.organizationUser.updateMany.mockResolvedValue({ count: 0 });
     mockPrisma.organizationUser.findFirst.mockResolvedValue({ organizationId: 'org-1' });
     mockPrisma.orgTeam.findFirst.mockResolvedValue({ id: 'team-1' });
     // Not a member yet

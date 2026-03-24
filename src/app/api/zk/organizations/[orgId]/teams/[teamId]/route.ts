@@ -32,7 +32,7 @@ export async function DELETE(
 
     // Verify admin/owner
     const orgUser = await prisma.organizationUser.findFirst({
-      where: { userId: auth.userId, organizationId: orgId, status: 'confirmed' },
+      where: { userId: auth.userId, organizationId: orgId, status: { in: ['confirmed', 'active'] } },
     });
     if (!orgUser) return errorResponse('Organization not found or access denied', 404);
     if (orgUser.role !== 'owner' && orgUser.role !== 'admin') {

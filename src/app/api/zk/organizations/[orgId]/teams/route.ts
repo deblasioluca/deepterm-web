@@ -35,7 +35,7 @@ export async function GET(
     const orgUser = await prisma.organizationUser.findFirst({
       where: {
         organizationId: orgId,
-        status: 'confirmed',
+        status: { in: ['confirmed', 'active'] },
         ...(sessionOnly
           ? { invitedEmail: auth.email }
           : {
@@ -88,7 +88,7 @@ export async function POST(
 
     // Verify admin/owner
     const orgUser = await prisma.organizationUser.findFirst({
-      where: { userId: auth.userId, organizationId: orgId, status: 'confirmed' },
+      where: { userId: auth.userId, organizationId: orgId, status: { in: ['confirmed', 'active'] } },
     });
     if (!orgUser) return errorResponse('Organization not found or access denied', 404);
     if (orgUser.role !== 'owner' && orgUser.role !== 'admin') {
