@@ -36,13 +36,15 @@ export async function POST() {
       const created: string[] = [];
 
       if (existingZK) {
-        // Link the existing ZKUser to this web User instead of creating a duplicate
-        await prisma.zKUser.update({
-          where: { id: existingZK.id },
-          data: { webUserId: webUser.id },
-        });
+        if (!existingZK.webUserId) {
+          // Link the existing ZKUser to this web User instead of creating a duplicate
+          await prisma.zKUser.update({
+            where: { id: existingZK.id },
+            data: { webUserId: webUser.id },
+          });
+          created.push('webUserLink');
+        }
         zkUserId = existingZK.id;
-        created.push('webUserLink');
       } else {
         // Re-use the same bcrypt hash so the login-password endpoint can verify
         const zkUser = await prisma.zKUser.create({

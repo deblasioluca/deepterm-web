@@ -53,21 +53,22 @@ export async function DELETE(request: NextRequest) {
     // Revoke all tokens first
     await revokeAllTokens(auth.userId);
 
-    // Audit log before deletion (user row will be gone after)
-    await createAuditLog({
-      eventType: 'account_deleted',
-      ipAddress: getClientIP(request),
-      userAgent: request.headers.get('user-agent') || undefined,
-      metadata: { deletedUserId: auth.userId, deletedEmail: user.email },
-    });
-
     // Cascade-delete ALL related data
+    const deletedEmail = user.email;
     await prisma.$transaction(async (tx) => {
       await cascadeDeleteUser(tx, {
         webUserId: user.webUserId || undefined,
         zkUserId: auth.userId,
-        userEmail: user.email,
+        userEmail: deletedEmail,
       });
+    });
+
+    // Audit log after successful deletion (user row is gone, use captured data)
+    await createAuditLog({
+      eventType: 'account_deleted',
+      ipAddress: getClientIP(request),
+      userAgent: request.headers.get('user-agent') || undefined,
+      metadata: { deletedUserId: auth.userId, deletedEmail },
     });
 
     const response = successResponse({ message: 'Account deleted successfully' });
