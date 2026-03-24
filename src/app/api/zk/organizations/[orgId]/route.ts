@@ -188,7 +188,13 @@ export async function DELETE(
       return addCorsHeaders(response);
     }
 
-    // Audit log BEFORE deletion (the org will be gone after)
+    // Delete organization and ALL children explicitly (SQLite FK cascades are unreliable)
+    await prisma.$transaction(async (tx) => {
+      await deleteOrganization(tx, orgId);
+    });
+
+    // Audit log AFTER successful deletion — avoids false entries if transaction fails.
+    // createAuditLog stores orgId in metadata (not FK), so it works post-deletion.
     await createAuditLog({
       userId: auth.userId,
       eventType: 'org_deleted',
@@ -197,11 +203,6 @@ export async function DELETE(
       ipAddress: getClientIP(request),
       userAgent: request.headers.get('user-agent') || undefined,
       metadata: { organizationId: orgId },
-    });
-
-    // Delete organization and ALL children explicitly (SQLite FK cascades are unreliable)
-    await prisma.$transaction(async (tx) => {
-      await deleteOrganization(tx, orgId);
     });
 
     return new NextResponse(null, { status: 204 });
