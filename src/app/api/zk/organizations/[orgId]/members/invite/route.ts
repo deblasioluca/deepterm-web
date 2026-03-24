@@ -118,8 +118,16 @@ export async function POST(
     if (orgHasPaidPlan && inviteeIsOnFreePlan) {
       // Invitee is on a free plan and org has a paid plan.
       // The inviter must explicitly accept covering the seat cost.
+      // Count only org-covered seats (self-paying members don't consume org seats)
+      const orgCoveredSeats = await prisma.organizationUser.count({
+        where: {
+          organizationId: orgId,
+          status: { in: ['confirmed', 'invited'] },
+          seatCoveredByOrg: true,
+        },
+      });
+
       if (coverSeat !== true) {
-        const seatsUsed = org._count.members;
         const response = NextResponse.json(
           {
             error: 'subscription_required',
@@ -128,9 +136,9 @@ export async function POST(
               `under your ${org.plan} plan. This will use 1 seat.`,
             inviteePlan,
             orgPlan: org.plan,
-            seatsUsed,
+            seatsUsed: orgCoveredSeats,
             seatsTotal: org.seats,
-            seatsAvailable: Math.max(0, org.seats - seatsUsed),
+            seatsAvailable: Math.max(0, org.seats - orgCoveredSeats),
             requiresCoverSeat: true,
           },
           { status: 402 }
@@ -139,14 +147,13 @@ export async function POST(
       }
 
       // Inviter accepted — check seat availability
-      const seatsUsed = org._count.members;
-      if (seatsUsed >= org.seats) {
+      if (orgCoveredSeats >= org.seats) {
         const response = NextResponse.json(
           {
             error: 'seats_exhausted',
             message: `All ${org.seats} seats are in use. Purchase additional seats ` +
               `or remove a member before inviting.`,
-            seatsUsed,
+            seatsUsed: orgCoveredSeats,
             seatsTotal: org.seats,
           },
           { status: 402 }

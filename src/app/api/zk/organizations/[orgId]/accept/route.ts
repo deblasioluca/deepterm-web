@@ -65,22 +65,26 @@ export async function POST(
     if (membership.seatCoveredByOrg) {
       const org = await prisma.organization.findUnique({
         where: { id: orgId },
-        include: {
-          _count: {
-            select: {
-              members: { where: { status: { in: ['confirmed', 'invited'] } } },
-            },
-          },
+        select: { seats: true },
+      });
+
+      // Count org-covered seats excluding this membership (it's already counted as 'invited')
+      const orgCoveredSeats = await prisma.organizationUser.count({
+        where: {
+          organizationId: orgId,
+          status: { in: ['confirmed', 'invited'] },
+          seatCoveredByOrg: true,
+          id: { not: membership.id },
         },
       });
 
-      if (org && org._count.members >= org.seats) {
+      if (org && orgCoveredSeats >= org.seats) {
         const response = NextResponse.json(
           {
             error: 'seats_exhausted',
             message: `All ${org.seats} seats are in use. The organization needs to ` +
               `purchase additional seats before you can join.`,
-            seatsUsed: org._count.members,
+            seatsUsed: orgCoveredSeats,
             seatsTotal: org.seats,
           },
           { status: 402 }

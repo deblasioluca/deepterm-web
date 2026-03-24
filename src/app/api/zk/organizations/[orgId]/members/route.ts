@@ -92,13 +92,17 @@ export async function GET(
       if (org) {
         const confirmedCount = members.filter(m => m.status === 'confirmed').length;
         const invitedCount = members.filter(m => m.status === 'invited').length;
+        // Only org-covered members consume paid seats
+        const orgCoveredSeats = members.filter(
+          m => m.seatCoveredByOrg && (m.status === 'confirmed' || m.status === 'invited')
+        ).length;
         orgBilling = {
           plan: org.plan,
           seats: org.seats,
           maxMembers: org.maxMembers,
           memberBillingMode: org.memberBillingMode,
           subscriptionStatus: org.subscriptionStatus,
-          seatsUsed: confirmedCount + invitedCount,
+          seatsUsed: orgCoveredSeats,
           confirmedMembers: confirmedCount,
           pendingInvites: invitedCount,
         };
