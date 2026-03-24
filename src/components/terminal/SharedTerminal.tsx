@@ -68,6 +68,14 @@ export function SharedTerminal({
         const msg = JSON.parse(event.data);
 
         switch (msg.type) {
+          case 'connected':
+            // Welcome message from server — we're authenticated
+            if (termRef.current) {
+              termRef.current.writeln('\x1b[32m✓ Connected to collaboration server\x1b[0m');
+              termRef.current.writeln('\x1b[90mWaiting for terminal output from session owner...\x1b[0m');
+              termRef.current.writeln('');
+            }
+            break;
           case 'terminal_output':
             if (msg.payload?.data && termRef.current) {
               termRef.current.write(msg.payload.data);
