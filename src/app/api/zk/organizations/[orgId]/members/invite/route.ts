@@ -63,7 +63,7 @@ export async function POST(
       where: {
         userId: auth.userId,
         organizationId: orgId,
-        status: 'confirmed',
+        status: { in: ['confirmed', 'active'] },
         role: { in: ['owner', 'admin'] },
       },
     });

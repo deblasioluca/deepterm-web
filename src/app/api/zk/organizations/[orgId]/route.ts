@@ -38,7 +38,7 @@ export async function GET(
       where: {
         userId: auth.userId,
         organizationId: orgId,
-        status: 'confirmed',
+        status: { in: ['confirmed', 'active'] },
       },
     });
 
@@ -108,7 +108,7 @@ export async function PUT(
       where: {
         userId: auth.userId,
         organizationId: orgId,
-        status: 'confirmed',
+        status: { in: ['confirmed', 'active'] },
         role: { in: ['owner', 'admin'] },
       },
     });
@@ -166,7 +166,7 @@ export async function DELETE(
       where: {
         userId: auth.userId,
         organizationId: orgId,
-        status: 'confirmed',
+        status: { in: ['confirmed', 'active'] },
         role: 'owner',
       },
     });

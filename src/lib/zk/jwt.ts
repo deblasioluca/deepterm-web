@@ -75,7 +75,7 @@ export async function createTokenPair(
   // Get organization IDs if not provided
   if (!orgIds) {
     const orgUsers = await prisma.organizationUser.findMany({
-      where: { userId, status: 'confirmed' },
+      where: { userId, status: { in: ['confirmed', 'active'] } },
       select: { organizationId: true },
     });
     orgIds = orgUsers.map(ou => ou.organizationId);
@@ -138,7 +138,7 @@ export async function refreshTokenPair(refreshToken: string): Promise<TokenPair 
 
   // Get user's org IDs
   const orgUsers = await prisma.organizationUser.findMany({
-    where: { userId: storedToken.userId, status: 'confirmed' },
+    where: { userId: storedToken.userId, status: { in: ['confirmed', 'active'] } },
     select: { organizationId: true },
   });
   const orgIds = orgUsers.map(ou => ou.organizationId);

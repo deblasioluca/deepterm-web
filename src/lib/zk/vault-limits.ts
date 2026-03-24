@@ -82,7 +82,7 @@ export async function checkVaultItemLimit(
     // Personal vault → use the user's effective plan (max of individual + org)
     // Look up ALL user's organizations — pick the one with the best plan
     const memberships = await prisma.organizationUser.findMany({
-      where: { userId, status: 'confirmed' },
+      where: { userId, status: { in: ['confirmed', 'active'] } },
       include: { organization: true },
     });
 

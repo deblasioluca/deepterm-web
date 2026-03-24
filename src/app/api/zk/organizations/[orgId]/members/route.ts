@@ -39,7 +39,7 @@ export async function GET(
     const orgUser = await prisma.organizationUser.findFirst({
       where: {
         organizationId: orgId,
-        status: 'confirmed',
+        status: { in: ['confirmed', 'active'] },
         ...(sessionOnly
           ? { invitedEmail: auth.email }
           : {

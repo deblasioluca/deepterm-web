@@ -71,7 +71,7 @@ export async function getAuthFromRequestOrSession(request: NextRequest): Promise
 
   // Get org memberships for the payload
   const orgUsers = await prisma.organizationUser.findMany({
-    where: { userId: zkUser.id, status: 'confirmed' },
+    where: { userId: zkUser.id, status: { in: ['confirmed', 'active'] } },
     select: { organizationId: true },
   });
 
