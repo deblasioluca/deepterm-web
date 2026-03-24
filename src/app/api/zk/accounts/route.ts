@@ -11,6 +11,7 @@ import {
   handleCorsPreflightRequest,
   addCorsHeaders,
 } from '@/lib/zk';
+import { cascadeDeleteUser } from '@/lib/zk/cascade-delete-user';
 
 export async function OPTIONS() {
   return handleCorsPreflightRequest();
@@ -52,17 +53,22 @@ export async function DELETE(request: NextRequest) {
     // Revoke all tokens first
     await revokeAllTokens(auth.userId);
 
-    // Delete all user data (cascades will handle related records)
-    await prisma.zKUser.delete({
-      where: { id: auth.userId },
+    // Cascade-delete ALL related data
+    const deletedEmail = user.email;
+    await prisma.$transaction(async (tx) => {
+      await cascadeDeleteUser(tx, {
+        webUserId: user.webUserId || undefined,
+        zkUserId: auth.userId,
+        userEmail: deletedEmail,
+      });
     });
 
-    // Audit log (create before deletion completes)
+    // Audit log after successful deletion (user row is gone, use captured data)
     await createAuditLog({
-      eventType: 'user_registered', // Using a neutral event since user is deleted
+      eventType: 'account_deleted',
       ipAddress: getClientIP(request),
       userAgent: request.headers.get('user-agent') || undefined,
-      metadata: { deletedUserId: auth.userId, deletedEmail: user.email },
+      metadata: { deletedUserId: auth.userId, deletedEmail },
     });
 
     const response = successResponse({ message: 'Account deleted successfully' });

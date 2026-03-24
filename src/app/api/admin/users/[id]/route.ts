@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import bcrypt from 'bcryptjs';
+import { cascadeDeleteUser } from '@/lib/zk/cascade-delete-user';
 
 // GET - Get a single user
 export async function GET(
@@ -170,7 +171,7 @@ export async function PATCH(
   }
 }
 
-// DELETE - Delete a user
+// DELETE - Delete a user and ALL related data (ZKUser, orgs, teams, vaults, memberships)
 export async function DELETE(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -189,26 +190,17 @@ export async function DELETE(
       );
     }
 
-    // Delete user and related data in a transaction
+    // Look up linked ZKUser
+    const zkUser = await prisma.zKUser.findFirst({
+      where: { webUserId: id },
+    });
+
+    // Delete user and ALL related data in a transaction
     await prisma.$transaction(async (tx) => {
-      // Delete votes first (references ideas)
-      await tx.vote.deleteMany({
-        where: { userId: id },
-      });
-
-      // Delete ideas
-      await tx.idea.deleteMany({
-        where: { authorId: id },
-      });
-
-      // Delete sessions
-      await tx.session.deleteMany({
-        where: { userId: id },
-      });
-
-      // Finally delete the user
-      await tx.user.delete({
-        where: { id },
+      await cascadeDeleteUser(tx, {
+        webUserId: id,
+        zkUserId: zkUser?.id,
+        userEmail: user.email,
       });
     });
 

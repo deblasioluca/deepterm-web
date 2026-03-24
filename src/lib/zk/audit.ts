@@ -38,7 +38,8 @@ export type AuditEventType =
   | 'terminal_participant_updated'
   | 'team_updated'
   | 'team_deleted'
-  | 'invitation_accepted';
+  | 'invitation_accepted'
+  | 'account_deleted';
 
 export type AuditTargetType = 
   | 'user'
