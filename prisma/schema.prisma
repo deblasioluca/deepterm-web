@@ -97,6 +97,10 @@ model Organization {
   currentPeriodEnd     DateTime?
   cancelAtPeriodEnd    Boolean          @default(false)
   seats                Int              @default(1)
+  // Member billing: 'org_covers' = org pays for all seats,
+  // 'self_pay' = members must have their own Pro+ subscription,
+  // 'hybrid' = org admin decides per-invite whether to cover the seat
+  memberBillingMode    String           @default("org_covers")
   // Relations
   members      OrganizationUser[]
   auditLogs    ZKAuditLog[]
@@ -122,6 +126,8 @@ model OrganizationUser {
   invitedEmail    String?
   expiresAt       DateTime?
   confirmedAt     DateTime?
+  // Whether the org covers this member's seat (true) or the member self-pays (false)
+  seatCoveredByOrg Boolean      @default(true)
   createdAt       DateTime     @default(now())
   updatedAt       DateTime     @updatedAt
   user            ZKUser?      @relation(fields: [userId], references: [id], onDelete: Cascade)

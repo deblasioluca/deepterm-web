@@ -1,4 +1,4 @@
-import { NextRequest } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import {
   getAuthFromRequest,
@@ -57,6 +57,36 @@ export async function POST(
 
     if (!membership) {
       return errorResponse('No pending invitation found for this organization', 404);
+    }
+
+    // ── Seat re-check (race condition guard) ──
+    // If this invitation was marked as org-covered, re-verify seat availability
+    // in case seats were consumed between invite and accept.
+    if (membership.seatCoveredByOrg) {
+      const org = await prisma.organization.findUnique({
+        where: { id: orgId },
+        include: {
+          _count: {
+            select: {
+              members: { where: { status: 'confirmed' } },
+            },
+          },
+        },
+      });
+
+      if (org && org._count.members >= org.seats) {
+        const response = NextResponse.json(
+          {
+            error: 'seats_exhausted',
+            message: `All ${org.seats} seats are in use. The organization needs to ` +
+              `purchase additional seats before you can join.`,
+            seatsUsed: org._count.members,
+            seatsTotal: org.seats,
+          },
+          { status: 402 }
+        );
+        return addCorsHeaders(response);
+      }
     }
 
     // Update status to confirmed and clear the invitation token.

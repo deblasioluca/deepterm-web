@@ -50,7 +50,7 @@ const plans = [
       'All Pro features',
       'Team vault for simple, secure sharing',
       'Real-time collaboration',
-      'Consolidated billing',
+      'Consolidated billing — cover seats for free-tier members'
     ],
     cta: 'Try for Free',
     ctaVariant: 'primary' as const,
@@ -66,7 +66,7 @@ const plans = [
     features: [
       'All Team features',
       'Multiple vaults with granular permissions',
-      'SOC2 Type II report',
+      'SOC2 Type II report — org covers member seats',
       'SAML SSO',
     ],
     cta: 'Try for Free',

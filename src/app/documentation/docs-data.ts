@@ -1971,10 +1971,20 @@ Subsystem sftp /usr/lib/openssh/sftp-server</code></pre>
   <li>Open your organization in Account Settings or the Collaboration dashboard.</li>
   <li>Click <strong>Invite Member</strong>.</li>
   <li>Enter their email address and select a role.</li>
+  <li>If the invitee is on the <strong>Free</strong> or <strong>Starter</strong> plan, you'll be asked to confirm that your organization will cover their seat subscription. The invite cannot be sent without this confirmation.</li>
   <li>They receive an email invitation with a link to join.</li>
 </ol>
 
-<p><strong>Note:</strong> You can invite users who don't have a DeepTerm account yet. They'll be prompted to create one when they click the invitation link.</p>
+<p><strong>Note:</strong> You can invite users who don't have a DeepTerm account yet. They'll be prompted to create one when they click the invitation link. Unregistered users are treated as Free-plan users, so the same seat coverage confirmation applies.</p>
+
+<h3>Subscription &amp; Seat Coverage</h3>
+<p>When your organization is on a <strong>Team</strong> or <strong>Business</strong> plan:</p>
+<ul>
+  <li><strong>Free/Starter invitees</strong> — the organization covers their seat. They are elevated to the org's plan upon joining. This uses one of your paid seats.</li>
+  <li><strong>Pro+ invitees</strong> — they already have their own subscription. They join without consuming an additional seat.</li>
+  <li>If all seats are in use, you must purchase additional seats before inviting more Free/Starter users.</li>
+</ul>
+<p>The inviter always sees the invitee's current plan before sending the invitation, ensuring full transparency about costs.</p>
 
 <h3>Member Roles</h3>
 <table>
@@ -2019,7 +2029,15 @@ Subsystem sftp /usr/lib/openssh/sftp-server</code></pre>
 </ul>
 
 <h3>Seat Management</h3>
-<p>Your subscription includes a number of seats. Each organization member occupies one seat. Add more seats from the billing page if your team grows beyond the current allocation.</p>
+<p>Your subscription includes a number of seats. Each confirmed or invited organization member occupies one seat. Add more seats from the billing page if your team grows beyond the current allocation.</p>
+
+<h3>How Seats Work When Inviting</h3>
+<p>When you invite someone to your organization:</p>
+<ul>
+  <li><strong>Free/Starter users</strong> — the organization covers their seat cost. You must confirm this before the invite can be sent. They are elevated to your org's plan (e.g. Team) when they accept.</li>
+  <li><strong>Pro+ users</strong> — they have their own subscription. They join without consuming an additional org seat because they are self-paying.</li>
+</ul>
+<p>The member list in the organization settings shows each member's plan, whether their seat is covered by the org, and current seat usage vs. total seats available.</p>
 `,
       },
     ],
