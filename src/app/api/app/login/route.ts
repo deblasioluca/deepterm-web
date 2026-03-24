@@ -51,7 +51,7 @@ export async function POST(request: NextRequest) {
       }
 
       if (!user) {
-        return NextResponse.json({ error: 'No account found with this email address. Please check for typos or register first.' }, { status: 404 });
+        return NextResponse.json({ error: 'User not found', message: 'No account found with this email address. Please check for typos or register first.' }, { status: 404 });
       }
     } else {
       const { email, password, twoFactorCode } = await request.json();
@@ -70,7 +70,7 @@ export async function POST(request: NextRequest) {
 
       if (!user) {
         return NextResponse.json(
-          { error: 'No account found with this email address. Please check for typos or register first.' },
+          { error: 'User not found', message: 'No account found with this email address. Please check for typos or register first.' },
           { status: 404 }
         );
       }
