@@ -2,8 +2,9 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
-import { useSession } from 'next-auth/react';
+import { useSession, signOut } from 'next-auth/react';
 import { Card, Button, Input, Badge, Modal } from '@/components/ui';
 import {
   User,
@@ -47,10 +48,14 @@ const mockSessions = [
 
 export default function AccountPage() {
   const { data: session, status } = useSession();
+  const router = useRouter();
   const [user, setUser] = useState(defaultUser);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [isPasswordModalOpen, setIsPasswordModalOpen] = useState(false);
   const [sessions] = useState(mockSessions);
+  const [deleteConfirmation, setDeleteConfirmation] = useState('');
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState('');
 
   // Update user state when session loads
   useEffect(() => {
@@ -271,17 +276,55 @@ export default function AccountPage() {
               Please type <strong>delete my account</strong> to confirm.
             </p>
           </div>
-          <Input placeholder="delete my account" />
+          <Input
+            placeholder="delete my account"
+            value={deleteConfirmation}
+            onChange={(e) => setDeleteConfirmation(e.target.value)}
+          />
+          {deleteError && (
+            <p className="text-sm text-accent-danger">{deleteError}</p>
+          )}
           <div className="flex gap-3">
             <Button
               variant="secondary"
               className="flex-1"
-              onClick={() => setIsDeleteModalOpen(false)}
+              onClick={() => {
+                setIsDeleteModalOpen(false);
+                setDeleteConfirmation('');
+                setDeleteError('');
+              }}
+              disabled={isDeleting}
             >
               Cancel
             </Button>
-            <Button variant="danger" className="flex-1">
-              Delete Account
+            <Button
+              variant="danger"
+              className="flex-1"
+              disabled={deleteConfirmation !== 'delete my account' || isDeleting}
+              onClick={async () => {
+                setIsDeleting(true);
+                setDeleteError('');
+                try {
+                  const res = await fetch('/api/user/delete-account', {
+                    method: 'DELETE',
+                  });
+                  if (!res.ok) {
+                    const data = await res.json();
+                    throw new Error(data.error || 'Failed to delete account');
+                  }
+                  await signOut({ redirect: false });
+                  router.push('/login');
+                } catch (err) {
+                  setDeleteError(err instanceof Error ? err.message : 'Failed to delete account');
+                  setIsDeleting(false);
+                }
+              }}
+            >
+              {isDeleting ? (
+                <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Deleting...</>
+              ) : (
+                'Delete Account'
+              )}
             </Button>
           </div>
         </div>

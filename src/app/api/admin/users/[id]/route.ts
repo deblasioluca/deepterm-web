@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import bcrypt from 'bcryptjs';
+import { cascadeDeleteUser } from '@/lib/zk/cascade-delete-user';
 
 // GET - Get a single user
 export async function GET(
@@ -194,109 +195,13 @@ export async function DELETE(
       where: { webUserId: id },
     });
 
-    const userEmail = user.email.toLowerCase();
-
     // Delete user and ALL related data in a transaction
     await prisma.$transaction(async (tx) => {
-      if (zkUser) {
-        const zkUserId = zkUser.id;
-
-        // --- Collaboration data (references ZKUser) ---
-        await tx.sharedSessionParticipant.deleteMany({ where: { userId: zkUserId } });
-        await tx.sharedTerminalSession.deleteMany({ where: { ownerId: zkUserId } });
-        await tx.chatFile.deleteMany({ where: { uploaderId: zkUserId } });
-        await tx.chatMessage.deleteMany({ where: { senderId: zkUserId } });
-        await tx.chatChannelParticipant.deleteMany({ where: { userId: zkUserId } });
-        await tx.teamPresence.deleteMany({ where: { userId: zkUserId } });
-
-        // --- Vault data ---
-        await tx.zKVaultItem.deleteMany({ where: { userId: zkUserId } });
-        // Delete personal vaults (owned by this user, not org-level)
-        await tx.zKVault.deleteMany({ where: { userId: zkUserId } });
-
-        // --- Audit logs ---
-        await tx.zKAuditLog.deleteMany({ where: { userId: zkUserId } });
-
-        // --- Device & token data ---
-        await tx.device.deleteMany({ where: { userId: zkUserId } });
-        await tx.refreshToken.deleteMany({ where: { userId: zkUserId } });
-
-        // --- Team memberships (OrgTeamMember) ---
-        await tx.orgTeamMember.deleteMany({
-          where: { OR: [{ userId: zkUserId }, { invitedEmail: userEmail }] },
-        });
-
-        // --- Find orgs where user is sole owner → delete those entirely ---
-        const ownedMemberships = await tx.organizationUser.findMany({
-          where: { userId: zkUserId, role: 'owner' },
-          select: { organizationId: true },
-        });
-
-        for (const membership of ownedMemberships) {
-          const orgId = membership.organizationId;
-          // Count other owners in this org
-          const otherOwners = await tx.organizationUser.count({
-            where: { organizationId: orgId, role: 'owner', userId: { not: zkUserId } },
-          });
-
-          if (otherOwners === 0) {
-            // User is sole owner → delete the entire org (cascades to OrgTeam, members, vaults, etc.)
-            // First clean up children that might not cascade in SQLite
-            const orgTeams = await tx.orgTeam.findMany({ where: { organizationId: orgId }, select: { id: true } });
-            for (const team of orgTeams) {
-              await tx.orgTeamMember.deleteMany({ where: { teamId: team.id } });
-            }
-            await tx.orgTeam.deleteMany({ where: { organizationId: orgId } });
-            await tx.zKVaultItem.deleteMany({
-              where: { vault: { organizationId: orgId } },
-            });
-            await tx.zKVault.deleteMany({ where: { organizationId: orgId } });
-            await tx.organizationUser.deleteMany({ where: { organizationId: orgId } });
-            await tx.teamPresence.deleteMany({ where: { organizationId: orgId } });
-            await tx.chatFile.deleteMany({ where: { organizationId: orgId } });
-            // Delete chat messages via channels
-            const orgChannels = await tx.chatChannel.findMany({ where: { organizationId: orgId }, select: { id: true } });
-            for (const ch of orgChannels) {
-              await tx.chatMessage.deleteMany({ where: { channelId: ch.id } });
-              await tx.chatChannelParticipant.deleteMany({ where: { channelId: ch.id } });
-            }
-            await tx.chatChannel.deleteMany({ where: { organizationId: orgId } });
-            await tx.sharedTerminalSession.deleteMany({ where: { organizationId: orgId } });
-            await tx.invoice.deleteMany({ where: { organizationId: orgId } });
-            await tx.paymentMethod.deleteMany({ where: { organizationId: orgId } });
-            await tx.zKAuditLog.deleteMany({ where: { organizationId: orgId } });
-            await tx.organization.delete({ where: { id: orgId } });
-          }
-        }
-
-        // --- Remove membership rows for orgs user was NOT sole owner of ---
-        await tx.organizationUser.deleteMany({ where: { userId: zkUserId } });
-
-        // --- Remove any dangling invitations by email ---
-        await tx.organizationUser.deleteMany({ where: { invitedEmail: userEmail, userId: null } });
-
-        // --- Delete the ZKUser ---
-        await tx.zKUser.delete({ where: { id: zkUserId } });
-      } else {
-        // No ZKUser — still clean up any org invitations by email
-        await tx.organizationUser.deleteMany({ where: { invitedEmail: userEmail, userId: null } });
-        await tx.orgTeamMember.deleteMany({ where: { invitedEmail: userEmail } });
-      }
-
-      // --- Web User data ---
-      // Delete votes first (references ideas via FK)
-      await tx.vote.deleteMany({ where: { userId: id } });
-      // Delete idea comments before ideas
-      const userIdeas = await tx.idea.findMany({ where: { authorId: id }, select: { id: true } });
-      if (userIdeas.length > 0) {
-        await tx.ideaComment.deleteMany({ where: { ideaId: { in: userIdeas.map(i => i.id) } } });
-      }
-      await tx.idea.deleteMany({ where: { authorId: id } });
-      await tx.session.deleteMany({ where: { userId: id } });
-      await tx.userNotification.deleteMany({ where: { userId: id } });
-
-      // Finally delete the User (cascades Account, Passkey, Issue, etc.)
-      await tx.user.delete({ where: { id } });
+      await cascadeDeleteUser(tx, {
+        webUserId: id,
+        zkUserId: zkUser?.id,
+        userEmail: user.email,
+      });
     });
 
     return NextResponse.json({ success: true });
