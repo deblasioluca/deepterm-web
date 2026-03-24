@@ -35,7 +35,7 @@ export async function POST() {
 
     // Get the user's confirmed org memberships
     const orgUsers = await prisma.organizationUser.findMany({
-      where: { userId: zkUser.id, status: 'confirmed' },
+      where: { userId: zkUser.id, status: { in: ['confirmed', 'active'] } },
       select: { organizationId: true },
     });
     const orgIds = orgUsers.map(ou => ou.organizationId);

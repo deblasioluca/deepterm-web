@@ -105,6 +105,20 @@ function leaveAllRooms(ws: AuthenticatedSocket) {
         payload: { userId: ws.userId, sessionId: key },
       });
       if (room.size === 0) terminalRooms.delete(key);
+      // If the disconnecting user is the session owner, mark session inactive
+      prisma.sharedTerminalSession.findUnique({
+        where: { id: key },
+        select: { ownerId: true },
+      }).then(sess => {
+        if (sess && sess.ownerId === ws.userId) {
+          prisma.sharedTerminalSession.update({
+            where: { id: key },
+            data: { isActive: false },
+          }).then(() => {
+            console.log(`[WS] Session ${key} marked inactive (owner disconnected)`);
+          }).catch(err => console.error('[WS] Failed to deactivate session on disconnect:', err));
+        }
+      }).catch(() => { /* ignore */ });
     }
   });
   Array.from(chatRooms.entries()).forEach(([key, room]) => {
@@ -279,6 +293,20 @@ async function handleTerminal(ws: AuthenticatedSocket, payload: Record<string, u
         });
         if (room.size === 0) terminalRooms.delete(sessionId);
       }
+      // If the owner leaves, mark the session as inactive in the DB
+      prisma.sharedTerminalSession.findUnique({
+        where: { id: sessionId },
+        select: { ownerId: true },
+      }).then(sess => {
+        if (sess && sess.ownerId === ws.userId) {
+          prisma.sharedTerminalSession.update({
+            where: { id: sessionId },
+            data: { isActive: false },
+          }).then(() => {
+            console.log(`[WS] Session ${sessionId} marked inactive (owner left)`);
+          }).catch(err => console.error('[WS] Failed to deactivate session:', err));
+        }
+      }).catch(err => console.error('[WS] Failed to check session owner:', err));
       break;
     }
     case 'output': {
@@ -571,18 +599,32 @@ function handleAudioSignal(ws: AuthenticatedSocket, payload: Record<string, unkn
 // ── Notification Handler ──────────────────────────────────────────────────────
 
 async function handleNotification(ws: AuthenticatedSocket, payload: Record<string, unknown>) {
-  const { notificationType, orgId, targetUserIds, data } = payload;
+  // Support both nested format ({ notificationType, data: {...} }) and flat format
+  // from the macOS app ({ sessionType: "terminal", sessionId, sessionName, ... }).
+  const orgId = (payload.orgId as string) || '';
+  if (!orgId || !ws.orgIds.includes(orgId)) return;
 
-  if (!orgId || typeof orgId !== 'string') return;
-  if (!ws.orgIds.includes(orgId)) return;
-  if (!data || typeof data !== 'object') return;
+  const rawTargets = Array.isArray(payload.targetUserIds) ? payload.targetUserIds as string[] : [];
 
-  const rawTargets = Array.isArray(targetUserIds) ? targetUserIds as string[] : [];
+  // Determine notification type from either nested or flat format
+  let notificationType = payload.notificationType as string | undefined;
+  if (!notificationType) {
+    // Flat format: derive from sessionType ("terminal" -> "terminal_invite")
+    const sessionType = payload.sessionType as string | undefined;
+    if (sessionType === 'terminal') notificationType = 'terminal_invite';
+    else if (sessionType === 'audio') notificationType = 'audio_invite';
+  }
+  if (!notificationType) return;
+
+  // Extract data from either nested "data" field or flat payload
+  const data = (payload.data && typeof payload.data === 'object')
+    ? payload.data as Record<string, unknown>
+    : payload;
 
   // Validate that target users are confirmed members of this organization
   const validMembers = rawTargets.length > 0
     ? await prisma.organizationUser.findMany({
-        where: { organizationId: orgId, userId: { in: rawTargets }, status: 'confirmed' },
+        where: { organizationId: orgId, userId: { in: rawTargets }, status: { in: ['confirmed', 'active'] } },
         select: { userId: true },
       })
     : [];
@@ -590,7 +632,9 @@ async function handleNotification(ws: AuthenticatedSocket, payload: Record<strin
 
   switch (notificationType) {
     case 'terminal_invite': {
-      const { sessionId, sessionName } = data as { sessionId: string; sessionName: string };
+      const sessionId = data.sessionId as string;
+      const sessionName = (data.sessionName as string) || 'Shared Terminal';
+      const orgName = (data.orgName as string) || '';
       // Notify online users via WebSocket
       for (const targetId of targets) {
         const sockets = socketsForUser(targetId);
@@ -601,11 +645,13 @@ async function handleNotification(ws: AuthenticatedSocket, payload: Record<strin
               channel: 'notification',
               payload: {
                 notificationType: 'terminal_invite',
+                sessionType: 'terminal',
                 fromUserId: ws.userId,
                 fromEmail: ws.email,
                 sessionId,
                 sessionName,
                 orgId,
+                orgName,
                 timestamp: new Date().toISOString(),
               },
             }));
@@ -623,7 +669,7 @@ async function handleNotification(ws: AuthenticatedSocket, payload: Record<strin
       break;
     }
     case 'audio_invite': {
-      const { roomName } = data as { roomName?: string };
+      const roomName = (data.roomName as string) || 'Audio Channel';
       // Broadcast to all org members that an audio call started
       const room = orgRooms.get(orgId);
       if (room) {
@@ -634,7 +680,7 @@ async function handleNotification(ws: AuthenticatedSocket, payload: Record<strin
             notificationType: 'audio_invite',
             fromUserId: ws.userId,
             fromEmail: ws.email,
-            roomName: roomName || 'Audio Channel',
+            roomName,
             orgId,
             timestamp: new Date().toISOString(),
           },
