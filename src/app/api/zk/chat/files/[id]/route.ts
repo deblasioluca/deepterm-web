@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { readFile } from 'fs/promises';
 import {
-  getAuthFromRequest,
+  getAuthFromRequestOrSession,
+  isSessionOnlyAuth,
   errorResponse,
   handleCorsPreflightRequest,
   addCorsHeaders,
@@ -21,8 +22,9 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const auth = getAuthFromRequest(request);
+    const auth = await getAuthFromRequestOrSession(request);
     if (!auth) return errorResponse('Unauthorized', 401);
+    if (isSessionOnlyAuth(auth)) return errorResponse('Vault setup required', 403);
 
     const { id } = await params;
     const chatFile = await prisma.chatFile.findUnique({

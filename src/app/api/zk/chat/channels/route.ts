@@ -1,7 +1,8 @@
 import { NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import {
-  getAuthFromRequest,
+  getAuthFromRequestOrSession,
+  isSessionOnlyAuth,
   createAuditLog,
   getClientIP,
   errorResponse,
@@ -20,8 +21,9 @@ export async function OPTIONS() {
  */
 export async function GET(request: NextRequest) {
   try {
-    const auth = getAuthFromRequest(request);
+    const auth = await getAuthFromRequestOrSession(request);
     if (!auth) return errorResponse('Unauthorized', 401);
+    if (isSessionOnlyAuth(auth)) return errorResponse('Vault setup required', 403);
 
     const orgId = request.nextUrl.searchParams.get('orgId');
     const teamId = request.nextUrl.searchParams.get('teamId');
@@ -106,8 +108,9 @@ export async function GET(request: NextRequest) {
  */
 export async function POST(request: NextRequest) {
   try {
-    const auth = getAuthFromRequest(request);
+    const auth = await getAuthFromRequestOrSession(request);
     if (!auth) return errorResponse('Unauthorized', 401);
+    if (isSessionOnlyAuth(auth)) return errorResponse('Vault setup required', 403);
 
     const body = await request.json();
     const { orgId, teamId, type, name, participantIds } = body;

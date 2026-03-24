@@ -362,6 +362,7 @@ function ChannelSidebar({
   onSelectChannel: (id: string) => void;
 }) {
   const [channels, setChannels] = useState<ChatChannel[]>([]);
+  const [creating, setCreating] = useState(false);
 
   useEffect(() => {
     async function fetchChannels() {
@@ -383,6 +384,36 @@ function ChannelSidebar({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [orgId]);
 
+  async function handleCreateChannel() {
+    if (creating) return;
+    const name = prompt('Channel name:');
+    if (!name?.trim()) return;
+    setCreating(true);
+    try {
+      const res = await fetch('/api/zk/chat/channels', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ orgId, type: 'team', name: name.trim() }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        const channelId = data.id || data.data?.id;
+        // Refresh channel list
+        const listRes = await fetch(`/api/zk/chat/channels?orgId=${orgId}`);
+        if (listRes.ok) {
+          const listData = await listRes.json();
+          const chs = Array.isArray(listData) ? listData : (listData.channels || []);
+          setChannels(chs);
+          if (channelId) onSelectChannel(channelId);
+        }
+      }
+    } catch {
+      // silent
+    } finally {
+      setCreating(false);
+    }
+  }
+
   return (
     <div className="w-60 bg-background-secondary border-r border-border flex flex-col shrink-0">
       <div className="px-3 py-3 border-b border-border/50">
@@ -390,7 +421,12 @@ function ChannelSidebar({
           <h3 className="text-xs font-bold text-text-tertiary uppercase tracking-wider">
             Channels
           </h3>
-          <button className="p-1 text-text-tertiary hover:text-text-primary rounded transition-colors">
+          <button
+            onClick={handleCreateChannel}
+            disabled={creating}
+            className="p-1 text-text-tertiary hover:text-text-primary rounded transition-colors disabled:opacity-50"
+            title="Create channel"
+          >
             <Plus className="w-3.5 h-3.5" />
           </button>
         </div>

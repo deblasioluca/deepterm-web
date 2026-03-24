@@ -1,7 +1,8 @@
 import { NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import {
-  getAuthFromRequest,
+  getAuthFromRequestOrSession,
+  isSessionOnlyAuth,
   errorResponse,
   successResponse,
   handleCorsPreflightRequest,
@@ -19,8 +20,9 @@ export async function OPTIONS() {
  */
 export async function POST(request: NextRequest) {
   try {
-    const auth = getAuthFromRequest(request);
+    const auth = await getAuthFromRequestOrSession(request);
     if (!auth) return errorResponse('Unauthorized', 401);
+    if (isSessionOnlyAuth(auth)) return errorResponse('Vault setup required', 403);
 
     const body = await request.json().catch(() => ({}));
     const status = body.status || 'online';
