@@ -182,6 +182,17 @@ export async function POST(request: NextRequest) {
     const displayName = webUser.name || normalizedEmail.split('@')[0];
     const { vaultId: defaultVaultId } = await ensureUserDefaults(zkUser.id, displayName);
 
+    // Link any pending org invitations (by invitedEmail) to the newly-created ZKUser
+    await prisma.organizationUser.updateMany({
+      where: {
+        invitedEmail: normalizedEmail,
+        userId: null,
+      },
+      data: {
+        userId: zkUser.id,
+      },
+    });
+
     const hasKeys = Boolean(zkUser.publicKey && zkUser.encryptedPrivateKey);
 
     return successResponse({
