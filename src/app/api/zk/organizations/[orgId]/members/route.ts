@@ -90,7 +90,7 @@ export async function GET(
         },
       });
       if (org) {
-        const confirmedCount = members.filter(m => m.status === 'confirmed').length;
+        const confirmedCount = members.filter(m => m.status === 'confirmed' || m.status === 'active').length;
         const invitedCount = members.filter(m => m.status === 'invited').length;
         // Only org-covered members consume paid seats
         const orgCoveredSeats = members.filter(
