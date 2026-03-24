@@ -32,6 +32,17 @@ export async function cascadeDeleteUser(
   if (zkUserId) {
     // Collaboration data
     await tx.sharedSessionParticipant.deleteMany({ where: { userId: zkUserId } });
+
+    // Delete participants of sessions this user owns (other users' participation records)
+    const ownedSessions = await tx.sharedTerminalSession.findMany({
+      where: { ownerId: zkUserId },
+      select: { id: true },
+    });
+    if (ownedSessions.length > 0) {
+      await tx.sharedSessionParticipant.deleteMany({
+        where: { sessionId: { in: ownedSessions.map(s => s.id) } },
+      });
+    }
     await tx.sharedTerminalSession.deleteMany({ where: { ownerId: zkUserId } });
     await tx.chatFile.deleteMany({ where: { uploaderId: zkUserId } });
     await tx.chatMessage.deleteMany({ where: { senderId: zkUserId } });
@@ -89,7 +100,9 @@ export async function cascadeDeleteUser(
 
     const userIdeas = await tx.idea.findMany({ where: { authorId: webUserId }, select: { id: true } });
     if (userIdeas.length > 0) {
-      await tx.ideaComment.deleteMany({ where: { ideaId: { in: userIdeas.map(i => i.id) } } });
+      const ideaIds = userIdeas.map(i => i.id);
+      await tx.vote.deleteMany({ where: { ideaId: { in: ideaIds } } });
+      await tx.ideaComment.deleteMany({ where: { ideaId: { in: ideaIds } } });
     }
     await tx.idea.deleteMany({ where: { authorId: webUserId } });
     await tx.session.deleteMany({ where: { userId: webUserId } });
@@ -129,6 +142,10 @@ async function deleteOrganization(tx: TransactionClient, orgId: string) {
   await tx.chatChannel.deleteMany({ where: { organizationId: orgId } });
 
   // Shared sessions
+  const orgSessions = await tx.sharedTerminalSession.findMany({ where: { organizationId: orgId }, select: { id: true } });
+  if (orgSessions.length > 0) {
+    await tx.sharedSessionParticipant.deleteMany({ where: { sessionId: { in: orgSessions.map(s => s.id) } } });
+  }
   await tx.sharedTerminalSession.deleteMany({ where: { organizationId: orgId } });
 
   // Billing
