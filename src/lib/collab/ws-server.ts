@@ -105,20 +105,24 @@ function leaveAllRooms(ws: AuthenticatedSocket) {
         payload: { userId: ws.userId, sessionId: key },
       });
       if (room.size === 0) terminalRooms.delete(key);
-      // If the disconnecting user is the session owner, mark session inactive
-      prisma.sharedTerminalSession.findUnique({
-        where: { id: key },
-        select: { ownerId: true },
-      }).then(sess => {
-        if (sess && sess.ownerId === ws.userId) {
-          prisma.sharedTerminalSession.update({
-            where: { id: key },
-            data: { isActive: false },
-          }).then(() => {
-            console.log(`[WS] Session ${key} marked inactive (owner disconnected)`);
-          }).catch(err => console.error('[WS] Failed to deactivate session on disconnect:', err));
-        }
-      }).catch(() => { /* ignore */ });
+      // If the disconnecting user is the session owner and has no other sockets
+      // still in this terminal room (multi-device), mark session inactive
+      const ownerStillInRoom = Array.from(room).some(c => c.userId === ws.userId);
+      if (!ownerStillInRoom) {
+        prisma.sharedTerminalSession.findUnique({
+          where: { id: key },
+          select: { ownerId: true },
+        }).then(sess => {
+          if (sess && sess.ownerId === ws.userId) {
+            prisma.sharedTerminalSession.update({
+              where: { id: key },
+              data: { isActive: false },
+            }).then(() => {
+              console.log(`[WS] Session ${key} marked inactive (owner disconnected)`);
+            }).catch(err => console.error('[WS] Failed to deactivate session on disconnect:', err));
+          }
+        }).catch(() => { /* ignore */ });
+      }
     }
   });
   Array.from(chatRooms.entries()).forEach(([key, room]) => {
@@ -183,7 +187,7 @@ async function handleChat(ws: AuthenticatedSocket, payload: Record<string, unkno
       const membership = await prisma.organizationUser.findUnique({
         where: { organizationId_userId: { organizationId: channel.organizationId, userId: ws.userId } },
       });
-      if (!membership || membership.status !== 'confirmed') {
+      if (!membership || !['confirmed', 'active'].includes(membership.status)) {
         ws.send(JSON.stringify({ type: 'error', message: 'Access denied to channel' }));
         return;
       }
@@ -292,21 +296,25 @@ async function handleTerminal(ws: AuthenticatedSocket, payload: Record<string, u
           payload: { userId: ws.userId, sessionId },
         });
         if (room.size === 0) terminalRooms.delete(sessionId);
-      }
-      // If the owner leaves, mark the session as inactive in the DB
-      prisma.sharedTerminalSession.findUnique({
-        where: { id: sessionId },
-        select: { ownerId: true },
-      }).then(sess => {
-        if (sess && sess.ownerId === ws.userId) {
-          prisma.sharedTerminalSession.update({
+        // If the owner leaves and has no other sockets in the room (multi-device),
+        // mark the session as inactive in the DB
+        const ownerStillInRoom = Array.from(room).some(c => c.userId === ws.userId);
+        if (!ownerStillInRoom) {
+          prisma.sharedTerminalSession.findUnique({
             where: { id: sessionId },
-            data: { isActive: false },
-          }).then(() => {
-            console.log(`[WS] Session ${sessionId} marked inactive (owner left)`);
-          }).catch(err => console.error('[WS] Failed to deactivate session:', err));
+            select: { ownerId: true },
+          }).then(sess => {
+            if (sess && sess.ownerId === ws.userId) {
+              prisma.sharedTerminalSession.update({
+                where: { id: sessionId },
+                data: { isActive: false },
+              }).then(() => {
+                console.log(`[WS] Session ${sessionId} marked inactive (owner left)`);
+              }).catch(err => console.error('[WS] Failed to deactivate session:', err));
+            }
+          }).catch(err => console.error('[WS] Failed to check session owner:', err));
         }
-      }).catch(err => console.error('[WS] Failed to check session owner:', err));
+      }
       break;
     }
     case 'output': {
