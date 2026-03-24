@@ -239,6 +239,7 @@ function MembersView({ orgId, orgRole }: { orgId: string; orgRole: string }) {
   const sendInvite = async (coverSeat?: boolean) => {
     setSubmitting(true);
     setError('');
+    let handledByRetry = false;
     try {
       const payload: Record<string, unknown> = { email: inviteEmail, role: inviteRole };
       if (coverSeat) payload.coverSeat = true;
@@ -252,10 +253,9 @@ function MembersView({ orgId, orgRole }: { orgId: string; orgRole: string }) {
         // Handle 402 seat coverage confirmation (hybrid billing mode)
         if (res.status === 402 && data.requiresCoverSeat) {
           if (confirm(data.message + '\n\nCover this seat?')) {
-            setSubmitting(false);
+            handledByRetry = true;
             return sendInvite(true);
           }
-          setSubmitting(false);
           return;
         }
         throw new Error(data.message || data.error || 'Failed to send invitation');
@@ -266,7 +266,7 @@ function MembersView({ orgId, orgRole }: { orgId: string; orgRole: string }) {
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to send invitation');
     } finally {
-      setSubmitting(false);
+      if (!handledByRetry) setSubmitting(false);
     }
   };
 

@@ -676,6 +676,7 @@ function InviteMemberModal({
     setInviting(true);
     setError('');
     setSuccess('');
+    let handledByRetry = false;
     try {
       const payload: Record<string, unknown> = { email: email.trim(), role };
       if (coverSeat) payload.coverSeat = true;
@@ -693,10 +694,9 @@ function InviteMemberModal({
         // Handle 402 seat coverage confirmation (hybrid billing mode)
         if (res.status === 402 && data.requiresCoverSeat) {
           if (confirm(data.message + '\n\nCover this seat?')) {
-            setInviting(false);
+            handledByRetry = true;
             return sendInvite(true);
           }
-          setInviting(false);
           return;
         }
         setError(data.message || data.error || 'Failed to send invitation');
@@ -704,7 +704,7 @@ function InviteMemberModal({
     } catch {
       setError('Network error');
     } finally {
-      setInviting(false);
+      if (!handledByRetry) setInviting(false);
     }
   };
 
