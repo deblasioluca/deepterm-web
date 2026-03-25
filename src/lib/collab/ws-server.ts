@@ -237,9 +237,9 @@ async function handleChat(ws: AuthenticatedSocket, payload: Record<string, unkno
       const chatMsgStr = JSON.stringify(chatMsg);
 
       const room = chatRooms.get(channelId);
-      // Snapshot room members BEFORE the await below so the dedup check
-      // reflects the same state that broadcast() used.
-      const roomMemberIds = room ? new Set(Array.from(room).map(c => c.userId)) : new Set<string>();
+      // Snapshot room sockets BEFORE the await below so the dedup check
+      // reflects the same state that broadcast() used (socket-level, not user-level).
+      const roomSocketSnapshot = room ? new Set(room) : new Set<AuthenticatedSocket>();
       if (room) {
         broadcast(room, chatMsg, ws);
       }
@@ -254,9 +254,9 @@ async function handleChat(ws: AuthenticatedSocket, payload: Record<string, unkno
       if (dmChannel?.type === 'dm') {
         for (const p of dmChannel.participants) {
           if (p.userId === ws.userId) continue; // skip sender
-          if (roomMemberIds.has(p.userId)) continue; // already received via broadcast
           const sockets = socketsForUser(p.userId);
           for (const sock of sockets) {
+            if (roomSocketSnapshot.has(sock)) continue; // already received via broadcast
             sock.send(chatMsgStr);
           }
         }
