@@ -610,7 +610,11 @@ async function handleNotification(ws: AuthenticatedSocket, payload: Record<strin
   // Support both nested format ({ notificationType, data: {...} }) and flat format
   // from the macOS app ({ sessionType: "terminal", sessionId, sessionName, ... }).
   const orgId = (payload.orgId as string) || '';
-  if (!orgId || !ws.orgIds.includes(orgId)) return;
+  console.log(`[WS-Notify] Received notification from ${ws.email}, orgId=${orgId}, payload keys: ${Object.keys(payload).join(',')}`);
+  if (!orgId || !ws.orgIds.includes(orgId)) {
+    console.log(`[WS-Notify] Rejected: orgId=${orgId} not in sender orgIds=[${ws.orgIds.join(',')}]`);
+    return;
+  }
 
   const rawTargets = Array.isArray(payload.targetUserIds) ? payload.targetUserIds as string[] : [];
 
@@ -637,6 +641,7 @@ async function handleNotification(ws: AuthenticatedSocket, payload: Record<strin
       })
     : [];
   const targets = validMembers.map(m => m.userId).filter((id): id is string => id != null);
+  console.log(`[WS-Notify] type=${notificationType}, rawTargets=${rawTargets.length}, validTargets=${targets.length}, targets=[${targets.join(',')}]`);
 
   switch (notificationType) {
     case 'terminal_invite': {
@@ -646,6 +651,7 @@ async function handleNotification(ws: AuthenticatedSocket, payload: Record<strin
       // Notify online users via WebSocket
       for (const targetId of targets) {
         const sockets = socketsForUser(targetId);
+        console.log(`[WS-Notify] Target ${targetId}: ${sockets.length} socket(s) online`);
         if (sockets.length > 0) {
           for (const sock of sockets) {
             sock.send(JSON.stringify({

@@ -47,6 +47,17 @@ export async function GET(request: NextRequest) {
       }
     }
 
+    // Clean up stale sessions: mark sessions older than 24h as inactive
+    const staleThreshold = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    await prisma.sharedTerminalSession.updateMany({
+      where: {
+        organizationId: orgId,
+        isActive: true,
+        createdAt: { lt: staleThreshold },
+      },
+      data: { isActive: false },
+    });
+
     const sessions = await prisma.sharedTerminalSession.findMany({
       where: { organizationId: orgId, ...(teamId ? { teamId } : {}), isActive: true },
       include: {
