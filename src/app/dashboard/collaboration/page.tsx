@@ -71,6 +71,7 @@ export default function CollaborationPage() {
   const [selectedOrgId, setSelectedOrgId] = useState<string | null>(null);
   const [orgs, setOrgs] = useState<OrgData[]>([]);
   const [currentUserId, setCurrentUserId] = useState<string>("");
+  const [currentUserEmail, setCurrentUserEmail] = useState<string>("");
   const [wsConnected, setWsConnected] = useState(false);
   const [loading, setLoading] = useState(true);
   const [panelView, setPanelView] = useState<PanelView>("chat");
@@ -109,6 +110,7 @@ export default function CollaborationPage() {
         if (tokenRes.ok) {
           const tokenData = await tokenRes.json();
           setCurrentUserId(tokenData?.userId || "");
+          setCurrentUserEmail(tokenData?.email || "");
         }
       } catch {
         // silent
@@ -301,6 +303,7 @@ export default function CollaborationPage() {
               wsRef={wsRef}
               wsConnected={wsConnected}
               currentUserId={currentUserId}
+              currentUserEmail={currentUserEmail}
               selectedChannelId={selectedChannelId}
               onSelectChannel={setSelectedChannelId}
             />
@@ -311,7 +314,7 @@ export default function CollaborationPage() {
               currentUserId={currentUserId}
             />
           )}
-          {panelView === "audio" && selectedOrgId && <AudioPanel />}
+          {panelView === "audio" && selectedOrgId && <AudioPanel orgId={selectedOrgId} wsRef={wsRef} wsConnected={wsConnected} />}
         </div>
 
         {showParticipants && selectedOrgId && (
@@ -480,6 +483,7 @@ function ChatPanel({
   wsRef,
   wsConnected,
   currentUserId,
+  currentUserEmail,
   selectedChannelId,
   onSelectChannel,
 }: {
@@ -487,6 +491,7 @@ function ChatPanel({
   wsRef: React.RefObject<WebSocket | null>;
   wsConnected: boolean;
   currentUserId: string;
+  currentUserEmail: string;
   selectedChannelId: string | null;
   onSelectChannel: (id: string) => void;
 }) {
@@ -547,6 +552,8 @@ function ChatPanel({
           msg.type === "chat_message" &&
           msg.payload?.channelId === selectedChannelId
         ) {
+          // Skip messages from ourselves (already shown via optimistic UI)
+          if (msg.payload.senderId === currentUserId) return;
           setMessages((prev) => [
             ...prev,
             {
@@ -566,7 +573,7 @@ function ChatPanel({
     };
     ws.addEventListener("message", handler);
     return () => ws.removeEventListener("message", handler);
-  }, [wsRef, wsConnected, selectedChannelId]);
+  }, [wsRef, wsConnected, selectedChannelId, currentUserId]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -575,6 +582,19 @@ function ChatPanel({
   const sendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newMessage.trim() || !selectedChannelId) return;
+    const content = newMessage.trim();
+    // Optimistic UI: immediately show the message locally
+    const optimisticMsg: ChatMessage = {
+      id: crypto.randomUUID(),
+      senderId: currentUserId,
+      senderEmail: currentUserEmail,
+      senderName: currentUserEmail.split("@")[0] || "You",
+      content,
+      type: "text",
+      createdAt: new Date().toISOString(),
+    };
+    setMessages((prev) => [...prev, optimisticMsg]);
+    setNewMessage("");
     setSending(true);
     try {
       const res = await fetch(
@@ -582,14 +602,17 @@ function ChatPanel({
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ content: newMessage.trim() }),
+          body: JSON.stringify({ content }),
         },
       );
-      if (res.ok) {
-        setNewMessage("");
+      if (!res.ok) {
+        setMessages((prev) => prev.filter((m) => m.id !== optimisticMsg.id));
+        setNewMessage(content);
       }
     } catch {
-      // silent
+      // Remove optimistic message on failure and restore input
+      setMessages((prev) => prev.filter((m) => m.id !== optimisticMsg.id));
+      setNewMessage(content);
     } finally {
       setSending(false);
     }
@@ -860,7 +883,7 @@ function TerminalPanel({
                     <Button
                       variant="secondary"
                       onClick={() => {
-                        window.location.href = "/dashboard/terminal";
+                        window.open(`/dashboard/terminal?sessionId=${session.id}`, "_blank");
                       }}
                     >
                       <ChevronRight className="w-4 h-4" />
@@ -893,7 +916,123 @@ function TerminalPanel({
 
 // -- Audio Panel (Center) --
 
-function AudioPanel() {
+function AudioPanel({ orgId, wsRef, wsConnected }: { orgId: string; wsRef: React.RefObject<WebSocket | null>; wsConnected: boolean }) {
+  const [inRoom, setInRoom] = useState(false);
+  const [muted, setMuted] = useState(false);
+  const [participants, setParticipants] = useState<string[]>([]);
+  const [joining, setJoining] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const mediaStreamRef = useRef<MediaStream | null>(null);
+
+  // Listen for audio-signal messages
+  useEffect(() => {
+    const ws = wsRef.current;
+    if (!ws || ws.readyState !== WebSocket.OPEN) return;
+    const handler = (event: MessageEvent) => {
+      try {
+        const msg = JSON.parse(event.data);
+        // Server sends audio_room_state on successful join (with full participant list)
+        if (msg.type === "audio_room_state") {
+          setInRoom(true);
+          setJoining(false);
+          if (msg.payload?.participants) {
+            setParticipants(msg.payload.participants.map((p: { email?: string; userId?: string }) => p.email || p.userId || "unknown"));
+          }
+        }
+        // Server sends audio_peer_joined when another user joins
+        if (msg.type === "audio_peer_joined" && msg.payload?.email) {
+          setParticipants((prev) => [...prev, msg.payload.email]);
+        }
+        // Server sends audio_peer_left when another user leaves
+        if (msg.type === "audio_peer_left" && msg.payload?.email) {
+          setParticipants((prev) => prev.filter((p) => p !== msg.payload.email));
+        }
+        // Server sends audio_room_full when room is at capacity
+        if (msg.type === "audio_room_full") {
+          setError(`Room is full (max ${msg.payload?.maxParticipants || 5} participants)`);
+          setInRoom(false);
+          setJoining(false);
+          // Release microphone since we can't join
+          mediaStreamRef.current?.getTracks().forEach(t => t.stop());
+          mediaStreamRef.current = null;
+        }
+      } catch { /* ignore */ }
+    };
+    ws.addEventListener("message", handler);
+    return () => ws.removeEventListener("message", handler);
+  }, [wsRef, wsConnected]);
+
+  // Cleanup media stream and leave room on unmount or org change
+  useEffect(() => {
+    return () => {
+      mediaStreamRef.current?.getTracks().forEach(t => t.stop());
+      mediaStreamRef.current = null;
+      setInRoom(false);
+      setMuted(false);
+      setParticipants([]);
+      setJoining(false);
+      setError(null);
+      const ws = wsRef.current;
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({
+          channel: "audio-signal",
+          type: "audio_leave",
+          payload: { action: "leave", orgId },
+        }));
+      }
+    };
+  }, [orgId, wsRef]);
+
+  const handleJoinRoom = async () => {
+    setError(null);
+    setJoining(true);
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      mediaStreamRef.current = stream;
+      const ws = wsRef.current;
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({
+          channel: "audio-signal",
+          type: "audio_join",
+          payload: { action: "join", orgId },
+        }));
+        // Don't set inRoom here — wait for audio_room_state from server
+      } else {
+        // WebSocket not connected — release mic and show error
+        stream.getTracks().forEach(t => t.stop());
+        mediaStreamRef.current = null;
+        setError("Not connected to collaboration server");
+        setJoining(false);
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Microphone access denied");
+      setJoining(false);
+    }
+  };
+
+  const handleLeaveRoom = () => {
+    mediaStreamRef.current?.getTracks().forEach(t => t.stop());
+    mediaStreamRef.current = null;
+    const ws = wsRef.current;
+    if (ws && ws.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify({
+        channel: "audio-signal",
+        type: "audio_leave",
+        payload: { action: "leave", orgId },
+      }));
+    }
+    setInRoom(false);
+    setMuted(false);
+    setParticipants([]);
+  };
+
+  const handleToggleMute = () => {
+    if (mediaStreamRef.current) {
+      mediaStreamRef.current.getAudioTracks().forEach(t => { t.enabled = muted; });
+      setMuted(!muted);
+    }
+  };
+
   return (
     <div className="flex-1 flex flex-col min-h-0">
       <div className="flex items-center justify-between px-4 py-2.5 border-b border-border bg-background-secondary">
@@ -902,74 +1041,76 @@ function AudioPanel() {
           <h3 className="text-sm font-semibold text-text-primary">
             Audio Channels
           </h3>
+          {inRoom && (
+            <Badge variant="success" className="text-[10px]">In Call</Badge>
+          )}
         </div>
       </div>
       <div className="flex-1 overflow-y-auto p-4">
         <div className="space-y-4">
+          {error && (
+            <Card className="p-4 border-red-500/30 bg-red-500/5">
+              <p className="text-sm text-red-400">{error}</p>
+            </Card>
+          )}
           <Card className="p-6">
             <div className="flex items-center gap-4 mb-4">
-              <div className="w-12 h-12 rounded-xl bg-blue-500/15 flex items-center justify-center">
-                <Mic className="w-6 h-6 text-blue-500" />
+              <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${inRoom ? "bg-green-500/15" : "bg-blue-500/15"}`}>
+                <Mic className={`w-6 h-6 ${inRoom ? "text-green-500" : "text-blue-500"}`} />
               </div>
               <div>
                 <h4 className="text-base font-semibold text-text-primary">
                   Voice Chat
                 </h4>
                 <p className="text-sm text-text-tertiary">
-                  WebRTC peer-to-peer &middot; up to 5 participants
+                  {inRoom ? `${participants.length + 1} participant(s) in call` : "WebRTC peer-to-peer · up to 5 participants"}
                 </p>
               </div>
             </div>
-            <p className="text-sm text-text-secondary mb-4">
-              Start or join an audio call with your team members. Calls use
-              encrypted peer-to-peer connections &mdash; no audio is routed
-              through the server.
-            </p>
+            {inRoom && participants.length > 0 && (
+              <div className="mb-4 flex flex-wrap gap-2">
+                {participants.map((p, i) => (
+                  <Badge key={i} variant="default">{p.split("@")[0]}</Badge>
+                ))}
+              </div>
+            )}
             <div className="grid grid-cols-2 gap-3">
-              <div className="flex items-center gap-2 p-3 bg-white/[0.03] rounded-lg">
-                <Phone className="w-4 h-4 text-green-500" />
+              <button
+                onClick={inRoom ? handleLeaveRoom : handleJoinRoom}
+                disabled={joining}
+                className={`flex items-center gap-2 p-3 rounded-lg transition-colors cursor-pointer ${
+                  inRoom
+                    ? "bg-red-500/10 hover:bg-red-500/20 border border-red-500/30"
+                    : "bg-green-500/10 hover:bg-green-500/20 border border-green-500/30"
+                } ${joining ? "opacity-50 cursor-wait" : ""}`}
+              >
+                {inRoom ? <PhoneOff className="w-4 h-4 text-red-500" /> : <Phone className="w-4 h-4 text-green-500" />}
                 <div>
                   <p className="text-xs font-medium text-text-primary">
-                    Join Room
+                    {joining ? "Joining..." : inRoom ? "Leave Room" : "Join Room"}
                   </p>
                   <p className="text-[10px] text-text-tertiary">
-                    Connect to audio channel
+                    {inRoom ? "Disconnect from call" : "Connect to audio channel"}
                   </p>
                 </div>
-              </div>
-              <div className="flex items-center gap-2 p-3 bg-white/[0.03] rounded-lg">
-                <Mic className="w-4 h-4 text-green-500" />
+              </button>
+              <button
+                onClick={handleToggleMute}
+                disabled={!inRoom}
+                className={`flex items-center gap-2 p-3 rounded-lg transition-colors ${
+                  inRoom ? "bg-white/[0.03] hover:bg-white/[0.06] cursor-pointer border border-border/30" : "bg-white/[0.02] opacity-50 cursor-not-allowed border border-transparent"
+                }`}
+              >
+                {muted ? <MicOff className="w-4 h-4 text-red-500" /> : <Mic className="w-4 h-4 text-green-500" />}
                 <div>
                   <p className="text-xs font-medium text-text-primary">
-                    Mute / Unmute
+                    {muted ? "Unmute" : "Mute"}
                   </p>
                   <p className="text-[10px] text-text-tertiary">
                     Toggle your microphone
                   </p>
                 </div>
-              </div>
-              <div className="flex items-center gap-2 p-3 bg-white/[0.03] rounded-lg">
-                <MicOff className="w-4 h-4 text-amber-500" />
-                <div>
-                  <p className="text-xs font-medium text-text-primary">
-                    Push to Talk
-                  </p>
-                  <p className="text-[10px] text-text-tertiary">
-                    Hold key to speak
-                  </p>
-                </div>
-              </div>
-              <div className="flex items-center gap-2 p-3 bg-white/[0.03] rounded-lg">
-                <PhoneOff className="w-4 h-4 text-red-500" />
-                <div>
-                  <p className="text-xs font-medium text-text-primary">
-                    Leave Room
-                  </p>
-                  <p className="text-[10px] text-text-tertiary">
-                    No calls are recorded
-                  </p>
-                </div>
-              </div>
+              </button>
             </div>
           </Card>
         </div>
