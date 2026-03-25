@@ -573,7 +573,7 @@ function ChatPanel({
     };
     ws.addEventListener("message", handler);
     return () => ws.removeEventListener("message", handler);
-  }, [wsRef, wsConnected, selectedChannelId]);
+  }, [wsRef, wsConnected, selectedChannelId, currentUserId]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -597,7 +597,7 @@ function ChatPanel({
     setNewMessage("");
     setSending(true);
     try {
-      await fetch(
+      const res = await fetch(
         `/api/zk/chat/channels/${selectedChannelId}/messages`,
         {
           method: "POST",
@@ -605,6 +605,9 @@ function ChatPanel({
           body: JSON.stringify({ content }),
         },
       );
+      if (!res.ok) {
+        setMessages((prev) => prev.filter((m) => m.id !== optimisticMsg.id));
+      }
     } catch {
       // Remove optimistic message on failure
       setMessages((prev) => prev.filter((m) => m.id !== optimisticMsg.id));
@@ -949,6 +952,22 @@ function AudioPanel({ orgId, wsRef, wsConnected }: { orgId: string; wsRef: React
     return () => ws.removeEventListener("message", handler);
   }, [wsRef, wsConnected]);
 
+  // Cleanup media stream and leave room on unmount
+  useEffect(() => {
+    return () => {
+      mediaStreamRef.current?.getTracks().forEach(t => t.stop());
+      mediaStreamRef.current = null;
+      const ws = wsRef.current;
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({
+          channel: "audio-signal",
+          type: "audio_leave",
+          payload: { action: "leave", orgId },
+        }));
+      }
+    };
+  }, [orgId, wsRef]);
+
   const handleJoinRoom = async () => {
     setError(null);
     setJoining(true);
@@ -959,8 +978,8 @@ function AudioPanel({ orgId, wsRef, wsConnected }: { orgId: string; wsRef: React
       if (ws && ws.readyState === WebSocket.OPEN) {
         ws.send(JSON.stringify({
           channel: "audio-signal",
-          type: "join",
-          payload: { orgId },
+          type: "audio_join",
+          payload: { action: "join", orgId },
         }));
       }
       setInRoom(true);
@@ -978,8 +997,8 @@ function AudioPanel({ orgId, wsRef, wsConnected }: { orgId: string; wsRef: React
     if (ws && ws.readyState === WebSocket.OPEN) {
       ws.send(JSON.stringify({
         channel: "audio-signal",
-        type: "leave",
-        payload: { orgId },
+        type: "audio_leave",
+        payload: { action: "leave", orgId },
       }));
     }
     setInRoom(false);
