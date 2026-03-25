@@ -223,22 +223,43 @@ async function handleChat(ws: AuthenticatedSocket, payload: Record<string, unkno
         data: { updatedAt: new Date() },
       });
 
+      const chatPayload = {
+        messageId: dbMessage.id,
+        channelId,
+        senderId: ws.userId,
+        senderEmail: ws.email,
+        content,
+        type: msgType || 'text',
+        fileId: fileId || null,
+        timestamp: dbMessage.createdAt.toISOString(),
+      };
+      const chatMsg = { type: 'chat_message', channel: 'chat', payload: chatPayload };
+      const chatMsgStr = JSON.stringify(chatMsg);
+
       const room = chatRooms.get(channelId);
+      // Snapshot room sockets BEFORE the await below so the dedup check
+      // reflects the same state that broadcast() used (socket-level, not user-level).
+      const roomSocketSnapshot = room ? new Set(room) : new Set<AuthenticatedSocket>();
       if (room) {
-        broadcast(room, {
-          type: 'chat_message',
-          channel: 'chat',
-          payload: {
-            messageId: dbMessage.id,
-            channelId,
-            senderId: ws.userId,
-            senderEmail: ws.email,
-            content,
-            type: msgType || 'text',
-            fileId: fileId || null,
-            timestamp: dbMessage.createdAt.toISOString(),
-          },
-        }, ws);
+        broadcast(room, chatMsg, ws);
+      }
+
+      // For DM channels, also deliver directly to participants who aren't
+      // in the chatRoom yet (fixes first-message-lost bug: recipient hasn't
+      // joined the WS chatRoom when the channel was just created).
+      const dmChannel = await prisma.chatChannel.findUnique({
+        where: { id: channelId },
+        select: { type: true, participants: { select: { userId: true } } },
+      });
+      if (dmChannel?.type === 'dm') {
+        for (const p of dmChannel.participants) {
+          if (p.userId === ws.userId) continue; // skip sender
+          const sockets = socketsForUser(p.userId);
+          for (const sock of sockets) {
+            if (roomSocketSnapshot.has(sock)) continue; // already received via broadcast
+            sock.send(chatMsgStr);
+          }
+        }
       }
     } catch (err) {
       console.error('Failed to persist chat message:', err);
