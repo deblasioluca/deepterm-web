@@ -849,7 +849,7 @@ function TerminalPanel({
         body: JSON.stringify({ action: "request_write" }),
       });
       if (res.ok) {
-        alert("Write access request sent to session owner.");
+        alert("Write access request logged. The session owner will need to grant access manually.");
       } else {
         const data = await res.json().catch(() => ({}));
         alert(data.error || "Failed to request write access.");
@@ -1328,13 +1328,6 @@ function AudioPanel({ orgId, wsRef, wsConnected }: { orgId: string; wsRef: React
                 </p>
               </div>
             </div>
-            {inRoom && participants.length > 0 && (
-              <div className="mb-4 flex flex-wrap gap-2">
-                {participants.map((p, i) => (
-                  <Badge key={i} variant="default">{p.email.split("@")[0]}</Badge>
-                ))}
-              </div>
-            )}
             {/* Participant list with mute indicators */}
             {inRoom && participants.length > 0 && (
               <div className="mb-4 space-y-1">
