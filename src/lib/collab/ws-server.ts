@@ -455,6 +455,29 @@ async function handleTerminal(ws: AuthenticatedSocket, payload: Record<string, u
       }
       break;
     }
+    case 'request_write': {
+      // Participant requests write access — relay to session owner
+      const rwRoom = terminalRooms.get(sessionId);
+      if (rwRoom && rwRoom.has(ws)) {
+        const rwSession = await prisma.sharedTerminalSession.findUnique({
+          where: { id: sessionId },
+          select: { ownerId: true },
+        });
+        if (rwSession) {
+          // Send only to the session owner
+          Array.from(rwRoom).forEach(client => {
+            if (client.userId === rwSession.ownerId && client.readyState === WebSocket.OPEN) {
+              client.send(JSON.stringify({
+                type: 'request_write',
+                channel: 'terminal',
+                payload: { sessionId, userId: ws.userId, email: ws.email },
+              }));
+            }
+          });
+        }
+      }
+      break;
+    }
   }
 }
 
