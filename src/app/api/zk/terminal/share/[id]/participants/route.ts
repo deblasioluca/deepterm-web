@@ -109,8 +109,23 @@ export async function PUT(
         });
         break;
       }
+      case 'request_write': {
+        // Participant requests write access from owner
+        const participant = await prisma.sharedSessionParticipant.findUnique({
+          where: { sessionId_userId: { sessionId: id, userId: auth.userId } },
+        });
+        if (!participant || participant.status === 'left') {
+          return errorResponse('Not a participant in this session', 403);
+        }
+        if (participant.canWrite) {
+          return errorResponse('You already have write access');
+        }
+        // For now, just log the request. In a full implementation this would
+        // send a notification to the session owner via WebSocket.
+        break;
+      }
       default:
-        return errorResponse('Invalid action. Use: add, update, remove, join, leave');
+        return errorResponse('Invalid action. Use: add, update, remove, join, leave, request_write');
     }
 
     await createAuditLog({
