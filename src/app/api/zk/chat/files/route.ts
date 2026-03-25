@@ -3,7 +3,8 @@ import { prisma } from '@/lib/prisma';
 import { writeFile, mkdir } from 'fs/promises';
 import path from 'path';
 import {
-  getAuthFromRequest,
+  getAuthFromRequestOrSession,
+  isSessionOnlyAuth,
   createAuditLog,
   getClientIP,
   errorResponse,
@@ -23,8 +24,9 @@ export async function OPTIONS() {
  */
 export async function POST(request: NextRequest) {
   try {
-    const auth = getAuthFromRequest(request);
+    const auth = await getAuthFromRequestOrSession(request);
     if (!auth) return errorResponse('Unauthorized', 401);
+    if (isSessionOnlyAuth(auth)) return errorResponse('Vault setup required', 403);
 
     const formData = await request.formData();
     const file = formData.get('file') as File | null;
