@@ -318,7 +318,7 @@ export default function CollaborationPage() {
         </div>
 
         {showParticipants && selectedOrgId && (
-          <ParticipantsSidebar orgId={selectedOrgId} />
+          <ParticipantsSidebar orgId={selectedOrgId} wsRef={wsRef} wsConnected={wsConnected} currentUserId={currentUserId} />
         )}
       </div>
     </div>
@@ -794,30 +794,70 @@ function TerminalPanel({
 }) {
   const [sessions, setSessions] = useState<SharedSession[]>([]);
   const [loading, setLoading] = useState(true);
+  const [updatingPermission, setUpdatingPermission] = useState<string | null>(null);
+
+  const fetchSessions = useCallback(async () => {
+    try {
+      const tokenRes = await fetch("/api/terminal/ws-token", {
+        method: "POST",
+      });
+      if (!tokenRes.ok) return;
+      const tokenData = await tokenRes.json();
+      const res = await fetch(`/api/zk/terminal/share?orgId=${orgId}`, {
+        headers: { Authorization: `Bearer ${tokenData.token}` },
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setSessions(Array.isArray(data) ? data : []);
+      }
+    } catch {
+      // silent
+    } finally {
+      setLoading(false);
+    }
+  }, [orgId]);
 
   useEffect(() => {
-    async function fetchSessions() {
-      try {
-        const tokenRes = await fetch("/api/terminal/ws-token", {
-          method: "POST",
-        });
-        if (!tokenRes.ok) return;
-        const tokenData = await tokenRes.json();
-        const res = await fetch(`/api/zk/terminal/share?orgId=${orgId}`, {
-          headers: { Authorization: `Bearer ${tokenData.token}` },
-        });
-        if (res.ok) {
-          const data = await res.json();
-          setSessions(Array.isArray(data) ? data : []);
-        }
-      } catch {
-        // silent
-      } finally {
-        setLoading(false);
-      }
-    }
     fetchSessions();
-  }, [orgId]);
+  }, [fetchSessions]);
+
+  // Toggle write permission for a participant (Item d — write access grant/revoke)
+  async function toggleWritePermission(sessionId: string, targetUserId: string, currentCanWrite: boolean) {
+    setUpdatingPermission(`${sessionId}:${targetUserId}`);
+    try {
+      const res = await fetch(`/api/zk/terminal/share/${sessionId}/participants`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "update", userId: targetUserId, canWrite: !currentCanWrite }),
+      });
+      if (res.ok) {
+        await fetchSessions();
+      }
+    } catch {
+      // silent
+    } finally {
+      setUpdatingPermission(null);
+    }
+  }
+
+  // Request write access from session owner (Item d — viewer requests write)
+  async function requestWriteAccess(sessionId: string) {
+    try {
+      const res = await fetch(`/api/zk/terminal/share/${sessionId}/participants`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "request_write" }),
+      });
+      if (res.ok) {
+        alert("Write access request logged. The session owner will need to grant access manually.");
+      } else {
+        const data = await res.json().catch(() => ({}));
+        alert(data.error || "Failed to request write access.");
+      }
+    } catch {
+      alert("Failed to send request.");
+    }
+  }
 
   if (loading) {
     return (
@@ -836,6 +876,13 @@ function TerminalPanel({
             Shared Terminals
           </h3>
         </div>
+        <button
+          onClick={() => fetchSessions()}
+          className="p-1.5 rounded-md text-text-tertiary hover:text-text-primary transition-colors"
+          title="Refresh sessions"
+        >
+          <Loader2 className="w-3.5 h-3.5" />
+        </button>
       </div>
 
       <div className="flex-1 overflow-y-auto p-4">
@@ -864,6 +911,7 @@ function TerminalPanel({
                 (p) => p.status === "joined",
               );
               const isOwner = session.ownerId === currentUserId;
+              const myParticipant = session.participants.find(p => p.userId === currentUserId);
               return (
                 <Card key={session.id} className="p-4">
                   <div className="flex items-center justify-between mb-3">
@@ -880,27 +928,52 @@ function TerminalPanel({
                         </p>
                       </div>
                     </div>
-                    <Button
-                      variant="secondary"
-                      onClick={() => {
-                        window.open(`/dashboard/terminal?sessionId=${session.id}`, "_blank");
-                      }}
-                    >
-                      <ChevronRight className="w-4 h-4" />
-                      View
-                    </Button>
+                    <div className="flex items-center gap-2">
+                      {/* Request write access button for non-owner read-only participants */}
+                      {!isOwner && myParticipant && !myParticipant.canWrite && (
+                        <Button
+                          variant="secondary"
+                          onClick={() => requestWriteAccess(session.id)}
+                          className="text-xs"
+                        >
+                          Request Write Access
+                        </Button>
+                      )}
+                      <Button
+                        variant="secondary"
+                        onClick={() => {
+                          window.open(`/dashboard/terminal?sessionId=${session.id}`, "_blank");
+                        }}
+                      >
+                        <ChevronRight className="w-4 h-4" />
+                        View
+                      </Button>
+                    </div>
                   </div>
                   {session.participants.length > 0 && (
-                    <div className="flex flex-wrap gap-1.5">
+                    <div className="space-y-1">
                       {session.participants.map((p) => (
-                        <Badge
-                          key={p.userId}
-                          variant={
-                            p.status === "joined" ? "success" : "default"
-                          }
-                        >
-                          {p.email.split("@")[0]}
-                        </Badge>
+                        <div key={p.userId} className="flex items-center gap-2">
+                          <span className={`w-1.5 h-1.5 rounded-full ${p.status === "joined" ? "bg-green-400" : "bg-gray-500"}`} />
+                          <span className="text-xs text-text-secondary flex-1 truncate">
+                            {p.email.split("@")[0]}
+                          </span>
+                          <Badge variant={p.canWrite ? "success" : "default"} className="text-[10px]">
+                            {p.canWrite ? "Read/Write" : "Read-Only"}
+                          </Badge>
+                          {/* Owner can toggle write permission for each participant */}
+                          {isOwner && p.userId !== currentUserId && (
+                            <button
+                              onClick={() => toggleWritePermission(session.id, p.userId, p.canWrite)}
+                              disabled={updatingPermission === `${session.id}:${p.userId}`}
+                              className="text-[10px] px-1.5 py-0.5 rounded border border-border/50 text-text-tertiary hover:text-text-primary hover:border-accent-primary/50 transition-colors disabled:opacity-50"
+                            >
+                              {updatingPermission === `${session.id}:${p.userId}`
+                                ? "..."
+                                : p.canWrite ? "Revoke Write" : "Grant Write"}
+                            </button>
+                          )}
+                        </div>
                       ))}
                     </div>
                   )}
@@ -916,13 +989,107 @@ function TerminalPanel({
 
 // -- Audio Panel (Center) --
 
+interface AudioPeer {
+  userId: string;
+  email: string;
+  isMuted?: boolean;
+}
+
 function AudioPanel({ orgId, wsRef, wsConnected }: { orgId: string; wsRef: React.RefObject<WebSocket | null>; wsConnected: boolean }) {
   const [inRoom, setInRoom] = useState(false);
   const [muted, setMuted] = useState(false);
-  const [participants, setParticipants] = useState<string[]>([]);
+  const [peers, setPeers] = useState<AudioPeer[]>([]);
   const [joining, setJoining] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const mediaStreamRef = useRef<MediaStream | null>(null);
+  const peerConnectionsRef = useRef<Map<string, RTCPeerConnection>>(new Map());
+  const remoteAudioRef = useRef<HTMLDivElement>(null);
+
+  // Create a new RTCPeerConnection for a specific peer
+  const createPeerConnection = useCallback((peerId: string, peerEmail: string, isInitiator: boolean) => {
+    const pc = new RTCPeerConnection({
+      iceServers: [
+        { urls: "stun:stun.l.google.com:19302" },
+        { urls: "stun:stun1.l.google.com:19302" },
+      ],
+    });
+
+    // Add local audio tracks
+    if (mediaStreamRef.current) {
+      mediaStreamRef.current.getTracks().forEach(track => {
+        pc.addTrack(track, mediaStreamRef.current!);
+      });
+    }
+
+    // Handle incoming audio track
+    pc.ontrack = (event) => {
+      const audio = document.createElement("audio");
+      audio.srcObject = event.streams[0];
+      audio.autoplay = true;
+      audio.id = `audio-${peerId}`;
+      // Remove old element if exists
+      const old = document.getElementById(`audio-${peerId}`);
+      if (old) old.remove();
+      remoteAudioRef.current?.appendChild(audio);
+    };
+
+    // Handle ICE candidates
+    pc.onicecandidate = (event) => {
+      if (event.candidate) {
+        const ws = wsRef.current;
+        if (ws && ws.readyState === WebSocket.OPEN) {
+          ws.send(JSON.stringify({
+            channel: "audio-signal",
+            type: "audio_signal",
+            payload: {
+              action: "signal",
+              orgId,
+              targetUserId: peerId,
+              signalType: "ice-candidate",
+              signalData: event.candidate,
+            },
+          }));
+        }
+      }
+    };
+
+    peerConnectionsRef.current.set(peerId, pc);
+
+    // If initiator, create and send offer
+    if (isInitiator) {
+      pc.createOffer()
+        .then(offer => pc.setLocalDescription(offer))
+        .then(() => {
+          const ws = wsRef.current;
+          if (ws && ws.readyState === WebSocket.OPEN) {
+            ws.send(JSON.stringify({
+              channel: "audio-signal",
+              type: "audio_signal",
+              payload: {
+                action: "signal",
+                orgId,
+                targetUserId: peerId,
+                signalType: "offer",
+                signalData: pc.localDescription,
+              },
+            }));
+          }
+        })
+        .catch(err => console.error("Failed to create offer:", err));
+    }
+
+    return pc;
+  }, [orgId, wsRef]);
+
+  // Cleanup all peer connections
+  const cleanupPeerConnections = useCallback(() => {
+    peerConnectionsRef.current.forEach((pc, peerId) => {
+      pc.close();
+      const audio = document.getElementById(`audio-${peerId}`);
+      if (audio) audio.remove();
+    });
+    peerConnectionsRef.current.clear();
+  }, []);
 
   // Listen for audio-signal messages
   useEffect(() => {
@@ -931,45 +1098,128 @@ function AudioPanel({ orgId, wsRef, wsConnected }: { orgId: string; wsRef: React
     const handler = (event: MessageEvent) => {
       try {
         const msg = JSON.parse(event.data);
-        // Server sends audio_room_state on successful join (with full participant list)
+
         if (msg.type === "audio_room_state") {
           setInRoom(true);
           setJoining(false);
           if (msg.payload?.participants) {
-            setParticipants(msg.payload.participants.map((p: { email?: string; userId?: string }) => p.email || p.userId || "unknown"));
+            const existingPeers: AudioPeer[] = msg.payload.participants.map(
+              (p: { email?: string; userId?: string }) => ({
+                userId: p.userId || "",
+                email: p.email || p.userId || "unknown",
+              })
+            );
+            setPeers(existingPeers);
+            // Initiate peer connections with all existing participants
+            existingPeers.forEach(peer => {
+              if (!peerConnectionsRef.current.has(peer.userId)) {
+                createPeerConnection(peer.userId, peer.email, true);
+              }
+            });
           }
         }
-        // Server sends audio_peer_joined when another user joins
-        if (msg.type === "audio_peer_joined" && msg.payload?.email) {
-          setParticipants((prev) => [...prev, msg.payload.email]);
+
+        if (msg.type === "audio_peer_joined" && msg.payload?.userId) {
+          const newPeer: AudioPeer = {
+            userId: msg.payload.userId,
+            email: msg.payload.email || msg.payload.userId,
+          };
+          setPeers((prev) => {
+            if (prev.some(p => p.userId === newPeer.userId)) return prev;
+            return [...prev, newPeer];
+          });
+          // Don't initiate — the new peer will send offers to us
         }
-        // Server sends audio_peer_left when another user leaves
-        if (msg.type === "audio_peer_left" && msg.payload?.email) {
-          setParticipants((prev) => prev.filter((p) => p !== msg.payload.email));
+
+        if (msg.type === "audio_peer_left" && msg.payload?.userId) {
+          const leftUserId = msg.payload.userId;
+          setPeers((prev) => prev.filter((p) => p.userId !== leftUserId));
+          // Cleanup peer connection
+          const pc = peerConnectionsRef.current.get(leftUserId);
+          if (pc) {
+            pc.close();
+            peerConnectionsRef.current.delete(leftUserId);
+            const audio = document.getElementById(`audio-${leftUserId}`);
+            if (audio) audio.remove();
+          }
         }
-        // Server sends audio_room_full when room is at capacity
+
         if (msg.type === "audio_room_full") {
           setError(`Room is full (max ${msg.payload?.maxParticipants || 5} participants)`);
           setInRoom(false);
           setJoining(false);
-          // Release microphone since we can't join
           mediaStreamRef.current?.getTracks().forEach(t => t.stop());
           mediaStreamRef.current = null;
+          cleanupPeerConnections();
+        }
+
+        if (msg.type === "audio_mute_change" && msg.payload?.userId) {
+          setPeers(prev => prev.map(p =>
+            p.userId === msg.payload.userId ? { ...p, isMuted: msg.payload.isMuted } : p
+          ));
+        }
+
+        // Handle WebRTC signaling
+        if (msg.type === "audio_signal" && msg.payload?.fromUserId) {
+          const fromUserId = msg.payload.fromUserId;
+          const signalType = msg.payload.signalType;
+          const signalData = msg.payload.signalData;
+
+          if (signalType === "offer") {
+            // Create peer connection if it doesn't exist, then set remote and send answer
+            let pc = peerConnectionsRef.current.get(fromUserId);
+            if (!pc) {
+              pc = createPeerConnection(fromUserId, msg.payload.fromEmail || fromUserId, false);
+            }
+            pc.setRemoteDescription(new RTCSessionDescription(signalData))
+              .then(() => pc!.createAnswer())
+              .then(answer => pc!.setLocalDescription(answer))
+              .then(() => {
+                const ws2 = wsRef.current;
+                if (ws2 && ws2.readyState === WebSocket.OPEN) {
+                  ws2.send(JSON.stringify({
+                    channel: "audio-signal",
+                    type: "audio_signal",
+                    payload: {
+                      action: "signal",
+                      orgId,
+                      targetUserId: fromUserId,
+                      signalType: "answer",
+                      signalData: pc!.localDescription,
+                    },
+                  }));
+                }
+              })
+              .catch(err => console.error("Failed to handle offer:", err));
+          } else if (signalType === "answer") {
+            const pc = peerConnectionsRef.current.get(fromUserId);
+            if (pc) {
+              pc.setRemoteDescription(new RTCSessionDescription(signalData))
+                .catch(err => console.error("Failed to set answer:", err));
+            }
+          } else if (signalType === "ice-candidate") {
+            const pc = peerConnectionsRef.current.get(fromUserId);
+            if (pc) {
+              pc.addIceCandidate(new RTCIceCandidate(signalData))
+                .catch(err => console.error("Failed to add ICE candidate:", err));
+            }
+          }
         }
       } catch { /* ignore */ }
     };
     ws.addEventListener("message", handler);
     return () => ws.removeEventListener("message", handler);
-  }, [wsRef, wsConnected]);
+  }, [wsRef, wsConnected, orgId, createPeerConnection, cleanupPeerConnections]);
 
   // Cleanup media stream and leave room on unmount or org change
   useEffect(() => {
     return () => {
       mediaStreamRef.current?.getTracks().forEach(t => t.stop());
       mediaStreamRef.current = null;
+      cleanupPeerConnections();
       setInRoom(false);
       setMuted(false);
-      setParticipants([]);
+      setPeers([]);
       setJoining(false);
       setError(null);
       const ws = wsRef.current;
@@ -981,7 +1231,7 @@ function AudioPanel({ orgId, wsRef, wsConnected }: { orgId: string; wsRef: React
         }));
       }
     };
-  }, [orgId, wsRef]);
+  }, [orgId, wsRef, cleanupPeerConnections]);
 
   const handleJoinRoom = async () => {
     setError(null);
@@ -996,9 +1246,7 @@ function AudioPanel({ orgId, wsRef, wsConnected }: { orgId: string; wsRef: React
           type: "audio_join",
           payload: { action: "join", orgId },
         }));
-        // Don't set inRoom here — wait for audio_room_state from server
       } else {
-        // WebSocket not connected — release mic and show error
         stream.getTracks().forEach(t => t.stop());
         mediaStreamRef.current = null;
         setError("Not connected to collaboration server");
@@ -1013,6 +1261,7 @@ function AudioPanel({ orgId, wsRef, wsConnected }: { orgId: string; wsRef: React
   const handleLeaveRoom = () => {
     mediaStreamRef.current?.getTracks().forEach(t => t.stop());
     mediaStreamRef.current = null;
+    cleanupPeerConnections();
     const ws = wsRef.current;
     if (ws && ws.readyState === WebSocket.OPEN) {
       ws.send(JSON.stringify({
@@ -1023,15 +1272,27 @@ function AudioPanel({ orgId, wsRef, wsConnected }: { orgId: string; wsRef: React
     }
     setInRoom(false);
     setMuted(false);
-    setParticipants([]);
+    setPeers([]);
   };
 
   const handleToggleMute = () => {
     if (mediaStreamRef.current) {
-      mediaStreamRef.current.getAudioTracks().forEach(t => { t.enabled = muted; });
-      setMuted(!muted);
+      const newMuted = !muted;
+      mediaStreamRef.current.getAudioTracks().forEach(t => { t.enabled = !newMuted; });
+      setMuted(newMuted);
+      // Notify other participants about mute state
+      const ws = wsRef.current;
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({
+          channel: "audio-signal",
+          type: "audio_mute",
+          payload: { action: "mute_change", orgId, isMuted: newMuted },
+        }));
+      }
     }
   };
+
+  const participants = peers;
 
   return (
     <div className="flex-1 flex flex-col min-h-0">
@@ -1067,13 +1328,21 @@ function AudioPanel({ orgId, wsRef, wsConnected }: { orgId: string; wsRef: React
                 </p>
               </div>
             </div>
+            {/* Participant list with mute indicators */}
             {inRoom && participants.length > 0 && (
-              <div className="mb-4 flex flex-wrap gap-2">
-                {participants.map((p, i) => (
-                  <Badge key={i} variant="default">{p.split("@")[0]}</Badge>
+              <div className="mb-4 space-y-1">
+                {participants.map((p) => (
+                  <div key={p.userId || p.email} className="flex items-center gap-2 px-2 py-1 rounded bg-white/[0.03]">
+                    <span className={`w-1.5 h-1.5 rounded-full ${p.isMuted ? "bg-red-400" : "bg-green-400"}`} />
+                    <span className="text-xs text-text-secondary flex-1 truncate">
+                      {p.email.split("@")[0]}
+                    </span>
+                    {p.isMuted && <MicOff className="w-3 h-3 text-red-400" />}
+                  </div>
                 ))}
               </div>
             )}
+
             <div className="grid grid-cols-2 gap-3">
               <button
                 onClick={inRoom ? handleLeaveRoom : handleJoinRoom}
@@ -1115,13 +1384,15 @@ function AudioPanel({ orgId, wsRef, wsConnected }: { orgId: string; wsRef: React
           </Card>
         </div>
       </div>
+      {/* Hidden container for remote audio elements */}
+      <div ref={remoteAudioRef} className="hidden" />
     </div>
   );
 }
 
 // -- Participants Sidebar (Right) --
 
-function ParticipantsSidebar({ orgId }: { orgId: string }) {
+function ParticipantsSidebar({ orgId, wsRef, wsConnected, currentUserId }: { orgId: string; wsRef: React.RefObject<WebSocket | null>; wsConnected: boolean; currentUserId: string }) {
   const [members, setMembers] = useState<PresenceMember[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -1148,6 +1419,23 @@ function ParticipantsSidebar({ orgId }: { orgId: string }) {
   const away = members.filter((m) => m.status === "away");
   const busy = members.filter((m) => m.status === "busy");
   const offline = members.filter((m) => m.status === "offline");
+
+  // Person-to-person call: send audio invite notification to a specific user (Item f)
+  const handleCallUser = useCallback((targetUserId: string) => {
+    const ws = wsRef.current;
+    if (!ws || ws.readyState !== WebSocket.OPEN) return;
+    ws.send(JSON.stringify({
+      channel: "notification",
+      type: "notification",
+      payload: {
+        notificationType: "audio_invite",
+        orgId,
+        targetUserIds: [targetUserId],
+        roomName: "Direct Call",
+        roomId: `direct-${Date.now()}`,
+      },
+    }));
+  }, [orgId, wsRef]);
 
   const statusDot = (status: string) => {
     switch (status) {
@@ -1182,6 +1470,8 @@ function ParticipantsSidebar({ orgId }: { orgId: string }) {
                 label={`Online \u2014 ${online.length}`}
                 members={online}
                 statusDot={statusDot}
+                onCallUser={handleCallUser}
+                currentUserId={currentUserId}
               />
             )}
             {away.length > 0 && (
@@ -1233,10 +1523,14 @@ function MemberGroup({
   label,
   members,
   statusDot,
+  onCallUser,
+  currentUserId,
 }: {
   label: string;
   members: PresenceMember[];
   statusDot: (status: string) => string;
+  onCallUser?: (userId: string) => void;
+  currentUserId?: string;
 }) {
   return (
     <div className="mb-2">
@@ -1246,7 +1540,7 @@ function MemberGroup({
       {members.map((m) => (
         <div
           key={m.userId}
-          className="flex items-center gap-2 px-3 py-1.5 hover:bg-white/5 transition-colors cursor-pointer"
+          className="group flex items-center gap-2 px-3 py-1.5 hover:bg-white/5 transition-colors cursor-pointer"
         >
           <div className="relative">
             <div className="w-7 h-7 bg-accent-primary/15 rounded-full flex items-center justify-center">
@@ -1263,6 +1557,16 @@ function MemberGroup({
               {m.name || m.email.split("@")[0]}
             </p>
           </div>
+          {/* Person-to-person call button (Item f) */}
+          {onCallUser && m.userId !== currentUserId && m.status === "online" && (
+            <button
+              onClick={(e) => { e.stopPropagation(); onCallUser(m.userId); }}
+              className="opacity-0 group-hover:opacity-100 p-1 rounded text-text-tertiary hover:text-green-400 transition-all"
+              title={`Call ${m.name || m.email.split("@")[0]}`}
+            >
+              <Phone className="w-3 h-3" />
+            </button>
+          )}
         </div>
       ))}
     </div>

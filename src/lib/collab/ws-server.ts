@@ -684,21 +684,54 @@ async function handleNotification(ws: AuthenticatedSocket, payload: Record<strin
     }
     case 'audio_invite': {
       const roomName = (data.roomName as string) || 'Audio Channel';
-      // Broadcast to all org members that an audio call started
-      const room = orgRooms.get(orgId);
-      if (room) {
-        broadcast(room, {
-          type: 'session_invite',
-          channel: 'notification',
-          payload: {
-            notificationType: 'audio_invite',
-            fromUserId: ws.userId,
-            fromEmail: ws.email,
-            roomName,
-            orgId,
-            timestamp: new Date().toISOString(),
-          },
-        }, ws);
+      if (targets.length > 0) {
+        // Person-to-person call: send invite to specific users (Item f)
+        for (const targetId of targets) {
+          const sockets = socketsForUser(targetId);
+          console.log(`[WS-Notify] Audio invite to ${targetId}: ${sockets.length} socket(s) online`);
+          if (sockets.length > 0) {
+            for (const sock of sockets) {
+              sock.send(JSON.stringify({
+                type: 'session_invite',
+                channel: 'notification',
+                payload: {
+                  notificationType: 'audio_invite',
+                  fromUserId: ws.userId,
+                  fromEmail: ws.email,
+                  roomName,
+                  roomId: data.roomId || 'default',
+                  orgId,
+                  timestamp: new Date().toISOString(),
+                },
+              }));
+            }
+          } else {
+            queueOfflineNotification(targetId, {
+              type: 'audio_invite',
+              fromEmail: ws.email,
+              sessionName: roomName,
+              orgId,
+            }).catch(err => console.error('[WS] Failed to queue offline audio notification:', err));
+          }
+        }
+      } else {
+        // Broadcast to all org members that an audio call started
+        const room = orgRooms.get(orgId);
+        if (room) {
+          broadcast(room, {
+            type: 'session_invite',
+            channel: 'notification',
+            payload: {
+              notificationType: 'audio_invite',
+              fromUserId: ws.userId,
+              fromEmail: ws.email,
+              roomName,
+              roomId: data.roomId || 'default',
+              orgId,
+              timestamp: new Date().toISOString(),
+            },
+          }, ws);
+        }
       }
       break;
     }
