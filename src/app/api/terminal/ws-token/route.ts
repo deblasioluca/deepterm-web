@@ -47,7 +47,7 @@ export async function POST() {
       orgIds,
     });
 
-    const response = successResponse({ token, userId: zkUser.id, orgIds });
+    const response = successResponse({ token, userId: zkUser.id, email: zkUser.email, orgIds });
     return addCorsHeaders(response);
   } catch (error) {
     console.error('WS token generation error:', error);
