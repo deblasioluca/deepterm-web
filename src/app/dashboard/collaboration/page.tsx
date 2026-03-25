@@ -1331,7 +1331,7 @@ function AudioPanel({ orgId, wsRef, wsConnected }: { orgId: string; wsRef: React
             {inRoom && participants.length > 0 && (
               <div className="mb-4 flex flex-wrap gap-2">
                 {participants.map((p, i) => (
-                  <Badge key={i} variant="default">{p.split("@")[0]}</Badge>
+                  <Badge key={i} variant="default">{p.email.split("@")[0]}</Badge>
                 ))}
               </div>
             )}
