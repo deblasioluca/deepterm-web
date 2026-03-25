@@ -960,11 +960,16 @@ function AudioPanel({ orgId, wsRef, wsConnected }: { orgId: string; wsRef: React
     return () => ws.removeEventListener("message", handler);
   }, [wsRef, wsConnected]);
 
-  // Cleanup media stream and leave room on unmount
+  // Cleanup media stream and leave room on unmount or org change
   useEffect(() => {
     return () => {
       mediaStreamRef.current?.getTracks().forEach(t => t.stop());
       mediaStreamRef.current = null;
+      setInRoom(false);
+      setMuted(false);
+      setParticipants([]);
+      setJoining(false);
+      setError(null);
       const ws = wsRef.current;
       if (ws && ws.readyState === WebSocket.OPEN) {
         ws.send(JSON.stringify({
