@@ -740,11 +740,13 @@ async function handleNotification(ws: AuthenticatedSocket, payload: Record<strin
                 channel: 'notification',
                 payload: {
                   notificationType: 'audio_invite',
+                  sessionType: 'audio',
                   fromUserId: ws.userId,
                   fromEmail: ws.email,
                   roomName,
                   roomId: data.roomId || 'default',
                   orgId,
+                  orgName: data.orgName || '',
                   timestamp: new Date().toISOString(),
                 },
               }));
@@ -767,11 +769,13 @@ async function handleNotification(ws: AuthenticatedSocket, payload: Record<strin
             channel: 'notification',
             payload: {
               notificationType: 'audio_invite',
+              sessionType: 'audio',
               fromUserId: ws.userId,
               fromEmail: ws.email,
               roomName,
               roomId: data.roomId || 'default',
               orgId,
+              orgName: data.orgName || '',
               timestamp: new Date().toISOString(),
             },
           }, ws);
