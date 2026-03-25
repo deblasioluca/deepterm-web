@@ -71,6 +71,7 @@ export default function CollaborationPage() {
   const [selectedOrgId, setSelectedOrgId] = useState<string | null>(null);
   const [orgs, setOrgs] = useState<OrgData[]>([]);
   const [currentUserId, setCurrentUserId] = useState<string>("");
+  const [currentUserEmail, setCurrentUserEmail] = useState<string>("");
   const [wsConnected, setWsConnected] = useState(false);
   const [loading, setLoading] = useState(true);
   const [panelView, setPanelView] = useState<PanelView>("chat");
@@ -109,6 +110,7 @@ export default function CollaborationPage() {
         if (tokenRes.ok) {
           const tokenData = await tokenRes.json();
           setCurrentUserId(tokenData?.userId || "");
+          setCurrentUserEmail(tokenData?.email || "");
         }
       } catch {
         // silent
@@ -301,6 +303,7 @@ export default function CollaborationPage() {
               wsRef={wsRef}
               wsConnected={wsConnected}
               currentUserId={currentUserId}
+              currentUserEmail={currentUserEmail}
               selectedChannelId={selectedChannelId}
               onSelectChannel={setSelectedChannelId}
             />
@@ -480,6 +483,7 @@ function ChatPanel({
   wsRef,
   wsConnected,
   currentUserId,
+  currentUserEmail,
   selectedChannelId,
   onSelectChannel,
 }: {
@@ -487,6 +491,7 @@ function ChatPanel({
   wsRef: React.RefObject<WebSocket | null>;
   wsConnected: boolean;
   currentUserId: string;
+  currentUserEmail: string;
   selectedChannelId: string | null;
   onSelectChannel: (id: string) => void;
 }) {
@@ -582,7 +587,8 @@ function ChatPanel({
     const optimisticMsg: ChatMessage = {
       id: crypto.randomUUID(),
       senderId: currentUserId,
-      senderEmail: "",
+      senderEmail: currentUserEmail,
+      senderName: currentUserEmail.split("@")[0] || "You",
       content,
       type: "text",
       createdAt: new Date().toISOString(),
