@@ -607,10 +607,12 @@ function ChatPanel({
       );
       if (!res.ok) {
         setMessages((prev) => prev.filter((m) => m.id !== optimisticMsg.id));
+        setNewMessage(content);
       }
     } catch {
-      // Remove optimistic message on failure
+      // Remove optimistic message on failure and restore input
       setMessages((prev) => prev.filter((m) => m.id !== optimisticMsg.id));
+      setNewMessage(content);
     } finally {
       setSending(false);
     }
