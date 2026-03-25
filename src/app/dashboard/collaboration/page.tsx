@@ -929,22 +929,30 @@ function AudioPanel({ orgId, wsRef, wsConnected }: { orgId: string; wsRef: React
     const handler = (event: MessageEvent) => {
       try {
         const msg = JSON.parse(event.data);
-        if (msg.channel === "audio-signal" || msg.type === "audio_participants") {
+        // Server sends audio_room_state on successful join (with full participant list)
+        if (msg.type === "audio_room_state") {
+          setInRoom(true);
+          setJoining(false);
           if (msg.payload?.participants) {
             setParticipants(msg.payload.participants.map((p: { email?: string; userId?: string }) => p.email || p.userId || "unknown"));
           }
         }
-        if (msg.type === "audio_joined") {
-          setInRoom(true);
-          setJoining(false);
+        // Server sends audio_peer_joined when another user joins
+        if (msg.type === "audio_peer_joined" && msg.payload?.email) {
+          setParticipants((prev) => [...prev, msg.payload.email]);
         }
-        if (msg.type === "audio_left") {
+        // Server sends audio_peer_left when another user leaves
+        if (msg.type === "audio_peer_left" && msg.payload?.email) {
+          setParticipants((prev) => prev.filter((p) => p !== msg.payload.email));
+        }
+        // Server sends audio_room_full when room is at capacity
+        if (msg.type === "audio_room_full") {
+          setError(`Room is full (max ${msg.payload?.maxParticipants || 5} participants)`);
           setInRoom(false);
-          setParticipants([]);
-        }
-        if (msg.type === "audio_error") {
-          setError(msg.payload?.message || "Audio error");
           setJoining(false);
+          // Release microphone since we can't join
+          mediaStreamRef.current?.getTracks().forEach(t => t.stop());
+          mediaStreamRef.current = null;
         }
       } catch { /* ignore */ }
     };
@@ -981,9 +989,14 @@ function AudioPanel({ orgId, wsRef, wsConnected }: { orgId: string; wsRef: React
           type: "audio_join",
           payload: { action: "join", orgId },
         }));
+        // Don't set inRoom here — wait for audio_room_state from server
+      } else {
+        // WebSocket not connected — release mic and show error
+        stream.getTracks().forEach(t => t.stop());
+        mediaStreamRef.current = null;
+        setError("Not connected to collaboration server");
+        setJoining(false);
       }
-      setInRoom(true);
-      setJoining(false);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Microphone access denied");
       setJoining(false);
