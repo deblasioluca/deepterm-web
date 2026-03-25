@@ -458,7 +458,7 @@ async function handleTerminal(ws: AuthenticatedSocket, payload: Record<string, u
     case 'request_write': {
       // Participant requests write access — relay to session owner
       const rwRoom = terminalRooms.get(sessionId);
-      if (rwRoom) {
+      if (rwRoom && rwRoom.has(ws)) {
         const rwSession = await prisma.sharedTerminalSession.findUnique({
           where: { id: sessionId },
           select: { ownerId: true },
