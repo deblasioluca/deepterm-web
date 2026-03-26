@@ -2,7 +2,7 @@
  * Documentation structure — single source of truth for the sidebar nav,
  * page routing, and content rendering.
  *
- * Updated: 2026-03-21
+ * Updated: 2026-03-26
  * Categories: 19 | Articles: 56
  */
 
@@ -1917,6 +1917,7 @@ Subsystem sftp /usr/lib/openssh/sftp-server</code></pre>
 <h3>Troubleshooting</h3>
 <ul>
   <li><strong>No audio</strong> — check that DeepTerm has microphone permission in System Settings \u2192 Privacy &amp; Security \u2192 Microphone.</li>
+  <li><strong>WebRTC not available</strong> — starting with v1.0.19, the WebRTC framework is bundled automatically via Swift Package Manager. If you're on an older version, update to the latest release so <code>canImport(WebRTC)</code> succeeds and real audio code runs instead of placeholder mode.</li>
   <li><strong>Echo or feedback</strong> — use headphones or enable echo cancellation in your system audio settings.</li>
   <li><strong>Can't connect</strong> — WebRTC requires certain ports for peer connections. If you're behind a restrictive firewall, peer connections may fail.</li>
 </ul>
