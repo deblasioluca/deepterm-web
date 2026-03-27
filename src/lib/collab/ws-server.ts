@@ -688,6 +688,29 @@ async function handleNotification(ws: AuthenticatedSocket, payload: Record<strin
   console.log(`[WS-Notify] type=${notificationType}, rawTargets=${rawTargets.length}, validTargets=${targets.length}, targets=[${targets.join(',')}]`);
 
   switch (notificationType) {
+    case 'cancel_call': {
+      // Caller left before callee answered — relay cancellation to targets
+      for (const targetId of targets) {
+        const sockets = socketsForUser(targetId);
+        if (sockets.length > 0) {
+          for (const sock of sockets) {
+            sock.send(JSON.stringify({
+              type: 'cancel_call',
+              channel: 'notification',
+              payload: {
+                fromUserId: ws.userId,
+                fromEmail: ws.email,
+                roomId: data.roomId || 'default',
+                orgId,
+                timestamp: new Date().toISOString(),
+              },
+            }));
+          }
+        }
+      }
+      console.log(`[WS-Notify] Call cancelled by ${ws.email}, notified ${targets.length} target(s)`);
+      break;
+    }
     case 'terminal_invite': {
       const sessionId = data.sessionId as string;
       const sessionName = (data.sessionName as string) || 'Shared Terminal';
