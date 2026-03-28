@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { listLogs } from '@/lib/improvmx';
 
-/** GET /api/admin/email/logs — list recent email logs */
+/** GET /api/admin/email/activity — list recent email logs */
 export async function GET() {
   try {
     const logs = await listLogs();

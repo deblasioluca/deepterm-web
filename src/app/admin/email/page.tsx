@@ -15,7 +15,6 @@ import {
   RefreshCw,
   AlertCircle,
   Search,
-  X,
 } from 'lucide-react';
 
 // ── Types ────────────────────────────────────────────────────────────────────
