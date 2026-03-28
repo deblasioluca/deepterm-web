@@ -208,7 +208,7 @@ export default function AdminEmailPage() {
   });
 
   const formatDate = (ts: number) => {
-    const d = new Date(ts);
+    const d = new Date(ts * 1000);
     return d.toLocaleDateString('en-US', {
       month: 'short',
       day: 'numeric',
