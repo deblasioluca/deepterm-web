@@ -2,8 +2,8 @@
  * Documentation structure — single source of truth for the sidebar nav,
  * page routing, and content rendering.
  *
- * Updated: 2026-03-26
- * Categories: 19 | Articles: 56
+ * Updated: 2026-03-28
+ * Categories: 20 | Articles: 57
  */
 
 import {
@@ -998,7 +998,7 @@ export const DOC_CATEGORIES: DocCategory[] = [
 <p>For passwordless login, register a passkey from <a href="/dashboard/passkeys">Dashboard → Passkeys</a>. Passkeys use FIDO2/WebAuthn and work with Touch ID, Face ID, or hardware security keys (YubiKey).</p>
 
 <h3>Recovery</h3>
-<p>If you lose access to your authenticator, use one of your backup codes. Each code can only be used once. If you've exhausted all codes, contact support with account verification.</p>
+<p>If you lose access to your authenticator, use one of your backup codes. Each code can only be used once. If you've exhausted all codes, contact <a href="mailto:support@deepterm.net">support@deepterm.net</a> with account verification.</p>
 `,
       },
       {
@@ -1219,7 +1219,7 @@ Subsystem sftp /usr/lib/openssh/sftp-server</code></pre>
 <p>If you have many terminal tabs open, each consumes a PTY and some memory. Close unused tabs. If the issue persists, check <strong>Activity Monitor</strong> and send us the details via <a href="/dashboard/help">Help → Report Issue</a>.</p>
 
 <h3>Logs</h3>
-<p>Diagnostic logs are stored at <code>~/Library/Logs/DeepTerm/</code>. Attach them when submitting a support request.</p>
+<p>Diagnostic logs are stored at <code>~/Library/Logs/DeepTerm/</code>. Attach them when submitting a support request to <a href="mailto:support@deepterm.net">support@deepterm.net</a>.</p>
 `,
       },
     ],
@@ -2116,6 +2116,51 @@ Subsystem sftp /usr/lib/openssh/sftp-server</code></pre>
 
 <h3>Conflict Resolution</h3>
 <p>If the same configuration is edited on two devices, the most recent change wins (last-write-wins based on timestamp).</p>
+`,
+      },
+    ],
+  },
+
+  // ─── Contact & Support ──────────────────────────────
+  {
+    label: 'Contact & Support',
+    icon: HelpCircle,
+    articles: [
+      {
+        slug: 'contact',
+        title: 'Contact Us',
+        description: 'Get in touch with the DeepTerm team.',
+        content: `
+<p>We\'d love to hear from you. Reach us at any of the addresses below:</p>
+
+<h3>Email Addresses</h3>
+<table>
+  <thead><tr><th>Address</th><th>Use For</th></tr></thead>
+  <tbody>
+    <tr>
+      <td><strong><a href="mailto:support@deepterm.net">support@deepterm.net</a></strong></td>
+      <td>Bug reports, account issues, technical help, billing questions</td>
+    </tr>
+    <tr>
+      <td><strong><a href="mailto:info@deepterm.net">info@deepterm.net</a></strong></td>
+      <td>General enquiries, partnership requests, press</td>
+    </tr>
+    <tr>
+      <td><strong><a href="mailto:luca@deepterm.net">luca@deepterm.net</a></strong></td>
+      <td>Direct contact with the founder</td>
+    </tr>
+  </tbody>
+</table>
+
+<h3>In-App Support</h3>
+<ul>
+  <li><strong>Report a Bug</strong> — in the macOS app go to <strong>Settings → Support → Feedback → Report</strong>.</li>
+  <li><strong>Suggest a Feature</strong> — in the macOS app go to <strong>Settings → Support → Feedback → Suggest</strong>.</li>
+  <li><strong>Help Center</strong> — visit <a href="/dashboard/help">Dashboard → Help</a> in the web app.</li>
+</ul>
+
+<h3>Response Times</h3>
+<p>We aim to respond within 24 hours on business days. Pro and Business plan users receive priority support.</p>
 `,
       },
     ],

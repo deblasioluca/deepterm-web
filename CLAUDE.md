@@ -28,7 +28,7 @@ DeepTerm is a professional SSH client platform. This repository is the **web app
 | **Auth (Admin)** | Intranet-only session cookies |
 | **2FA** | OTPAuth (TOTP) + SHA-256 backup codes |
 | **Passkeys** | SimpleWebAuthn (server + browser) |
-| **Email** | Nodemailer (SMTP) |
+| **Email** | Nodemailer (SMTP) via ImprovMX forwarding |
 | **Billing** | Stripe |
 | **Caching** | Redis (ioredis) |
 | **Validation** | Zod |
@@ -556,6 +556,8 @@ const platforms = [
 | **Rate limiting** | `src/lib/zk/rate-limit.ts` |
 | **Audit logging** | `src/lib/zk/audit.ts` |
 | **Email service** | `src/lib/email.ts` |
+| **Email forwarding admin** | `src/app/admin/email/page.tsx` |
+| **ImprovMX API client** | `src/lib/improvmx.ts` |
 | **2FA (TOTP)** | `src/lib/2fa.ts` |
 | **Passkeys/WebAuthn** | `src/lib/webauthn.ts` |
 | **Stripe billing** | `src/lib/stripe.ts` |
@@ -681,6 +683,24 @@ If you lose context mid-task:
 
 ---
 
-**Last Updated:** February 21, 2026
+## Email Addresses
+
+DeepTerm uses **ImprovMX** for email forwarding on the `deepterm.net` domain. All aliases forward to the admin inbox.
+
+| Address | Purpose |
+|---------|--------|
+| `noreply@deepterm.net` | System emails (welcome, invitations, alerts) — `FROM_EMAIL` in `email.ts` |
+| `support@deepterm.net` | User-facing support (bugs, account issues, billing) |
+| `info@deepterm.net` | General enquiries, partnerships, press |
+| `luca@deepterm.net` | Direct founder contact |
+| `*@deepterm.net` | Catch-all (forwards everything not matched above) |
+
+**Admin UI:** Manage aliases at `/admin/email` (intranet-only).
+**API:** ImprovMX REST API via `src/lib/improvmx.ts`. Requires `IMPROVMX_API_KEY` env var.
+**SMTP:** Outbound email uses `SMTP_HOST` / `SMTP_USER` / `SMTP_PASSWORD` env vars (Gmail SMTP by default).
+
+---
+
+**Last Updated:** March 28, 2026
 **For:** AI Assistants working on DeepTerm Web Application
 **Purpose:** Prevent code duplication and architectural violations during context resets

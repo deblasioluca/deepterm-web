@@ -354,8 +354,11 @@ function DocumentationContent() {
               <Link href="/security" className="hover:text-text-secondary transition-colors">
                 Security
               </Link>
+              <a href="mailto:support@deepterm.net" className="hover:text-text-secondary transition-colors">
+                support@deepterm.net
+              </a>
               <Link href="/dashboard/help" className="hover:text-text-secondary transition-colors flex items-center gap-1">
-                Support <ExternalLink className="w-3 h-3" />
+                Help Center <ExternalLink className="w-3 h-3" />
               </Link>
             </div>
           </footer>
