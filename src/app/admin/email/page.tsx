@@ -22,6 +22,14 @@ import {
   Archive,
   Zap,
   Download,
+  FolderOpen,
+  Bug,
+  Lightbulb,
+  CreditCard,
+  Handshake,
+  User,
+  UserCheck,
+  HelpCircle,
 } from 'lucide-react';
 
 // ── Types ────────────────────────────────────────────────────────────────────
@@ -104,7 +112,17 @@ interface InboxCounts {
   replied: number;
   archived: number;
   spam: number;
+  needs_human: number;
   total: number;
+}
+
+interface CategoryCounts {
+  support_request: number;
+  bug_report: number;
+  feature_request: number;
+  billing_inquiry: number;
+  partnership: number;
+  personal: number;
 }
 
 type TabKey = 'inbox' | 'drafts' | 'sent' | 'aliases' | 'logs';
@@ -148,7 +166,11 @@ export default function AdminEmailPage() {
   // Inbox state
   const [messages, setMessages] = useState<EmailMessage[]>([]);
   const [inboxCounts, setInboxCounts] = useState<InboxCounts>({
-    unread: 0, read: 0, replied: 0, archived: 0, spam: 0, total: 0,
+    unread: 0, read: 0, replied: 0, archived: 0, spam: 0, needs_human: 0, total: 0,
+  });
+  const [categoryCounts, setCategoryCounts] = useState<CategoryCounts>({
+    support_request: 0, bug_report: 0, feature_request: 0,
+    billing_inquiry: 0, partnership: 0, personal: 0,
   });
   const [inboxLoading, setInboxLoading] = useState(false);
   const [inboxFilter, setInboxFilter] = useState<string>('all');
@@ -234,9 +256,10 @@ export default function AdminEmailPage() {
 
       const res = await fetch(`/api/admin/email/inbox?${params.toString()}`);
       if (res.ok) {
-        const data = (await res.json()) as { messages: EmailMessage[]; counts: InboxCounts };
+        const data = (await res.json()) as { messages: EmailMessage[]; counts: InboxCounts; categoryCounts: CategoryCounts };
         setMessages(data.messages);
         setInboxCounts(data.counts);
+        if (data.categoryCounts) setCategoryCounts(data.categoryCounts);
       }
     } catch (err) {
       console.error('Failed to fetch inbox:', err);
@@ -585,36 +608,76 @@ export default function AdminEmailPage() {
         >
           {/* ── INBOX TAB ─────────────────────────────────────────────── */}
           {activeTab === 'inbox' && (
-            <div className="space-y-4">
+            <div className="flex gap-4">
+              {/* Category Folder Sidebar */}
+              <div className="w-56 flex-shrink-0 space-y-1">
+                <p className="text-[10px] uppercase tracking-wider text-text-tertiary font-semibold px-2 mb-2">Status</p>
+                {([
+                  { key: 'all', label: 'All Mail', icon: Inbox, count: inboxCounts.total },
+                  { key: 'unread', label: 'Unread', icon: Mail, count: inboxCounts.unread },
+                  { key: 'needs_human', label: 'Needs Human', icon: UserCheck, count: inboxCounts.needs_human },
+                  { key: 'replied', label: 'Replied', icon: Send, count: inboxCounts.replied },
+                  { key: 'archived', label: 'Archived', icon: Archive, count: inboxCounts.archived },
+                  { key: 'spam', label: 'Spam', icon: AlertCircle, count: inboxCounts.spam },
+                ] as const).map((folder) => (
+                  <button
+                    key={folder.key}
+                    onClick={() => { setInboxFilter(folder.key); setClassFilter('all'); }}
+                    className={`w-full flex items-center gap-2 px-2 py-1.5 rounded-lg text-sm transition-colors ${
+                      inboxFilter === folder.key && classFilter === 'all'
+                        ? 'bg-accent-primary/10 text-accent-primary font-medium'
+                        : 'text-text-secondary hover:text-text-primary hover:bg-background-tertiary'
+                    }`}
+                  >
+                    <folder.icon className="w-4 h-4 flex-shrink-0" />
+                    <span className="flex-1 text-left truncate">{folder.label}</span>
+                    {folder.count > 0 && (
+                      <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${
+                        folder.key === 'needs_human' ? 'bg-orange-500/20 text-orange-400' :
+                        folder.key === 'unread' ? 'bg-red-500/20 text-red-400' :
+                        'bg-background-tertiary text-text-tertiary'
+                      }`}>
+                        {folder.count}
+                      </span>
+                    )}
+                  </button>
+                ))}
+
+                <div className="my-3 border-t border-border" />
+                <p className="text-[10px] uppercase tracking-wider text-text-tertiary font-semibold px-2 mb-2">Categories</p>
+                {([
+                  { key: 'support_request', label: 'Support', icon: HelpCircle, count: categoryCounts.support_request },
+                  { key: 'bug_report', label: 'Bugs', icon: Bug, count: categoryCounts.bug_report },
+                  { key: 'feature_request', label: 'Ideas', icon: Lightbulb, count: categoryCounts.feature_request },
+                  { key: 'billing_inquiry', label: 'Billing', icon: CreditCard, count: categoryCounts.billing_inquiry },
+                  { key: 'partnership', label: 'Partnership', icon: Handshake, count: categoryCounts.partnership },
+                  { key: 'personal', label: 'Personal', icon: User, count: categoryCounts.personal },
+                ] as const).map((folder) => (
+                  <button
+                    key={folder.key}
+                    onClick={() => { setClassFilter(folder.key); setInboxFilter('all'); }}
+                    className={`w-full flex items-center gap-2 px-2 py-1.5 rounded-lg text-sm transition-colors ${
+                      classFilter === folder.key
+                        ? 'bg-accent-primary/10 text-accent-primary font-medium'
+                        : 'text-text-secondary hover:text-text-primary hover:bg-background-tertiary'
+                    }`}
+                  >
+                    <folder.icon className="w-4 h-4 flex-shrink-0" />
+                    <span className="flex-1 text-left truncate">{folder.label}</span>
+                    {folder.count > 0 && (
+                      <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-background-tertiary text-text-tertiary">
+                        {folder.count}
+                      </span>
+                    )}
+                  </button>
+                ))}
+              </div>
+
+              {/* Main Content */}
+              <div className="flex-1 min-w-0 space-y-4">
               {/* Toolbar */}
               <div className="flex items-center justify-between gap-4 flex-wrap">
                 <div className="flex items-center gap-2 flex-wrap">
-                  <select
-                    value={inboxFilter}
-                    onChange={(e) => setInboxFilter(e.target.value)}
-                    className="px-3 py-2 bg-background-secondary border border-border rounded-lg text-sm text-text-primary focus:outline-none focus:border-accent-primary"
-                  >
-                    <option value="all">All ({inboxCounts.total})</option>
-                    <option value="unread">Unread ({inboxCounts.unread})</option>
-                    <option value="read">Read ({inboxCounts.read})</option>
-                    <option value="replied">Replied ({inboxCounts.replied})</option>
-                    <option value="archived">Archived ({inboxCounts.archived})</option>
-                    <option value="spam">Spam ({inboxCounts.spam})</option>
-                  </select>
-                  <select
-                    value={classFilter}
-                    onChange={(e) => setClassFilter(e.target.value)}
-                    className="px-3 py-2 bg-background-secondary border border-border rounded-lg text-sm text-text-primary focus:outline-none focus:border-accent-primary"
-                  >
-                    <option value="all">All Types</option>
-                    <option value="support_request">Support</option>
-                    <option value="bug_report">Bug Report</option>
-                    <option value="feature_request">Feature Request</option>
-                    <option value="billing_inquiry">Billing</option>
-                    <option value="partnership">Partnership</option>
-                    <option value="spam">Spam</option>
-                    <option value="personal">Personal</option>
-                  </select>
                   <select
                     value={priorityFilter}
                     onChange={(e) => setPriorityFilter(e.target.value)}
@@ -812,6 +875,9 @@ export default function AdminEmailPage() {
                               {msg.status === 'replied' && (
                                 <span className="text-[10px] text-green-400">replied</span>
                               )}
+                              {msg.status === 'needs_human' && (
+                                <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-orange-500/20 text-orange-400 font-medium">needs human</span>
+                              )}
                             </div>
                           </div>
                         </div>
@@ -820,6 +886,7 @@ export default function AdminEmailPage() {
                   })}
                 </div>
               )}
+            </div>
             </div>
           )}
 

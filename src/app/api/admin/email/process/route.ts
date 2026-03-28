@@ -10,7 +10,7 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { fetchNewMessages } from '@/lib/gmail';
-import { classifyEmail, draftResponse, linkEmailToUser, performAutoAction } from '@/lib/email-ai';
+import { classifyEmail, detectEscalation, draftResponse, linkEmailToUser, performAutoAction } from '@/lib/email-ai';
 
 export const dynamic = 'force-dynamic';
 
@@ -78,8 +78,17 @@ async function processEmails(sinceHours: number = 1) {
       // Perform auto-actions
       await performAutoAction(emailMessage.id);
 
-      // Auto-draft response for non-spam emails
-      if (classification.classification !== 'spam') {
+      // Check for escalation keywords — flag for human review
+      const needsHuman = detectEscalation(msg.bodyText);
+      if (needsHuman) {
+        await prisma.emailMessage.update({
+          where: { id: emailMessage.id },
+          data: { status: 'needs_human' },
+        });
+      }
+
+      // Auto-draft response for non-spam, non-escalated emails
+      if (!needsHuman && classification.classification !== 'spam') {
         try {
           const draft = await draftResponse(emailMessage.id);
           await prisma.emailDraft.create({
@@ -88,6 +97,9 @@ async function processEmails(sinceHours: number = 1) {
               draftBody: draft.draftBody,
               draftText: draft.draftText,
               model: draft.model,
+              inputTokens: draft.inputTokens,
+              outputTokens: draft.outputTokens,
+              costCents: draft.costCents,
               status: 'pending',
             },
           });
