@@ -559,6 +559,7 @@ export async function sendEmailReply(opts: {
   replyTo?: string;
   inReplyTo?: string;
   references?: string;
+  threadId?: string;
 }): Promise<EmailSendResult> {
   // Prefer Gmail API so From shows the deepterm.net alias
   if (
@@ -568,7 +569,17 @@ export async function sendEmailReply(opts: {
   ) {
     try {
       const { sendViaGmailApi } = await import('@/lib/gmail');
-      const result = await sendViaGmailApi(opts);
+      const result = await sendViaGmailApi({
+        from: opts.from,
+        fromName: opts.fromName,
+        to: opts.to,
+        subject: opts.subject,
+        html: opts.html,
+        replyTo: opts.replyTo,
+        inReplyTo: opts.inReplyTo,
+        references: opts.references,
+        threadId: opts.threadId,
+      });
       if (result.ok) {
         return { ok: true };
       }

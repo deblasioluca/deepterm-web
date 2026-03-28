@@ -302,6 +302,7 @@ export async function sendViaGmailApi(opts: {
   replyTo?: string;
   inReplyTo?: string;
   references?: string;
+  threadId?: string;
 }): Promise<GmailSendResult> {
   const token = await getAccessToken();
 
@@ -355,7 +356,10 @@ export async function sendViaGmailApi(opts: {
         Authorization: `Bearer ${token}`,
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({ raw: encodedMessage }),
+      body: JSON.stringify({
+        raw: encodedMessage,
+        ...(opts.threadId ? { threadId: opts.threadId } : {}),
+      }),
     },
   );
 
