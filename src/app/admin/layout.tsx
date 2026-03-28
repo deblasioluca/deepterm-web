@@ -25,6 +25,7 @@ import {
   GitMerge,
   Database,
   Bot,
+  Mail,
 } from 'lucide-react';
 
 // Custom GitHub mark — the lucide `Github` icon is deprecated and barely visible
@@ -52,6 +53,7 @@ const navItems = [
   { label: 'Audit Logs',   href: '/admin/audit-logs',   icon: FileText },
   { label: 'Feedback',     href: '/admin/feedback',     icon: MessageSquare },
   { label: 'Issues',       href: '/admin/issues',       icon: HelpCircle },
+  { label: 'Email',        href: '/admin/email',        icon: Mail },
   { label: 'Announcements',href: '/admin/announcements',icon: Bell },
   { label: 'Settings',     href: '/admin/settings',     icon: Settings },
 ];
