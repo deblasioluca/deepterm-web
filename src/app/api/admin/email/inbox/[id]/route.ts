@@ -1,7 +1,7 @@
 /**
  * GET    /api/admin/email/inbox/[id] — get single email message with drafts
  * PATCH  /api/admin/email/inbox/[id] — update status
- * DELETE /api/admin/email/inbox/[id] — permanently delete
+ * DELETE /api/admin/email/inbox/[id] — soft-delete (sets status to 'deleted')
  */
 
 import { NextResponse } from 'next/server';
@@ -83,7 +83,12 @@ export async function DELETE(
   { params }: { params: { id: string } },
 ) {
   try {
-    await prisma.emailMessage.delete({ where: { id: params.id } });
+    // Soft-delete: set status to 'deleted' so the gmailMessageId stays in the DB
+    // and the ingest endpoint won't re-fetch this email.
+    await prisma.emailMessage.update({
+      where: { id: params.id },
+      data: { status: 'deleted' },
+    });
     return NextResponse.json({ deleted: true });
   } catch (error) {
     console.error('Failed to delete email message:', error);

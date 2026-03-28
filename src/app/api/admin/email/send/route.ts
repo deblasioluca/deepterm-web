@@ -61,7 +61,7 @@ export async function POST(request: Request) {
       ? 'Luca — DeepTerm'
       : 'DeepTerm Support';
 
-    // Send using shared transporter from src/lib/email.ts
+    // Send using Gmail API (falls back to SMTP if not configured)
     const result = await sendEmailReply({
       from: fromAlias,
       fromName,
@@ -72,6 +72,8 @@ export async function POST(request: Request) {
       // Use RFC 2822 Message-ID for proper email threading
       inReplyTo: email.rfcMessageId ?? undefined,
       references: email.rfcMessageId ?? undefined,
+      // Pass Gmail thread ID so the reply appears in the same conversation
+      threadId: email.threadId ?? undefined,
     });
 
     if (!result.ok) {

@@ -18,11 +18,14 @@ export async function GET(request: Request) {
     const limit = Math.min(parseInt(url.searchParams.get('limit') || '50', 10), 200);
     const offset = parseInt(url.searchParams.get('offset') || '0', 10);
 
-    // Build where clause
+    // Build where clause — exclude soft-deleted messages by default
     const where: Record<string, unknown> = {};
 
     if (status && status !== 'all') {
       where.status = status;
+    } else {
+      // When showing "all", exclude deleted messages
+      where.status = { not: 'deleted' };
     }
     if (classification && classification !== 'all') {
       where.classification = classification;
