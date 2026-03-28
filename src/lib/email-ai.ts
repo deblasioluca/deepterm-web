@@ -279,8 +279,10 @@ export async function draftResponse(emailMessageId: string): Promise<DraftResult
         }),
       );
 
+      const appleActive = !!zkUser.appleProductId
+        && (!zkUser.appleExpiresDate || zkUser.appleExpiresDate > new Date());
       const hasActivePro = orgEntries.some((o) => o.plan === 'pro' && o.subscriptionActive)
-        || !!zkUser.appleProductId;
+        || appleActive;
       const effectivePlan = hasActivePro ? 'pro' : 'free';
 
       const orgList = orgEntries
@@ -517,10 +519,20 @@ const ESCALATION_KEYWORDS = [
  * the user's own words, not quoted AI disclaimers from previous messages.
  */
 function stripQuotedText(bodyText: string): string {
-  // Remove everything after "On ... wrote:" quote header
-  const quoteHeader = bodyText.search(/^On .+ wrote:\s*$/m);
-  if (quoteHeader !== -1) {
-    return bodyText.slice(0, quoteHeader);
+  // Remove everything after "On ... wrote:" quote header (Gmail-style)
+  const gmailQuote = bodyText.search(/^On .+ wrote:\s*$/m);
+  if (gmailQuote !== -1) {
+    return bodyText.slice(0, gmailQuote);
+  }
+  // Remove everything after Outlook-style "From: ... Sent: ..." separator
+  const outlookQuote = bodyText.search(/^From:\s.+\nSent:\s/m);
+  if (outlookQuote !== -1) {
+    return bodyText.slice(0, outlookQuote);
+  }
+  // Remove everything after generic separator line "---" or "___"
+  const separatorLine = bodyText.search(/^[-_]{3,}\s*$/m);
+  if (separatorLine !== -1) {
+    return bodyText.slice(0, separatorLine);
   }
   // Remove lines starting with '>'
   return bodyText
