@@ -1232,3 +1232,73 @@ model SharedSessionParticipant {
   @@unique([sessionId, userId])
   @@index([userId])
 }
+
+
+// ─── Email AI Integration ───────────────────────────────────────────────────────
+
+/// Ingested email messages from Gmail (via ImprovMX forwarding).
+/// Classified by LLM with priority, sentiment, and auto-actions.
+model EmailMessage {
+  id              String    @id @default(cuid())
+  gmailMessageId  String    @unique               // Gmail API message ID
+  threadId        String?                          // Gmail thread ID for grouping
+  from            String                           // Sender email address
+  fromName        String    @default("")           // Sender display name
+  to              String                           // Recipient alias (support@, info@, luca@)
+  subject         String
+  bodyText        String                           // Plain-text body
+  bodyHtml        String?                          // HTML body (if available)
+  receivedAt      DateTime                         // Original email receive timestamp
+
+  // LLM classification fields
+  classification  String?                          // support_request, bug_report, feature_request, billing_inquiry, partnership, spam, personal
+  priority        String?                          // P0, P1, P2, P3
+  sentiment       String?                          // positive, neutral, negative
+  actionItems     String?                          // JSON array of extracted action items
+  classifiedAt    DateTime?                        // When LLM classification was performed
+
+  // Status tracking
+  status          String    @default("unread")     // unread, read, replied, archived, spam
+
+  // Linked entities
+  linkedUserId    String?                          // FK to ZKUser if sender matched
+  linkedIssueId   String?                          // FK to Issue if auto-created
+  linkedIdeaId    String?                          // FK to Idea if auto-created
+
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  drafts          EmailDraft[]
+
+  @@index([to])
+  @@index([classification])
+  @@index([priority])
+  @@index([status])
+  @@index([receivedAt])
+  @@index([threadId])
+  @@index([linkedUserId])
+}
+
+/// LLM-drafted email responses awaiting admin review.
+model EmailDraft {
+  id              String    @id @default(cuid())
+  emailMessageId  String                           // FK to EmailMessage
+  draftBody       String                           // LLM-generated response body (HTML)
+  draftText       String    @default("")           // Plain-text version
+  status          String    @default("pending")    // pending, approved, sent, discarded
+  editedBody      String?                          // Admin-edited version (if modified before send)
+  sentAt          DateTime?                        // When the response was actually sent
+  sentFrom        String?                          // Which alias was used to reply
+  model           String    @default("")           // LLM model used for generation
+  inputTokens     Int       @default(0)
+  outputTokens    Int       @default(0)
+  costCents       Float     @default(0)
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  emailMessage    EmailMessage @relation(fields: [emailMessageId], references: [id], onDelete: Cascade)
+
+  @@index([emailMessageId])
+  @@index([status])
+  @@index([createdAt])
+}
