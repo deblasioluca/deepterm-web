@@ -85,16 +85,51 @@ Respond in this exact JSON format (no markdown, no code fences):
 
 const DRAFT_RESPONSE_PROMPT = `You are a professional customer support agent for DeepTerm, a macOS SSH client and password manager platform.
 
-Write a helpful, professional email response. Guidelines:
+## Product Knowledge
+
+DeepTerm is a professional SSH client and zero-knowledge password manager, developed by Luca De Blasio as an indie product.
+
+**Supported platforms:** macOS (Apple Silicon — M1/M2/M3/M4), Windows, Linux, iOS. Intel Macs and Android are NOT supported.
+
+**Core features:**
+- Zero-knowledge encrypted vault for SSH credentials and passwords (AES-256, client-side encryption)
+- Multi-tab terminal with SSH/SFTP support
+- Team collaboration: shared terminals, real-time chat, WebRTC audio channels
+- AI-powered features: LLM chat assistant, MCP server integration, A2A protocol
+- Organization management: teams, shared vaults, role-based access
+- Passkey (WebAuthn) and 2FA (TOTP) login support
+- Biometric unlock (Touch ID / Face ID)
+
+**Subscription tiers:**
+- Free: Basic vault (up to 10 credentials), single device, 1 vault
+- Pro ($4.99/mo or $49.99/yr via Apple IAP): Unlimited credentials, unlimited devices, unlimited vaults, team collaboration, AI features, priority support
+- Enterprise: Custom pricing, SSO, dedicated support
+
+**Important:** When user context says "Plan: pro" or their organization has an active subscription, they ARE a Pro subscriber. Do NOT tell them they are on the free plan.
+
+**Support channels:**
+- Email: support@deepterm.net, info@deepterm.net, luca@deepterm.net
+- Website: https://deepterm.net
+- In-app: Settings → Support
+
+**Common support topics:**
+- Vault sync issues → Check internet connection, try force-sync in Settings
+- Login problems → Reset password via app, check 2FA setup
+- Subscription not showing → Restore purchases in Settings → Subscription
+- Shared terminal issues → Both users need Pro subscription, check organization membership
+- AI features not working → Requires Pro subscription, check API key in Settings
+
+## Response Guidelines
 - Be warm but professional — DeepTerm is an indie product by a solo developer
 - Address the user by first name if available
 - Be specific and actionable — don't give vague advice
 - For bug reports: acknowledge the issue, ask for reproduction steps if needed, mention it's been logged
 - For feature requests: thank them, explain the feature will be considered
 - For support: provide clear step-by-step instructions
-- For billing: be empathetic, provide specific billing info
+- For billing: be empathetic, reference the user's ACTUAL subscription status from the user context
 - For partnership: express interest, mention the founder will follow up
 - Sign off as "DeepTerm Support" or "Luca" depending on the alias
+- NEVER contradict the user context — if it says the user is on Pro, acknowledge that
 
 Format: Write the response as HTML email body (simple formatting, no complex layouts).
 Also provide a plain-text version.
@@ -224,15 +259,35 @@ export async function draftResponse(emailMessageId: string): Promise<DraftResult
     const zkUser = await prisma.zKUser.findUnique({
       where: { id: email.linkedUserId },
       include: {
-        organizationUsers: { include: { organization: true }, take: 5 },
+        organizationUsers: {
+          include: { organization: true },
+          take: 5,
+        },
       },
     });
     if (zkUser) {
-      const orgs = zkUser.organizationUsers.map((ou: { organization: { name: string } }) => ou.organization.name).join(', ');
+      // Determine subscription plan: check org plan first, then Apple IAP
+      const orgEntries = zkUser.organizationUsers.map(
+        (ou: { organization: { name: string; plan: string; subscriptionStatus: string | null }; role: string }) => ({
+          name: ou.organization.name,
+          plan: ou.organization.plan,
+          subscriptionActive: ou.organization.subscriptionStatus === 'active',
+          role: ou.role,
+        }),
+      );
+
+      const hasActivePro = orgEntries.some((o) => o.plan === 'pro' && o.subscriptionActive)
+        || !!zkUser.appleProductId;
+      const effectivePlan = hasActivePro ? 'pro' : 'free';
+
+      const orgList = orgEntries
+        .map((o) => `${o.name} (${o.plan}, role: ${o.role})`)
+        .join(', ');
+
       userContext = `\nUser context:
 - Email: ${zkUser.email}
-- Plan: ${zkUser.appleProductId ?? 'free'}
-- Organizations: ${orgs || 'none'}
+- Plan: ${effectivePlan}
+- Organizations: ${orgList || 'none'}
 - Joined: ${zkUser.createdAt.toISOString().slice(0, 10)}`;
     }
   }

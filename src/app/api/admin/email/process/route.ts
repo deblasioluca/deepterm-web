@@ -10,7 +10,7 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { fetchNewMessages } from '@/lib/gmail';
-import { classifyEmail, linkEmailToUser, performAutoAction } from '@/lib/email-ai';
+import { classifyEmail, draftResponse, linkEmailToUser, performAutoAction } from '@/lib/email-ai';
 
 export const dynamic = 'force-dynamic';
 
@@ -77,6 +77,24 @@ async function processEmails(sinceHours: number = 1) {
 
       // Perform auto-actions
       await performAutoAction(emailMessage.id);
+
+      // Auto-draft response for non-spam emails
+      if (classification.classification !== 'spam') {
+        try {
+          const draft = await draftResponse(emailMessage.id);
+          await prisma.emailDraft.create({
+            data: {
+              emailMessageId: emailMessage.id,
+              draftBody: draft.draftBody,
+              draftText: draft.draftText,
+              model: draft.model,
+              status: 'pending',
+            },
+          });
+        } catch (draftErr) {
+          console.error(`Auto-draft failed for ${emailMessage.id}:`, draftErr);
+        }
+      }
 
       processed++;
     } catch (err) {
