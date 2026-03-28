@@ -1,8 +1,9 @@
 /**
- * Gmail API client for email ingestion.
+ * Gmail API client for email ingestion and sending.
  *
- * Uses OAuth2 credentials to poll Gmail for new emails forwarded by ImprovMX.
- * Parses email content (from, subject, body, thread ID) and returns structured data.
+ * Uses OAuth2 credentials to:
+ *   - Poll Gmail for new emails forwarded by ImprovMX
+ *   - Send replies via the Gmail API (so From shows deepterm.net, not Bluewin)
  *
  * Required env vars:
  *   GMAIL_CLIENT_ID, GMAIL_CLIENT_SECRET, GMAIL_REFRESH_TOKEN
@@ -262,4 +263,109 @@ function base64UrlDecode(data: string): string {
   // Gmail uses URL-safe base64 encoding
   const base64 = data.replace(/-/g, '+').replace(/_/g, '/');
   return Buffer.from(base64, 'base64').toString('utf-8');
+}
+
+function base64UrlEncode(data: string): string {
+  return Buffer.from(data, 'utf-8')
+    .toString('base64')
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_')
+    .replace(/=+$/, '');
+}
+
+// ── Gmail API Send ──────────────────────────────────────────────────────────
+
+export interface GmailSendResult {
+  ok: boolean;
+  messageId?: string;
+  error?: string;
+}
+
+/**
+ * Send an email via the Gmail API.
+ *
+ * Constructs a raw RFC 2822 MIME message and sends it through
+ * `users.messages.send`. This allows the From address to show
+ * the deepterm.net alias (e.g. support@deepterm.net) instead of
+ * the SMTP account.
+ *
+ * NOTE: For Gmail to actually send from a non-Gmail address, the
+ * address must be added as a "Send as" alias in Gmail settings.
+ * Otherwise Gmail will rewrite the From to the authenticated user.
+ */
+export async function sendViaGmailApi(opts: {
+  from: string;
+  fromName: string;
+  to: string;
+  subject: string;
+  html: string;
+  replyTo?: string;
+  inReplyTo?: string;
+  references?: string;
+}): Promise<GmailSendResult> {
+  const token = await getAccessToken();
+
+  // Build RFC 2822 MIME message
+  const boundary = `----=_Part_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+  const fromHeader = opts.fromName
+    ? `"${opts.fromName}" <${opts.from}>`
+    : opts.from;
+
+  const lines: string[] = [
+    `From: ${fromHeader}`,
+    `To: ${opts.to}`,
+    `Subject: ${opts.subject}`,
+    'MIME-Version: 1.0',
+    `Content-Type: multipart/alternative; boundary="${boundary}"`,
+  ];
+
+  if (opts.replyTo) lines.push(`Reply-To: ${opts.replyTo}`);
+  if (opts.inReplyTo) lines.push(`In-Reply-To: ${opts.inReplyTo}`);
+  if (opts.references) lines.push(`References: ${opts.references}`);
+
+  // Plain-text fallback
+  const plainText = opts.html
+    .replace(/<[^>]*>/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  lines.push(
+    '',
+    `--${boundary}`,
+    'Content-Type: text/plain; charset="UTF-8"',
+    '',
+    plainText,
+    '',
+    `--${boundary}`,
+    'Content-Type: text/html; charset="UTF-8"',
+    '',
+    opts.html,
+    '',
+    `--${boundary}--`,
+  );
+
+  const rawMessage = lines.join('\r\n');
+  const encodedMessage = base64UrlEncode(rawMessage);
+
+  const res = await fetch(
+    'https://gmail.googleapis.com/gmail/v1/users/me/messages/send',
+    {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ raw: encodedMessage }),
+    },
+  );
+
+  if (!res.ok) {
+    const body = await res.text();
+    console.error(`[Gmail] Send failed (${res.status}): ${body}`);
+    return { ok: false, error: `Gmail send failed (${res.status}): ${body}` };
+  }
+
+  const data = (await res.json()) as { id: string; threadId: string };
+  console.log(`[Gmail] Message sent via API: id=${data.id} to=${opts.to}`);
+  return { ok: true, messageId: data.id };
 }

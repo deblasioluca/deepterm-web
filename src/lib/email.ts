@@ -545,7 +545,10 @@ export async function sendIdeaReplyEmail(params: {
 
 /**
  * Send an email reply (used by the LLM email draft system).
- * Uses the shared transporter — do NOT import nodemailer directly elsewhere.
+ *
+ * Uses the Gmail API so that the From address shows the deepterm.net alias
+ * (e.g. support@deepterm.net) instead of the Bluewin SMTP account.
+ * Falls back to the SMTP transporter if Gmail credentials are not configured.
  */
 export async function sendEmailReply(opts: {
   from: string;
@@ -557,6 +560,26 @@ export async function sendEmailReply(opts: {
   inReplyTo?: string;
   references?: string;
 }): Promise<EmailSendResult> {
+  // Prefer Gmail API so From shows the deepterm.net alias
+  if (
+    process.env.GMAIL_CLIENT_ID &&
+    process.env.GMAIL_CLIENT_SECRET &&
+    process.env.GMAIL_REFRESH_TOKEN
+  ) {
+    try {
+      const { sendViaGmailApi } = await import('@/lib/gmail');
+      const result = await sendViaGmailApi(opts);
+      if (result.ok) {
+        return { ok: true };
+      }
+      // If Gmail API fails, log and fall through to SMTP
+      console.warn(`[Email] Gmail API send failed, falling back to SMTP: ${result.error}`);
+    } catch (error) {
+      console.warn('[Email] Gmail API import/call failed, falling back to SMTP:', error);
+    }
+  }
+
+  // Fallback: SMTP transporter
   try {
     await transporter.sendMail({
       from: `"${opts.fromName}" <${process.env.SMTP_USER || opts.from}>`,
@@ -569,10 +592,10 @@ export async function sendEmailReply(opts: {
         ...(opts.references ? { References: opts.references } : {}),
       },
     });
-    console.log(`[Email] Reply sent to ${opts.to} from ${opts.from}`);
+    console.log(`[Email] Reply sent via SMTP to ${opts.to} from ${opts.from}`);
     return { ok: true };
   } catch (error) {
-    console.error('[Email] Failed to send reply:', error);
+    console.error('[Email] Failed to send reply via SMTP:', error);
     return { ok: false, error: toEmailSendErrorDetails(error) };
   }
 }
