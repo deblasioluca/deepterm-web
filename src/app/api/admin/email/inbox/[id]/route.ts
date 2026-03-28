@@ -30,10 +30,12 @@ export async function GET(
 
     // Auto-mark as read when viewed
     if (message.status === 'unread') {
-      await prisma.emailMessage.update({
+      const updated = await prisma.emailMessage.update({
         where: { id: params.id },
         data: { status: 'read' },
+        include: { drafts: { orderBy: { createdAt: 'desc' } } },
       });
+      return NextResponse.json({ message: updated });
     }
 
     return NextResponse.json({ message });

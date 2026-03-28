@@ -45,6 +45,13 @@ export async function POST(request: Request) {
       );
     }
 
+    if (draft.status === 'discarded') {
+      return NextResponse.json(
+        { error: 'Bad Request', message: 'Cannot send a discarded draft' },
+        { status: 400 },
+      );
+    }
+
     const email = draft.emailMessage;
     const responseBody = body.editedBody || draft.editedBody || draft.draftBody;
 
