@@ -106,8 +106,8 @@ export async function POST(request: Request) {
           }
         }
 
-        // Check for escalation keywords — flag for human review
-        const needsHuman = detectEscalation(msg.bodyText);
+        // Check for escalation keywords — flag for human review (skip for spam)
+        const needsHuman = classification !== 'spam' && detectEscalation(msg.bodyText);
         if (needsHuman) {
           await prisma.emailMessage.update({
             where: { id: emailMessage.id },

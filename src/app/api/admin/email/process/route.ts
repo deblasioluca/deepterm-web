@@ -78,8 +78,8 @@ async function processEmails(sinceHours: number = 1) {
       // Perform auto-actions
       await performAutoAction(emailMessage.id);
 
-      // Check for escalation keywords — flag for human review
-      const needsHuman = detectEscalation(msg.bodyText);
+      // Check for escalation keywords — flag for human review (skip for spam)
+      const needsHuman = classification.classification !== 'spam' && detectEscalation(msg.bodyText);
       if (needsHuman) {
         await prisma.emailMessage.update({
           where: { id: emailMessage.id },

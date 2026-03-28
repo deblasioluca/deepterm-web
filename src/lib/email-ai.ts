@@ -513,11 +513,30 @@ const ESCALATION_KEYWORDS = [
 ];
 
 /**
+ * Strip quoted text from an email reply so escalation detection only checks
+ * the user's own words, not quoted AI disclaimers from previous messages.
+ */
+function stripQuotedText(bodyText: string): string {
+  // Remove everything after "On ... wrote:" quote header
+  const quoteHeader = bodyText.search(/^On .+ wrote:\s*$/m);
+  if (quoteHeader !== -1) {
+    return bodyText.slice(0, quoteHeader);
+  }
+  // Remove lines starting with '>'
+  return bodyText
+    .split('\n')
+    .filter((line) => !line.trimStart().startsWith('>'))
+    .join('\n');
+}
+
+/**
  * Check if an email body contains escalation keywords requesting human review.
  * Returns true if the user is asking to speak with a human.
+ * Strips quoted text first to avoid matching the AI disclaimer in replies.
  */
 export function detectEscalation(bodyText: string): boolean {
-  const lower = bodyText.toLowerCase();
+  const unquoted = stripQuotedText(bodyText);
+  const lower = unquoted.toLowerCase();
   return ESCALATION_KEYWORDS.some((kw) => {
     // Match whole-word for short keywords like "human"
     if (kw.length <= 7) {
