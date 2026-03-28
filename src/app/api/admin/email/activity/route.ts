@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server';
 import { listLogs } from '@/lib/improvmx';
 
+export const dynamic = 'force-dynamic';
+
 /** GET /api/admin/email/activity — list recent email logs */
 export async function GET() {
   try {

@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server';
 import { listAliases, createAlias } from '@/lib/improvmx';
 
+export const dynamic = 'force-dynamic';
+
 /** GET /api/admin/email/aliases — list all email aliases */
 export async function GET() {
   try {
