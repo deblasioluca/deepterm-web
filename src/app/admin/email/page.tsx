@@ -99,7 +99,7 @@ export default function AdminEmailPage() {
   const fetchLogs = useCallback(async () => {
     try {
       setLogsLoading(true);
-      const res = await fetch('/api/admin/email/logs');
+      const res = await fetch('/api/admin/email/activity');
       if (res.ok) {
         const data = await res.json() as { logs: LogEntry[] };
         setLogs(data.logs);
