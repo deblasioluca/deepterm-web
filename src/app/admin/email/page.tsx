@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import DOMPurify from 'dompurify';
 import {
   Mail,
   Plus,
@@ -15,6 +16,12 @@ import {
   RefreshCw,
   AlertCircle,
   Search,
+  Inbox,
+  Send,
+  FileText,
+  Archive,
+  Zap,
+  Download,
 } from 'lucide-react';
 
 // ── Types ────────────────────────────────────────────────────────────────────
@@ -44,24 +51,125 @@ interface LogEntry {
   }>;
 }
 
-type TabKey = 'aliases' | 'logs';
+interface EmailDraft {
+  id: string;
+  emailMessageId: string;
+  draftBody: string;
+  draftText: string;
+  status: string;
+  editedBody: string | null;
+  sentAt: string | null;
+  sentFrom: string | null;
+  model: string;
+  createdAt: string;
+  emailMessage?: {
+    id: string;
+    from: string;
+    fromName: string;
+    to: string;
+    subject: string;
+    classification: string | null;
+    priority: string | null;
+    receivedAt: string;
+  };
+}
+
+interface EmailMessage {
+  id: string;
+  gmailMessageId: string;
+  threadId: string | null;
+  from: string;
+  fromName: string;
+  to: string;
+  subject: string;
+  bodyText: string;
+  bodyHtml: string | null;
+  receivedAt: string;
+  classification: string | null;
+  priority: string | null;
+  sentiment: string | null;
+  actionItems: string | null;
+  classifiedAt: string | null;
+  status: string;
+  linkedUserId: string | null;
+  linkedIssueId: string | null;
+  linkedIdeaId: string | null;
+  createdAt: string;
+  drafts?: EmailDraft[];
+}
+
+interface InboxCounts {
+  unread: number;
+  read: number;
+  replied: number;
+  archived: number;
+  spam: number;
+  total: number;
+}
+
+type TabKey = 'inbox' | 'drafts' | 'sent' | 'aliases' | 'logs';
+
+// ── Classification helpers ───────────────────────────────────────────────────
+
+const classificationConfig: Record<string, { label: string; color: string }> = {
+  support_request: { label: 'Support', color: 'text-blue-400 bg-blue-500/10' },
+  bug_report: { label: 'Bug', color: 'text-red-400 bg-red-500/10' },
+  feature_request: { label: 'Feature', color: 'text-purple-400 bg-purple-500/10' },
+  billing_inquiry: { label: 'Billing', color: 'text-yellow-400 bg-yellow-500/10' },
+  partnership: { label: 'Partnership', color: 'text-green-400 bg-green-500/10' },
+  spam: { label: 'Spam', color: 'text-text-tertiary bg-background-tertiary' },
+  personal: { label: 'Personal', color: 'text-accent-primary bg-accent-primary/10' },
+};
+
+const priorityConfig: Record<string, { label: string; color: string }> = {
+  P0: { label: 'P0', color: 'text-red-400 bg-red-500/10 border-red-500/30' },
+  P1: { label: 'P1', color: 'text-orange-400 bg-orange-500/10 border-orange-500/30' },
+  P2: { label: 'P2', color: 'text-blue-400 bg-blue-500/10 border-blue-500/30' },
+  P3: { label: 'P3', color: 'text-text-tertiary bg-background-tertiary border-border' },
+};
+
+const sentimentConfig: Record<string, { label: string; color: string }> = {
+  positive: { label: 'Positive', color: 'text-green-400' },
+  neutral: { label: 'Neutral', color: 'text-text-tertiary' },
+  negative: { label: 'Negative', color: 'text-red-400' },
+};
 
 // ── Component ────────────────────────────────────────────────────────────────
 
 export default function AdminEmailPage() {
-  const [activeTab, setActiveTab] = useState<TabKey>('aliases');
+  const [activeTab, setActiveTab] = useState<TabKey>('inbox');
+
+  // Existing state
   const [aliases, setAliases] = useState<Alias[]>([]);
   const [logs, setLogs] = useState<LogEntry[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(false);
   const [logsLoading, setLogsLoading] = useState(false);
 
-  // Create form
+  // Inbox state
+  const [messages, setMessages] = useState<EmailMessage[]>([]);
+  const [inboxCounts, setInboxCounts] = useState<InboxCounts>({
+    unread: 0, read: 0, replied: 0, archived: 0, spam: 0, total: 0,
+  });
+  const [inboxLoading, setInboxLoading] = useState(false);
+  const [inboxFilter, setInboxFilter] = useState<string>('all');
+  const [classFilter, setClassFilter] = useState<string>('all');
+  const [priorityFilter, setPriorityFilter] = useState<string>('all');
+  const [selectedMessage, setSelectedMessage] = useState<EmailMessage | null>(null);
+  const [ingesting, setIngesting] = useState(false);
+
+  // Drafts state
+  const [drafts, setDrafts] = useState<EmailDraft[]>([]);
+  const [draftsLoading, setDraftsLoading] = useState(false);
+  const [generatingDraft, setGeneratingDraft] = useState<string | null>(null);
+  const [sendingDraft, setSendingDraft] = useState<string | null>(null);
+
+  // Create alias form
   const [showCreate, setShowCreate] = useState(false);
   const [newAlias, setNewAlias] = useState('');
   const [newForward, setNewForward] = useState('');
   const [creating, setCreating] = useState(false);
 
-  // Edit form
+  // Edit alias form
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editForward, setEditForward] = useState('');
   const [saving, setSaving] = useState(false);
@@ -78,14 +186,19 @@ export default function AdminEmailPage() {
 
   const DOMAIN = 'deepterm.net';
 
-  // ── Data Fetching ────────────────────────────────────────────────────────
+  const showFeedback = useCallback((ok: boolean, msg: string) => {
+    setFeedback({ ok, msg });
+    setTimeout(() => setFeedback(null), 5000);
+  }, []);
+
+  // ── Data Fetching ──────────────────────────────────────────────────────────
 
   const fetchAliases = useCallback(async () => {
     try {
       setIsLoading(true);
       const res = await fetch('/api/admin/email/aliases');
       if (res.ok) {
-        const data = await res.json() as { aliases: Alias[] };
+        const data = (await res.json()) as { aliases: Alias[] };
         setAliases(data.aliases);
       }
     } catch (err) {
@@ -100,7 +213,7 @@ export default function AdminEmailPage() {
       setLogsLoading(true);
       const res = await fetch('/api/admin/email/activity');
       if (res.ok) {
-        const data = await res.json() as { logs: LogEntry[] };
+        const data = (await res.json()) as { logs: LogEntry[] };
         setLogs(data.logs);
       }
     } catch (err) {
@@ -110,17 +223,169 @@ export default function AdminEmailPage() {
     }
   }, []);
 
-  useEffect(() => {
-    fetchAliases();
-  }, [fetchAliases]);
+  const fetchInbox = useCallback(async () => {
+    try {
+      setInboxLoading(true);
+      const params = new URLSearchParams();
+      if (inboxFilter !== 'all') params.set('status', inboxFilter);
+      if (classFilter !== 'all') params.set('classification', classFilter);
+      if (priorityFilter !== 'all') params.set('priority', priorityFilter);
+      if (searchQuery) params.set('search', searchQuery);
 
-  useEffect(() => {
-    if (activeTab === 'logs' && logs.length === 0) {
-      fetchLogs();
+      const res = await fetch(`/api/admin/email/inbox?${params.toString()}`);
+      if (res.ok) {
+        const data = (await res.json()) as { messages: EmailMessage[]; counts: InboxCounts };
+        setMessages(data.messages);
+        setInboxCounts(data.counts);
+      }
+    } catch (err) {
+      console.error('Failed to fetch inbox:', err);
+    } finally {
+      setInboxLoading(false);
     }
-  }, [activeTab, logs.length, fetchLogs]);
+  }, [inboxFilter, classFilter, priorityFilter, searchQuery]);
 
-  // ── Actions ──────────────────────────────────────────────────────────────
+  const fetchDrafts = useCallback(async () => {
+    try {
+      setDraftsLoading(true);
+      const res = await fetch('/api/admin/email/draft');
+      if (res.ok) {
+        const data = (await res.json()) as { drafts: EmailDraft[] };
+        setDrafts(data.drafts);
+      }
+    } catch (err) {
+      console.error('Failed to fetch drafts:', err);
+    } finally {
+      setDraftsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (activeTab === 'aliases') fetchAliases();
+    if (activeTab === 'logs') fetchLogs();
+    if (activeTab === 'drafts' || activeTab === 'sent') fetchDrafts();
+  }, [activeTab, fetchAliases, fetchLogs, fetchDrafts]);
+
+  // Separate effect for inbox — fetchInbox already depends on filter values,
+  // so this single effect handles both tab-switch and filter-change triggers.
+  useEffect(() => {
+    if (activeTab === 'inbox') fetchInbox();
+  }, [activeTab, fetchInbox]);
+
+  // ── Actions ────────────────────────────────────────────────────────────────
+
+  const handleIngest = async () => {
+    try {
+      setIngesting(true);
+      const res = await fetch('/api/admin/email/ingest', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sinceHours: 48 }),
+      });
+      const data = (await res.json()) as { ingested?: number; errors?: number; message?: string };
+      if (res.ok) {
+        showFeedback(true, `Ingested ${data.ingested ?? 0} emails (${data.errors ?? 0} errors)`);
+        await fetchInbox();
+      } else {
+        showFeedback(false, data.message || 'Ingestion failed');
+      }
+    } catch (err) {
+      showFeedback(false, err instanceof Error ? err.message : 'Ingestion failed');
+    } finally {
+      setIngesting(false);
+    }
+  };
+
+  const handleStatusUpdate = async (ids: string[], status: string) => {
+    try {
+      const res = await fetch('/api/admin/email/inbox', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids, status }),
+      });
+      if (res.ok) {
+        showFeedback(true, `Updated ${ids.length} email(s)`);
+        await fetchInbox();
+        if (selectedMessage && ids.includes(selectedMessage.id)) {
+          setSelectedMessage(null);
+        }
+      }
+    } catch (err) {
+      showFeedback(false, err instanceof Error ? err.message : 'Update failed');
+    }
+  };
+
+  const handleDeleteMessage = async (id: string) => {
+    try {
+      const res = await fetch(`/api/admin/email/inbox/${id}`, { method: 'DELETE' });
+      if (res.ok) {
+        showFeedback(true, 'Email deleted');
+        await fetchInbox();
+        if (selectedMessage?.id === id) setSelectedMessage(null);
+      }
+    } catch (err) {
+      showFeedback(false, err instanceof Error ? err.message : 'Delete failed');
+    }
+  };
+
+  const handleGenerateDraft = async (emailMessageId: string) => {
+    try {
+      setGeneratingDraft(emailMessageId);
+      const res = await fetch('/api/admin/email/draft', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ emailMessageId }),
+      });
+      if (res.ok) {
+        showFeedback(true, 'Draft generated');
+        await fetchDrafts();
+        setActiveTab('drafts');
+      } else {
+        const data = (await res.json()) as { message?: string };
+        showFeedback(false, data.message || 'Draft generation failed');
+      }
+    } catch (err) {
+      showFeedback(false, err instanceof Error ? err.message : 'Draft generation failed');
+    } finally {
+      setGeneratingDraft(null);
+    }
+  };
+
+  const handleSendDraft = async (draftId: string) => {
+    try {
+      setSendingDraft(draftId);
+      const res = await fetch('/api/admin/email/send', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ draftId }),
+      });
+      const data = (await res.json()) as { success?: boolean; sentTo?: string; message?: string };
+      if (res.ok && data.success) {
+        showFeedback(true, `Reply sent to ${data.sentTo}`);
+        await fetchDrafts();
+      } else {
+        showFeedback(false, data.message || 'Send failed');
+      }
+    } catch (err) {
+      showFeedback(false, err instanceof Error ? err.message : 'Send failed');
+    } finally {
+      setSendingDraft(null);
+    }
+  };
+
+  const handleDiscardDraft = async (draftId: string) => {
+    try {
+      await fetch(`/api/admin/email/draft/${draftId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: 'discarded' }),
+      });
+      showFeedback(true, 'Draft discarded');
+      await fetchDrafts();
+    } catch (err) {
+      showFeedback(false, err instanceof Error ? err.message : 'Discard failed');
+    }
+  };
 
   const handleCreate = async () => {
     if (!newAlias || !newForward) return;
@@ -132,20 +397,19 @@ export default function AdminEmailPage() {
         body: JSON.stringify({ alias: newAlias, forward: newForward }),
       });
       if (res.ok) {
-        setFeedback({ ok: true, msg: `Alias ${newAlias}@${DOMAIN} created` });
+        showFeedback(true, `Alias ${newAlias}@${DOMAIN} created`);
         setNewAlias('');
         setNewForward('');
         setShowCreate(false);
         await fetchAliases();
       } else {
-        const data = await res.json() as { message?: string };
-        setFeedback({ ok: false, msg: data.message || 'Failed to create alias' });
+        const data = (await res.json()) as { message?: string };
+        showFeedback(false, data.message || 'Failed to create alias');
       }
     } catch (err) {
-      setFeedback({ ok: false, msg: err instanceof Error ? err.message : 'Failed to create alias' });
+      showFeedback(false, err instanceof Error ? err.message : 'Failed to create alias');
     } finally {
       setCreating(false);
-      setTimeout(() => setFeedback(null), 5000);
     }
   };
 
@@ -159,77 +423,76 @@ export default function AdminEmailPage() {
         body: JSON.stringify({ forward: editForward }),
       });
       if (res.ok) {
-        setFeedback({ ok: true, msg: `Alias ${alias.alias}@${DOMAIN} updated` });
+        showFeedback(true, `Alias ${alias.alias}@${DOMAIN} updated`);
         setEditingId(null);
         await fetchAliases();
       } else {
-        const data = await res.json() as { message?: string };
-        setFeedback({ ok: false, msg: data.message || 'Failed to update alias' });
+        const data = (await res.json()) as { message?: string };
+        showFeedback(false, data.message || 'Failed to update alias');
       }
     } catch (err) {
-      setFeedback({ ok: false, msg: err instanceof Error ? err.message : 'Failed to update alias' });
+      showFeedback(false, err instanceof Error ? err.message : 'Failed to update alias');
     } finally {
       setSaving(false);
-      setTimeout(() => setFeedback(null), 5000);
     }
   };
 
   const handleDelete = async (alias: Alias) => {
     try {
       setDeleting(true);
-      const res = await fetch(`/api/admin/email/aliases/${alias.alias}`, {
-        method: 'DELETE',
-      });
+      const res = await fetch(`/api/admin/email/aliases/${alias.alias}`, { method: 'DELETE' });
       if (res.ok) {
-        setFeedback({ ok: true, msg: `Alias ${alias.alias}@${DOMAIN} deleted` });
+        showFeedback(true, `Alias ${alias.alias}@${DOMAIN} deleted`);
         setDeletingId(null);
         await fetchAliases();
       } else {
-        const data = await res.json() as { message?: string };
-        setFeedback({ ok: false, msg: data.message || 'Failed to delete alias' });
+        const data = (await res.json()) as { message?: string };
+        showFeedback(false, data.message || 'Failed to delete alias');
       }
     } catch (err) {
-      setFeedback({ ok: false, msg: err instanceof Error ? err.message : 'Failed to delete alias' });
+      showFeedback(false, err instanceof Error ? err.message : 'Failed to delete alias');
     } finally {
       setDeleting(false);
-      setTimeout(() => setFeedback(null), 5000);
     }
   };
 
-  // ── Helpers ──────────────────────────────────────────────────────────────
+  // ── Helpers ────────────────────────────────────────────────────────────────
 
   const filteredAliases = aliases.filter((a) => {
-    if (!searchQuery) return true;
+    if (!searchQuery || activeTab !== 'aliases') return true;
     const q = searchQuery.toLowerCase();
-    return (
-      a.alias.toLowerCase().includes(q) ||
-      a.forward.toLowerCase().includes(q)
-    );
+    return a.alias.toLowerCase().includes(q) || a.forward.toLowerCase().includes(q);
   });
 
   const formatDate = (ts: number) => {
     const d = new Date(ts * 1000);
     return d.toLocaleDateString('en-US', {
-      month: 'short',
-      day: 'numeric',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
+      month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit',
     });
   };
 
-  const getStatusColor = (status: string) => {
+  const formatISODate = (iso: string) => {
+    const d = new Date(iso);
+    return d.toLocaleDateString('en-US', {
+      month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit',
+    });
+  };
+
+  const getLogStatusColor = (status: string) => {
     if (status === 'DELIVERED' || status === 'delivered') return 'text-green-500 bg-green-500/10';
     if (status === 'BOUNCED' || status === 'bounced') return 'text-red-500 bg-red-500/10';
     if (status === 'QUEUED' || status === 'queued') return 'text-yellow-500 bg-yellow-500/10';
     return 'text-text-tertiary bg-background-tertiary';
   };
 
-  // ── Render ───────────────────────────────────────────────────────────────
+  const pendingDrafts = drafts.filter((d) => d.status === 'pending');
+  const sentDrafts = drafts.filter((d) => d.status === 'sent');
+
+  // ── Render ─────────────────────────────────────────────────────────────────
 
   return (
     <div className="min-h-screen bg-background-primary">
-      <div className="max-w-6xl mx-auto px-6 py-8">
+      <div className="max-w-7xl mx-auto px-6 py-8">
         {/* Header */}
         <div className="flex items-center justify-between mb-8">
           <div className="flex items-center gap-3">
@@ -239,7 +502,7 @@ export default function AdminEmailPage() {
             <div>
               <h1 className="text-2xl font-bold text-text-primary">Email Management</h1>
               <p className="text-sm text-text-secondary">
-                Manage email aliases for <span className="text-accent-primary font-medium">{DOMAIN}</span> via ImprovMX
+                Manage emails for <span className="text-accent-primary font-medium">{DOMAIN}</span> &mdash; AI-powered classification &amp; response
               </p>
             </div>
           </div>
@@ -281,10 +544,13 @@ export default function AdminEmailPage() {
         </AnimatePresence>
 
         {/* Tab Navigation */}
-        <div className="flex gap-1 mb-6 border-b border-border">
+        <div className="flex gap-1 mb-6 border-b border-border overflow-x-auto">
           {([
-            { key: 'aliases' as const, label: 'Aliases', icon: Mail },
-            { key: 'logs' as const, label: 'Logs', icon: Clock },
+            { key: 'inbox' as const, label: 'Inbox', icon: Inbox, count: inboxCounts.unread },
+            { key: 'drafts' as const, label: 'Drafts', icon: FileText, count: pendingDrafts.length },
+            { key: 'sent' as const, label: 'Sent', icon: Send, count: null },
+            { key: 'aliases' as const, label: 'Aliases', icon: Mail, count: aliases.length || null },
+            { key: 'logs' as const, label: 'Logs', icon: Clock, count: null },
           ]).map((tab) => (
             <button
               key={tab.key}
@@ -297,9 +563,13 @@ export default function AdminEmailPage() {
             >
               <tab.icon className="w-4 h-4" />
               {tab.label}
-              {tab.key === 'aliases' && aliases.length > 0 && (
-                <span className="ml-1 px-1.5 py-0.5 text-xs bg-accent-primary/20 text-accent-primary rounded-full">
-                  {aliases.length}
+              {tab.count !== null && tab.count > 0 && (
+                <span className={`ml-1 px-1.5 py-0.5 text-xs rounded-full ${
+                  tab.key === 'inbox' && inboxCounts.unread > 0
+                    ? 'bg-red-500/20 text-red-400'
+                    : 'bg-accent-primary/20 text-accent-primary'
+                }`}>
+                  {tab.count}
                 </span>
               )}
             </button>
@@ -313,16 +583,395 @@ export default function AdminEmailPage() {
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.2 }}
         >
-          {activeTab === 'aliases' && (
+          {/* ── INBOX TAB ─────────────────────────────────────────────── */}
+          {activeTab === 'inbox' && (
             <div className="space-y-4">
               {/* Toolbar */}
+              <div className="flex items-center justify-between gap-4 flex-wrap">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <select
+                    value={inboxFilter}
+                    onChange={(e) => setInboxFilter(e.target.value)}
+                    className="px-3 py-2 bg-background-secondary border border-border rounded-lg text-sm text-text-primary focus:outline-none focus:border-accent-primary"
+                  >
+                    <option value="all">All ({inboxCounts.total})</option>
+                    <option value="unread">Unread ({inboxCounts.unread})</option>
+                    <option value="read">Read ({inboxCounts.read})</option>
+                    <option value="replied">Replied ({inboxCounts.replied})</option>
+                    <option value="archived">Archived ({inboxCounts.archived})</option>
+                    <option value="spam">Spam ({inboxCounts.spam})</option>
+                  </select>
+                  <select
+                    value={classFilter}
+                    onChange={(e) => setClassFilter(e.target.value)}
+                    className="px-3 py-2 bg-background-secondary border border-border rounded-lg text-sm text-text-primary focus:outline-none focus:border-accent-primary"
+                  >
+                    <option value="all">All Types</option>
+                    <option value="support_request">Support</option>
+                    <option value="bug_report">Bug Report</option>
+                    <option value="feature_request">Feature Request</option>
+                    <option value="billing_inquiry">Billing</option>
+                    <option value="partnership">Partnership</option>
+                    <option value="spam">Spam</option>
+                    <option value="personal">Personal</option>
+                  </select>
+                  <select
+                    value={priorityFilter}
+                    onChange={(e) => setPriorityFilter(e.target.value)}
+                    className="px-3 py-2 bg-background-secondary border border-border rounded-lg text-sm text-text-primary focus:outline-none focus:border-accent-primary"
+                  >
+                    <option value="all">All Priority</option>
+                    <option value="P0">P0 Critical</option>
+                    <option value="P1">P1 Important</option>
+                    <option value="P2">P2 Normal</option>
+                    <option value="P3">P3 Low</option>
+                  </select>
+                  <div className="relative">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-text-tertiary" />
+                    <input
+                      type="text"
+                      placeholder="Search emails..."
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      className="pl-10 pr-4 py-2 bg-background-secondary border border-border rounded-lg text-sm text-text-primary placeholder:text-text-tertiary focus:outline-none focus:border-accent-primary w-64"
+                    />
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={fetchInbox}
+                    disabled={inboxLoading}
+                    className="p-2 text-text-secondary hover:text-text-primary border border-border rounded-lg hover:bg-background-tertiary transition-colors disabled:opacity-50"
+                    title="Refresh"
+                  >
+                    <RefreshCw className={`w-4 h-4 ${inboxLoading ? 'animate-spin' : ''}`} />
+                  </button>
+                  <button
+                    onClick={handleIngest}
+                    disabled={ingesting}
+                    className="flex items-center gap-2 px-4 py-2 bg-accent-primary hover:bg-accent-primary-hover text-white rounded-lg text-sm font-medium transition-colors disabled:opacity-50"
+                    title="Fetch new emails from Gmail"
+                  >
+                    {ingesting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
+                    Fetch Emails
+                  </button>
+                </div>
+              </div>
+
+              {/* Selected message detail */}
+              {selectedMessage && (
+                <motion.div
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: 'auto' }}
+                  className="bg-background-secondary border border-border rounded-lg overflow-hidden"
+                >
+                  <div className="p-4 border-b border-border flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <button
+                        onClick={() => setSelectedMessage(null)}
+                        className="p-1 text-text-secondary hover:text-text-primary rounded"
+                      >
+                        <ArrowRight className="w-4 h-4 rotate-180" />
+                      </button>
+                      <h3 className="text-sm font-semibold text-text-primary">{selectedMessage.subject}</h3>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => handleGenerateDraft(selectedMessage.id)}
+                        disabled={generatingDraft === selectedMessage.id}
+                        className="flex items-center gap-1 px-3 py-1.5 bg-accent-primary hover:bg-accent-primary-hover text-white rounded-lg text-xs font-medium transition-colors disabled:opacity-50"
+                      >
+                        {generatingDraft === selectedMessage.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <Zap className="w-3 h-3" />}
+                        Draft Reply
+                      </button>
+                      <button
+                        onClick={() => handleStatusUpdate([selectedMessage.id], 'archived')}
+                        className="p-1.5 text-text-tertiary hover:text-text-primary hover:bg-background-tertiary rounded"
+                        title="Archive"
+                      >
+                        <Archive className="w-4 h-4" />
+                      </button>
+                      <button
+                        onClick={() => handleDeleteMessage(selectedMessage.id)}
+                        className="p-1.5 text-text-tertiary hover:text-red-500 hover:bg-red-500/10 rounded"
+                        title="Delete"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+                  <div className="p-4 space-y-3">
+                    <div className="flex items-center gap-4 text-xs text-text-secondary">
+                      <span>From: <span className="text-text-primary">{selectedMessage.fromName || selectedMessage.from}</span></span>
+                      <span>To: <span className="text-text-primary">{selectedMessage.to}</span></span>
+                      <span>{formatISODate(selectedMessage.receivedAt)}</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      {selectedMessage.classification && classificationConfig[selectedMessage.classification] && (
+                        <span className={`inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium rounded-full ${classificationConfig[selectedMessage.classification].color}`}>
+                          {classificationConfig[selectedMessage.classification].label}
+                        </span>
+                      )}
+                      {selectedMessage.priority && priorityConfig[selectedMessage.priority] && (
+                        <span className={`px-2 py-0.5 text-xs font-medium rounded-full border ${priorityConfig[selectedMessage.priority].color}`}>
+                          {selectedMessage.priority}
+                        </span>
+                      )}
+                      {selectedMessage.sentiment && sentimentConfig[selectedMessage.sentiment] && (
+                        <span className={`text-xs ${sentimentConfig[selectedMessage.sentiment].color}`}>
+                          {sentimentConfig[selectedMessage.sentiment].label}
+                        </span>
+                      )}
+                      {selectedMessage.linkedIssueId && (
+                        <span className="px-2 py-0.5 text-xs bg-red-500/10 text-red-400 rounded-full">Issue linked</span>
+                      )}
+                      {selectedMessage.linkedIdeaId && (
+                        <span className="px-2 py-0.5 text-xs bg-purple-500/10 text-purple-400 rounded-full">Idea linked</span>
+                      )}
+                    </div>
+                    <div className="bg-background-primary border border-border rounded-lg p-4 text-sm text-text-primary whitespace-pre-wrap max-h-96 overflow-y-auto">
+                      {selectedMessage.bodyText}
+                    </div>
+                    {selectedMessage.actionItems && (() => {
+                      try {
+                        const items = JSON.parse(selectedMessage.actionItems) as string[];
+                        if (items.length > 0) {
+                          return (
+                            <div className="text-xs text-text-secondary">
+                              <span className="font-medium">Action items: </span>
+                              {items.join(' \u00B7 ')}
+                            </div>
+                          );
+                        }
+                        return null;
+                      } catch {
+                        return null;
+                      }
+                    })()}
+                  </div>
+                </motion.div>
+              )}
+
+              {/* Messages list */}
+              {inboxLoading ? (
+                <div className="flex items-center justify-center py-20">
+                  <Loader2 className="w-8 h-8 text-accent-primary animate-spin" />
+                </div>
+              ) : messages.length === 0 ? (
+                <div className="text-center py-20">
+                  <Inbox className="w-12 h-12 text-text-tertiary mx-auto mb-3" />
+                  <p className="text-text-secondary">No emails found</p>
+                  <p className="text-xs text-text-tertiary mt-1">
+                    Click &quot;Fetch Emails&quot; to poll Gmail for new messages
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-1">
+                  {messages.map((msg) => {
+                    const cls = msg.classification ? classificationConfig[msg.classification] : null;
+                    const pri = msg.priority ? priorityConfig[msg.priority] : null;
+                    const isUnread = msg.status === 'unread';
+                    return (
+                      <button
+                        key={msg.id}
+                        onClick={() => setSelectedMessage(msg)}
+                        className={`w-full text-left p-3 rounded-lg border transition-colors ${
+                          selectedMessage?.id === msg.id
+                            ? 'bg-accent-primary/10 border-accent-primary/30'
+                            : isUnread
+                              ? 'bg-background-secondary border-border hover:border-border-hover'
+                              : 'bg-background-primary border-border/50 hover:border-border'
+                        }`}
+                      >
+                        <div className="flex items-center gap-3">
+                          <div className={`w-2 h-2 rounded-full flex-shrink-0 ${isUnread ? 'bg-accent-primary' : 'bg-transparent'}`} />
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center justify-between gap-2">
+                              <span className={`text-sm truncate ${isUnread ? 'font-semibold text-text-primary' : 'text-text-secondary'}`}>
+                                {msg.fromName || msg.from}
+                              </span>
+                              <span className="text-xs text-text-tertiary flex-shrink-0">
+                                {formatISODate(msg.receivedAt)}
+                              </span>
+                            </div>
+                            <p className={`text-sm truncate mt-0.5 ${isUnread ? 'text-text-primary' : 'text-text-secondary'}`}>
+                              {msg.subject}
+                            </p>
+                            <div className="flex items-center gap-2 mt-1">
+                              {cls && (
+                                <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] font-medium rounded-full ${cls.color}`}>
+                                  {cls.label}
+                                </span>
+                              )}
+                              {pri && (
+                                <span className={`px-1.5 py-0.5 text-[10px] font-medium rounded-full border ${pri.color}`}>
+                                  {msg.priority}
+                                </span>
+                              )}
+                              <span className="text-[10px] text-text-tertiary">{msg.to}</span>
+                              {msg.status === 'replied' && (
+                                <span className="text-[10px] text-green-400">replied</span>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* ── DRAFTS TAB ────────────────────────────────────────────── */}
+          {activeTab === 'drafts' && (
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <p className="text-sm text-text-secondary">
+                  LLM-generated response drafts awaiting review ({pendingDrafts.length} pending)
+                </p>
+                <button
+                  onClick={fetchDrafts}
+                  disabled={draftsLoading}
+                  className="p-2 text-text-secondary hover:text-text-primary border border-border rounded-lg hover:bg-background-tertiary transition-colors disabled:opacity-50"
+                >
+                  <RefreshCw className={`w-4 h-4 ${draftsLoading ? 'animate-spin' : ''}`} />
+                </button>
+              </div>
+
+              {draftsLoading ? (
+                <div className="flex items-center justify-center py-20">
+                  <Loader2 className="w-8 h-8 text-accent-primary animate-spin" />
+                </div>
+              ) : pendingDrafts.length === 0 ? (
+                <div className="text-center py-20">
+                  <FileText className="w-12 h-12 text-text-tertiary mx-auto mb-3" />
+                  <p className="text-text-secondary">No pending drafts</p>
+                  <p className="text-xs text-text-tertiary mt-1">
+                    Open an email in the Inbox and click &quot;Draft Reply&quot; to generate one
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {pendingDrafts.map((draft) => (
+                    <div
+                      key={draft.id}
+                      className="p-4 bg-background-secondary border border-border rounded-lg"
+                    >
+                      <div className="flex items-start justify-between mb-3">
+                        <div>
+                          <p className="text-sm font-medium text-text-primary">
+                            Re: {draft.emailMessage?.subject ?? 'Unknown'}
+                          </p>
+                          <p className="text-xs text-text-secondary mt-0.5">
+                            To: {draft.emailMessage?.from ?? 'Unknown'} &middot; Generated {formatISODate(draft.createdAt)}
+                          </p>
+                          <div className="flex items-center gap-2 mt-1">
+                            {draft.emailMessage?.classification && classificationConfig[draft.emailMessage.classification] && (
+                              <span className={`px-1.5 py-0.5 text-[10px] font-medium rounded-full ${classificationConfig[draft.emailMessage.classification].color}`}>
+                                {classificationConfig[draft.emailMessage.classification].label}
+                              </span>
+                            )}
+                            <span className="text-[10px] text-text-tertiary">Model: {draft.model}</span>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={() => handleSendDraft(draft.id)}
+                            disabled={sendingDraft === draft.id}
+                            className="flex items-center gap-1 px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white rounded-lg text-xs font-medium transition-colors disabled:opacity-50"
+                          >
+                            {sendingDraft === draft.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <Send className="w-3 h-3" />}
+                            Send
+                          </button>
+                          <button
+                            onClick={() => handleDiscardDraft(draft.id)}
+                            className="px-3 py-1.5 text-text-secondary hover:text-red-400 text-xs transition-colors"
+                          >
+                            Discard
+                          </button>
+                        </div>
+                      </div>
+                      <div
+                        className="bg-background-primary border border-border rounded-lg p-4 text-sm text-text-primary max-h-60 overflow-y-auto"
+                        dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(draft.draftBody) }}
+                      />
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* ── SENT TAB ──────────────────────────────────────────────── */}
+          {activeTab === 'sent' && (
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <p className="text-sm text-text-secondary">
+                  Sent responses ({sentDrafts.length} total)
+                </p>
+                <button
+                  onClick={fetchDrafts}
+                  disabled={draftsLoading}
+                  className="p-2 text-text-secondary hover:text-text-primary border border-border rounded-lg hover:bg-background-tertiary transition-colors disabled:opacity-50"
+                >
+                  <RefreshCw className={`w-4 h-4 ${draftsLoading ? 'animate-spin' : ''}`} />
+                </button>
+              </div>
+
+              {draftsLoading ? (
+                <div className="flex items-center justify-center py-20">
+                  <Loader2 className="w-8 h-8 text-accent-primary animate-spin" />
+                </div>
+              ) : sentDrafts.length === 0 ? (
+                <div className="text-center py-20">
+                  <Send className="w-12 h-12 text-text-tertiary mx-auto mb-3" />
+                  <p className="text-text-secondary">No sent responses yet</p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {sentDrafts.map((draft) => (
+                    <div
+                      key={draft.id}
+                      className="p-4 bg-background-secondary border border-border rounded-lg"
+                    >
+                      <div className="flex items-start justify-between mb-2">
+                        <div>
+                          <p className="text-sm font-medium text-text-primary">
+                            Re: {draft.emailMessage?.subject ?? 'Unknown'}
+                          </p>
+                          <p className="text-xs text-text-secondary mt-0.5">
+                            To: {draft.emailMessage?.from ?? 'Unknown'} &middot; Sent {draft.sentAt ? formatISODate(draft.sentAt) : 'N/A'}
+                          </p>
+                          <p className="text-xs text-text-tertiary mt-0.5">
+                            From: {draft.sentFrom ?? 'support@deepterm.net'}
+                          </p>
+                        </div>
+                        <span className="px-2 py-0.5 text-xs text-green-400 bg-green-500/10 rounded-full">
+                          Sent
+                        </span>
+                      </div>
+                      <div
+                        className="bg-background-primary border border-border rounded-lg p-4 text-sm text-text-primary max-h-40 overflow-y-auto"
+                        dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(draft.editedBody || draft.draftBody) }}
+                      />
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* ── ALIASES TAB ───────────────────────────────────────────── */}
+          {activeTab === 'aliases' && (
+            <div className="space-y-4">
               <div className="flex items-center justify-between gap-4">
                 <div className="relative flex-1 max-w-sm">
                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-text-tertiary" />
                   <input
                     type="text"
                     placeholder="Search aliases..."
-                    value={searchQuery}
+                    value={activeTab === 'aliases' ? searchQuery : ''}
                     onChange={(e) => setSearchQuery(e.target.value)}
                     className="w-full pl-10 pr-4 py-2 bg-background-secondary border border-border rounded-lg text-sm text-text-primary placeholder:text-text-tertiary focus:outline-none focus:border-accent-primary"
                   />
@@ -345,7 +994,6 @@ export default function AdminEmailPage() {
                 </div>
               </div>
 
-              {/* Create form */}
               <AnimatePresence>
                 {showCreate && (
                   <motion.div
@@ -389,11 +1037,7 @@ export default function AdminEmailPage() {
                           disabled={creating || !newAlias || !newForward}
                           className="flex items-center gap-2 px-4 py-2 bg-accent-primary hover:bg-accent-primary-hover text-white rounded-lg text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                         >
-                          {creating ? (
-                            <Loader2 className="w-4 h-4 animate-spin" />
-                          ) : (
-                            <Plus className="w-4 h-4" />
-                          )}
+                          {creating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
                           Create
                         </button>
                         <button
@@ -408,7 +1052,6 @@ export default function AdminEmailPage() {
                 )}
               </AnimatePresence>
 
-              {/* Aliases list */}
               {isLoading ? (
                 <div className="flex items-center justify-center py-20">
                   <Loader2 className="w-8 h-8 text-accent-primary animate-spin" />
@@ -428,7 +1071,6 @@ export default function AdminEmailPage() {
                       className="p-4 bg-background-secondary border border-border rounded-lg hover:border-border-hover transition-colors"
                     >
                       {editingId === alias.id ? (
-                        /* Edit mode */
                         <div className="flex items-center gap-3">
                           <div className="flex-1">
                             <span className="text-sm text-text-primary font-medium">
@@ -461,7 +1103,6 @@ export default function AdminEmailPage() {
                           </div>
                         </div>
                       ) : deletingId === alias.id ? (
-                        /* Delete confirmation */
                         <div className="flex items-center justify-between">
                           <div className="flex items-center gap-3">
                             <AlertCircle className="w-5 h-5 text-red-500" />
@@ -486,7 +1127,6 @@ export default function AdminEmailPage() {
                           </div>
                         </div>
                       ) : (
-                        /* Normal view */
                         <div className="flex items-center justify-between">
                           <div className="flex items-center gap-4">
                             <div className="p-2 bg-accent-primary/10 rounded-lg">
@@ -497,9 +1137,7 @@ export default function AdminEmailPage() {
                                 <span className="text-sm text-text-primary font-medium">
                                   {alias.alias === '*' ? (
                                     <span className="text-accent-secondary">* (catch-all)</span>
-                                  ) : (
-                                    alias.alias
-                                  )}
+                                  ) : alias.alias}
                                   <span className="text-text-tertiary">@{DOMAIN}</span>
                                 </span>
                               </div>
@@ -510,9 +1148,7 @@ export default function AdminEmailPage() {
                             </div>
                           </div>
                           <div className="flex items-center gap-3">
-                            <span className="text-xs text-text-tertiary">
-                              {formatDate(alias.created)}
-                            </span>
+                            <span className="text-xs text-text-tertiary">{formatDate(alias.created)}</span>
                             <button
                               onClick={() => { setEditingId(alias.id); setEditForward(alias.forward); }}
                               className="p-1.5 text-text-tertiary hover:text-accent-primary hover:bg-accent-primary/10 rounded-lg transition-colors"
@@ -537,9 +1173,9 @@ export default function AdminEmailPage() {
             </div>
           )}
 
+          {/* ── LOGS TAB ──────────────────────────────────────────────── */}
           {activeTab === 'logs' && (
             <div className="space-y-4">
-              {/* Toolbar */}
               <div className="flex items-center justify-between">
                 <p className="text-sm text-text-secondary">
                   Recent email delivery logs from ImprovMX
@@ -576,7 +1212,7 @@ export default function AdminEmailPage() {
                         <div className="flex items-start justify-between">
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center gap-2 mb-1">
-                              <span className={`px-2 py-0.5 text-xs font-medium rounded-full ${getStatusColor(status)}`}>
+                              <span className={`px-2 py-0.5 text-xs font-medium rounded-full ${getLogStatusColor(status)}`}>
                                 {status}
                               </span>
                               <span className="text-xs text-text-tertiary">

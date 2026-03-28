@@ -558,6 +558,13 @@ const platforms = [
 | **Email service** | `src/lib/email.ts` |
 | **Email forwarding admin** | `src/app/admin/email/page.tsx` |
 | **ImprovMX API client** | `src/lib/improvmx.ts` |
+| **Gmail API client** | `src/lib/gmail.ts` |
+| **Email AI (classify/draft)** | `src/lib/email-ai.ts` |
+| **Email ingestion API** | `src/app/api/admin/email/ingest/route.ts` |
+| **Email classification API** | `src/app/api/admin/email/process/route.ts` |
+| **Email draft API** | `src/app/api/admin/email/draft/route.ts` |
+| **Email send API** | `src/app/api/admin/email/send/route.ts` |
+| **Email inbox API** | `src/app/api/admin/email/inbox/route.ts` |
 | **2FA (TOTP)** | `src/lib/2fa.ts` |
 | **Passkeys/WebAuthn** | `src/lib/webauthn.ts` |
 | **Stripe billing** | `src/lib/stripe.ts` |
@@ -695,9 +702,22 @@ DeepTerm uses **ImprovMX** for email forwarding on the `deepterm.net` domain. Al
 | `luca@deepterm.net` | Direct founder contact |
 | `*@deepterm.net` | Catch-all (forwards everything not matched above) |
 
-**Admin UI:** Manage aliases at `/admin/email` (intranet-only).
+**Admin UI:** Manage aliases + AI inbox at `/admin/email` (intranet-only). Tabs: Inbox, Drafts, Sent, Aliases, Logs.
 **API:** ImprovMX REST API via `src/lib/improvmx.ts`. Requires `IMPROVMX_API_KEY` env var.
 **SMTP:** Outbound email uses `SMTP_HOST` / `SMTP_USER` / `SMTP_PASSWORD` env vars (Gmail SMTP by default).
+
+### LLM Email Integration (Phase 1-4)
+
+AI-powered email handling pipeline:
+
+1. **Ingestion** — `src/lib/gmail.ts` polls Gmail API via OAuth2 refresh token, stores in `EmailMessage` model
+2. **Classification** — `src/lib/email-ai.ts` uses Claude (Sonnet) to classify emails (support_request, bug_report, feature_request, billing_inquiry, partnership, spam, personal) with priority (P0-P3) and sentiment
+3. **Drafting** — Auto-generates context-aware response drafts, stored in `EmailDraft` model
+4. **Actions** — Creates Issues/Ideas from bug reports and feature requests
+5. **Admin UI** — Full inbox management with filters, draft review/send, sent history
+
+**Env vars:** `GMAIL_CLIENT_ID`, `GMAIL_CLIENT_SECRET`, `GMAIL_REFRESH_TOKEN`, `ANTHROPIC_API_KEY`
+**Models:** `EmailMessage`, `EmailDraft` in `prisma/schema.prisma`
 
 ---
 
