@@ -39,6 +39,7 @@ async function processEmails(sinceHours: number = 1) {
       const emailMessage = await prisma.emailMessage.create({
         data: {
           gmailMessageId: msg.gmailMessageId,
+          rfcMessageId: msg.rfcMessageId,
           threadId: msg.threadId,
           from: msg.from,
           fromName: msg.fromName,

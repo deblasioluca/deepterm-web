@@ -263,13 +263,14 @@ export default function AdminEmailPage() {
   useEffect(() => {
     if (activeTab === 'aliases') fetchAliases();
     if (activeTab === 'logs') fetchLogs();
-    if (activeTab === 'inbox') fetchInbox();
     if (activeTab === 'drafts' || activeTab === 'sent') fetchDrafts();
-  }, [activeTab, fetchAliases, fetchLogs, fetchInbox, fetchDrafts]);
+  }, [activeTab, fetchAliases, fetchLogs, fetchDrafts]);
 
+  // Separate effect for inbox — fetchInbox already depends on filter values,
+  // so this single effect handles both tab-switch and filter-change triggers.
   useEffect(() => {
     if (activeTab === 'inbox') fetchInbox();
-  }, [inboxFilter, classFilter, priorityFilter, searchQuery, activeTab, fetchInbox]);
+  }, [activeTab, fetchInbox]);
 
   // ── Actions ────────────────────────────────────────────────────────────────
 
