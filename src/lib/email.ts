@@ -543,6 +543,40 @@ export async function sendIdeaReplyEmail(params: {
   }
 }
 
+/**
+ * Send an email reply (used by the LLM email draft system).
+ * Uses the shared transporter — do NOT import nodemailer directly elsewhere.
+ */
+export async function sendEmailReply(opts: {
+  from: string;
+  fromName: string;
+  to: string;
+  subject: string;
+  html: string;
+  replyTo?: string;
+  inReplyTo?: string;
+  references?: string;
+}): Promise<EmailSendResult> {
+  try {
+    await transporter.sendMail({
+      from: `"${opts.fromName}" <${process.env.SMTP_USER || opts.from}>`,
+      replyTo: opts.replyTo || opts.from,
+      to: opts.to,
+      subject: opts.subject,
+      html: opts.html,
+      headers: {
+        ...(opts.inReplyTo ? { 'In-Reply-To': opts.inReplyTo } : {}),
+        ...(opts.references ? { References: opts.references } : {}),
+      },
+    });
+    console.log(`[Email] Reply sent to ${opts.to} from ${opts.from}`);
+    return { ok: true };
+  } catch (error) {
+    console.error('[Email] Failed to send reply:', error);
+    return { ok: false, error: toEmailSendErrorDetails(error) };
+  }
+}
+
 export async function sendSessionInviteEmail(invitation: {
   email: string;
   userName: string;

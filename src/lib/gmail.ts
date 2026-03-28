@@ -12,6 +12,7 @@
 
 export interface GmailMessage {
   gmailMessageId: string;
+  rfcMessageId: string | null;
   threadId: string;
   from: string;
   fromName: string;
@@ -194,12 +195,14 @@ function parseGmailMessage(raw: GmailMessageResponse): GmailMessage {
   const { email: from, name: fromName } = parseEmailAddress(fromRaw);
   const to = extractDeeptermAlias(getHeader('To'), getHeader('Delivered-To'));
   const subject = getHeader('Subject');
+  const rfcMessageId = getHeader('Message-ID') || null;
 
   const { text, html } = extractBody(raw.payload);
   const receivedAt = new Date(parseInt(raw.internalDate, 10));
 
   return {
     gmailMessageId: raw.id,
+    rfcMessageId,
     threadId: raw.threadId,
     from,
     fromName,

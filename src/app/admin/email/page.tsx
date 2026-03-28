@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import DOMPurify from 'dompurify';
 import {
   Mail,
   Plus,
@@ -892,7 +893,7 @@ export default function AdminEmailPage() {
                       </div>
                       <div
                         className="bg-background-primary border border-border rounded-lg p-4 text-sm text-text-primary max-h-60 overflow-y-auto"
-                        dangerouslySetInnerHTML={{ __html: draft.draftBody }}
+                        dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(draft.draftBody) }}
                       />
                     </div>
                   ))}
@@ -951,7 +952,7 @@ export default function AdminEmailPage() {
                       </div>
                       <div
                         className="bg-background-primary border border-border rounded-lg p-4 text-sm text-text-primary max-h-40 overflow-y-auto"
-                        dangerouslySetInnerHTML={{ __html: draft.editedBody || draft.draftBody }}
+                        dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(draft.editedBody || draft.draftBody) }}
                       />
                     </div>
                   ))}

@@ -1241,6 +1241,7 @@ model SharedSessionParticipant {
 model EmailMessage {
   id              String    @id @default(cuid())
   gmailMessageId  String    @unique               // Gmail API message ID
+  rfcMessageId    String?                          // RFC 2822 Message-ID header (for threading replies)
   threadId        String?                          // Gmail thread ID for grouping
   from            String                           // Sender email address
   fromName        String    @default("")           // Sender display name

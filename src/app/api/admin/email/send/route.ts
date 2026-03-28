@@ -1,13 +1,13 @@
 /**
  * POST /api/admin/email/send — send an approved draft response.
  *
- * Uses Nodemailer (existing email.ts infrastructure) to send the reply,
+ * Uses the shared email transporter from src/lib/email.ts (per CLAUDE.md rules),
  * then marks the draft as "sent" and the email as "replied".
  */
 
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import nodemailer from 'nodemailer';
+import { sendEmailReply } from '@/lib/email';
 
 export const dynamic = 'force-dynamic';
 
@@ -54,29 +54,25 @@ export async function POST(request: Request) {
       ? 'Luca — DeepTerm'
       : 'DeepTerm Support';
 
-    // Create transporter using existing SMTP config
-    const transporter = nodemailer.createTransport({
-      host: process.env.SMTP_HOST || 'smtp.gmail.com',
-      port: parseInt(process.env.SMTP_PORT || '587', 10),
-      secure: process.env.SMTP_SECURE === 'true',
-      auth: {
-        user: process.env.SMTP_USER,
-        pass: process.env.SMTP_PASSWORD,
-      },
-    });
-
-    // Send the email
-    await transporter.sendMail({
-      from: `"${fromName}" <${process.env.SMTP_USER || fromAlias}>`,
-      replyTo: fromAlias,
+    // Send using shared transporter from src/lib/email.ts
+    const result = await sendEmailReply({
+      from: fromAlias,
+      fromName,
       to: email.from,
       subject: `Re: ${email.subject}`,
       html: responseBody,
-      headers: {
-        ...(email.gmailMessageId ? { 'In-Reply-To': email.gmailMessageId } : {}),
-        ...(email.threadId ? { References: email.threadId } : {}),
-      },
+      replyTo: fromAlias,
+      // Use RFC 2822 Message-ID for proper email threading
+      inReplyTo: email.rfcMessageId ?? undefined,
+      references: email.rfcMessageId ?? undefined,
     });
+
+    if (!result.ok) {
+      return NextResponse.json(
+        { error: 'Send Failed', message: result.error.message },
+        { status: 500 },
+      );
+    }
 
     // Update draft status
     await prisma.emailDraft.update({
