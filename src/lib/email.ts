@@ -54,7 +54,7 @@ const transporter = nodemailer.createTransport({
   },
 });
 
-const ADMIN_EMAIL = process.env.ADMIN_ALERT_EMAIL || 'luca.deblasio@bluewin.ch';
+const ADMIN_EMAIL = process.env.ADMIN_ALERT_EMAIL || 'luca@deepterm.net';
 const FROM_EMAIL = process.env.EMAIL_FROM || process.env.SMTP_FROM || 'noreply@deepterm.net';
 
 export async function sendNewUserNotification(user: {
@@ -252,16 +252,16 @@ export async function sendWelcomeEmail(user: {
               </ol>
             </div>
             <p style="color: #888; font-size: 14px; margin-top: 30px;">
-              Need help? Visit our <a href="https://deepterm.net/dashboard/help" style="color: #00ffc6;">Help Center</a> or reply to this email.
+              Need help? Visit our <a href="https://deepterm.net/dashboard/help" style="color: #00ffc6;">Help Center</a> or email <a href="mailto:support@deepterm.net" style="color: #00ffc6;">support@deepterm.net</a>.
             </p>
           </div>
           <div style="background: #0a0b0d; padding: 15px; text-align: center; color: #666; font-size: 12px;">
             DeepTerm - Secure SSH Client<br>
-            <a href="https://deepterm.net" style="color: #888;">deepterm.net</a>
+            <a href="https://deepterm.net" style="color: #888;">deepterm.net</a> · <a href="mailto:support@deepterm.net" style="color: #888;">support@deepterm.net</a>
           </div>
         </div>
       `,
-      text: `Welcome to DeepTerm, ${user.name}!\n\nThank you for creating your DeepTerm account! We're excited to have you on board.\n\nDeepTerm is your secure SSH client designed for modern teams. Here's what you can do:\n\n- Secure Vaults - Store and manage your SSH credentials safely\n- Team Collaboration - Share access with your team members\n- Passkey Authentication - Enable passwordless login for enhanced security\n- Two-Factor Auth - Add an extra layer of protection\n\nGet Started:\n1. Download the DeepTerm app for macOS\n2. Create your first vault to store credentials\n3. Invite team members to collaborate\n4. Set up passkeys for secure, passwordless access\n\nGo to your dashboard: https://deepterm.net/dashboard\n\nNeed help? Visit https://deepterm.net/dashboard/help`,
+      text: `Welcome to DeepTerm, ${user.name}!\n\nThank you for creating your DeepTerm account! We're excited to have you on board.\n\nDeepTerm is your secure SSH client designed for modern teams. Here's what you can do:\n\n- Secure Vaults - Store and manage your SSH credentials safely\n- Team Collaboration - Share access with your team members\n- Passkey Authentication - Enable passwordless login for enhanced security\n- Two-Factor Auth - Add an extra layer of protection\n\nGet Started:\n1. Download the DeepTerm app for macOS\n2. Create your first vault to store credentials\n3. Invite team members to collaborate\n4. Set up passkeys for secure, passwordless access\n\nGo to your dashboard: https://deepterm.net/dashboard\n\nNeed help? Visit https://deepterm.net/dashboard/help or email support@deepterm.net`,
     };
 
     await transporter.sendMail(mailOptions);
