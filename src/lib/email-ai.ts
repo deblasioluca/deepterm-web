@@ -102,10 +102,18 @@ DeepTerm is a professional SSH client and zero-knowledge password manager, devel
 
 **Subscription tiers:**
 - Free: Basic vault (up to 10 credentials), single device, 1 vault
-- Pro ($4.99/mo or $49.99/yr via Apple IAP): Unlimited credentials, unlimited devices, unlimited vaults, team collaboration, AI features, priority support
+- Pro ($4.99/mo or $49.99/yr): Unlimited credentials, unlimited devices, unlimited vaults, team collaboration, AI features, priority support
 - Enterprise: Custom pricing, SSO, dedicated support
 
-**Important:** When user context says "Plan: pro" or their organization has an active subscription, they ARE a Pro subscriber. Do NOT tell them they are on the free plan.
+**Subscription methods:**
+- Apple In-App Purchase (IAP): Managed through Apple ID → Subscriptions
+- Organization subscription: Managed by the organization owner/admin through the DeepTerm web dashboard (deepterm.net). Members of an org with an active Pro plan get Pro features automatically — their seat is covered by the org.
+
+**Important subscription rules:**
+- When user context says "Plan: pro", they ARE a Pro subscriber. Do NOT tell them they are on the free plan.
+- When the user context says "Subscription source: organization", do NOT mention Apple App Store or Apple IAP. Their subscription is managed through their organization.
+- When the user context says "Subscription source: apple_iap", refer them to Apple ID subscription management.
+- Always use the ACTUAL subscription source from the user context. Never guess or assume Apple IAP.
 
 **Support channels:**
 - Email: support@deepterm.net, info@deepterm.net, luca@deepterm.net
@@ -115,7 +123,8 @@ DeepTerm is a professional SSH client and zero-knowledge password manager, devel
 **Common support topics:**
 - Vault sync issues → Check internet connection, try force-sync in Settings
 - Login problems → Reset password via app, check 2FA setup
-- Subscription not showing → Restore purchases in Settings → Subscription
+- Subscription not showing (Apple IAP) → Restore purchases in Settings → Subscription
+- Subscription not showing (Org) → Contact your organization admin, check org membership at deepterm.net
 - Shared terminal issues → Both users need Pro subscription, check organization membership
 - AI features not working → Requires Pro subscription, check API key in Settings
 
@@ -281,18 +290,39 @@ export async function draftResponse(emailMessageId: string): Promise<DraftResult
 
       const appleActive = !!zkUser.appleProductId
         && (!zkUser.appleExpiresDate || zkUser.appleExpiresDate > new Date());
-      const hasActivePro = orgEntries.some((o) => o.plan === 'pro' && o.subscriptionActive)
-        || appleActive;
+      const orgPro = orgEntries.find((o) => o.plan === 'pro' && o.subscriptionActive);
+      const hasActivePro = !!orgPro || appleActive;
       const effectivePlan = hasActivePro ? 'pro' : 'free';
 
+      // Determine subscription source for accurate LLM guidance
+      let subscriptionSource = 'none';
+      if (orgPro) {
+        subscriptionSource = 'organization';
+      } else if (appleActive) {
+        subscriptionSource = 'apple_iap';
+      }
+
       const orgList = orgEntries
-        .map((o) => `${o.name} (${o.plan}, role: ${o.role})`)
+        .map((o) => {
+          const status = o.subscriptionActive ? 'active' : 'inactive';
+          return `${o.name} (plan: ${o.plan}, subscription: ${status}, role: ${o.role})`;
+        })
         .join(', ');
+
+      // Build Apple IAP details if applicable
+      let appleIapInfo = '';
+      if (appleActive && zkUser.appleProductId) {
+        appleIapInfo = `\n- Apple IAP product: ${zkUser.appleProductId}`;
+        if (zkUser.appleExpiresDate) {
+          appleIapInfo += `\n- Apple IAP expires: ${zkUser.appleExpiresDate.toISOString().slice(0, 10)}`;
+        }
+      }
 
       userContext = `\nUser context:
 - Email: ${zkUser.email}
 - Plan: ${effectivePlan}
-- Organizations: ${orgList || 'none'}
+- Subscription source: ${subscriptionSource}${orgPro ? ` (via organization "${orgPro.name}")` : ''}
+- Organizations: ${orgList || 'none'}${appleIapInfo}
 - Joined: ${zkUser.createdAt.toISOString().slice(0, 10)}`;
     }
   }
