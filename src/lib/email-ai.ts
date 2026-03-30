@@ -311,7 +311,7 @@ export async function draftResponse(emailMessageId: string): Promise<DraftResult
 
       // Build Apple IAP details if applicable
       let appleIapInfo = '';
-      if (appleActive && zkUser.appleProductId) {
+      if (appleActive && zkUser.appleProductId && subscriptionSource === 'apple_iap') {
         appleIapInfo = `\n- Apple IAP product: ${zkUser.appleProductId}`;
         if (zkUser.appleExpiresDate) {
           appleIapInfo += `\n- Apple IAP expires: ${zkUser.appleExpiresDate.toISOString().slice(0, 10)}`;
