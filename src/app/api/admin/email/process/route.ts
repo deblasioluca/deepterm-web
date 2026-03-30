@@ -10,7 +10,7 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { fetchNewMessages } from '@/lib/gmail';
-import { classifyEmail, linkEmailToUser, performAutoAction } from '@/lib/email-ai';
+import { classifyEmail, detectEscalation, draftResponse, linkEmailToUser, performAutoAction } from '@/lib/email-ai';
 
 export const dynamic = 'force-dynamic';
 
@@ -77,6 +77,36 @@ async function processEmails(sinceHours: number = 1) {
 
       // Perform auto-actions
       await performAutoAction(emailMessage.id);
+
+      // Check for escalation keywords — flag for human review (skip for spam)
+      const needsHuman = classification.classification !== 'spam' && detectEscalation(msg.bodyText);
+      if (needsHuman) {
+        await prisma.emailMessage.update({
+          where: { id: emailMessage.id },
+          data: { status: 'needs_human' },
+        });
+      }
+
+      // Auto-draft response for non-spam, non-escalated emails
+      if (!needsHuman && classification.classification !== 'spam') {
+        try {
+          const draft = await draftResponse(emailMessage.id);
+          await prisma.emailDraft.create({
+            data: {
+              emailMessageId: emailMessage.id,
+              draftBody: draft.draftBody,
+              draftText: draft.draftText,
+              model: draft.model,
+              inputTokens: draft.inputTokens,
+              outputTokens: draft.outputTokens,
+              costCents: draft.costCents,
+              status: 'pending',
+            },
+          });
+        } catch (draftErr) {
+          console.error(`Auto-draft failed for ${emailMessage.id}:`, draftErr);
+        }
+      }
 
       processed++;
     } catch (err) {

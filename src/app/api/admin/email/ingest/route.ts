@@ -9,7 +9,7 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { fetchNewMessages } from '@/lib/gmail';
-import { classifyEmail, linkEmailToUser, performAutoAction } from '@/lib/email-ai';
+import { classifyEmail, detectEscalation, draftResponse, linkEmailToUser, performAutoAction } from '@/lib/email-ai';
 
 export const dynamic = 'force-dynamic';
 
@@ -19,11 +19,13 @@ export async function POST(request: Request) {
       sinceHours?: number;
       classify?: boolean;
       autoAction?: boolean;
+      autoDraft?: boolean;
     };
 
     const sinceHours = body.sinceHours ?? 24;
     const shouldClassify = body.classify !== false; // default true
     const shouldAutoAction = body.autoAction !== false; // default true
+    const shouldAutoDraft = body.autoDraft !== false; // default true
 
     const sinceDate = new Date(Date.now() - sinceHours * 60 * 60 * 1000);
 
@@ -45,6 +47,7 @@ export async function POST(request: Request) {
       subject: string;
       classification?: string;
       action?: string;
+      drafted?: boolean;
       error?: string;
     }> = [];
 
@@ -103,11 +106,44 @@ export async function POST(request: Request) {
           }
         }
 
+        // Check for escalation keywords — flag for human review (skip for spam)
+        const needsHuman = classification !== 'spam' && detectEscalation(msg.bodyText);
+        if (needsHuman) {
+          await prisma.emailMessage.update({
+            where: { id: emailMessage.id },
+            data: { status: 'needs_human' },
+          });
+        }
+
+        // Auto-draft response for non-spam, non-escalated emails
+        let drafted = false;
+        if (shouldAutoDraft && !needsHuman && classification && classification !== 'spam') {
+          try {
+            const draft = await draftResponse(emailMessage.id);
+            await prisma.emailDraft.create({
+              data: {
+                emailMessageId: emailMessage.id,
+                draftBody: draft.draftBody,
+                draftText: draft.draftText,
+                model: draft.model,
+                inputTokens: draft.inputTokens,
+                outputTokens: draft.outputTokens,
+                costCents: draft.costCents,
+                status: 'pending',
+              },
+            });
+            drafted = true;
+          } catch (draftErr) {
+            console.error(`Auto-draft failed for ${emailMessage.id}:`, draftErr);
+          }
+        }
+
         results.push({
           id: emailMessage.id,
           subject: msg.subject,
           classification,
           action,
+          drafted,
         });
       } catch (err) {
         results.push({

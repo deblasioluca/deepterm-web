@@ -59,13 +59,25 @@ export async function GET(request: Request) {
     ]);
 
     // Get counts by status for sidebar badges
-    const [unreadCount, readCount, repliedCount, archivedCount, spamCount] =
+    const [unreadCount, readCount, repliedCount, archivedCount, spamCount, needsHumanCount] =
       await Promise.all([
         prisma.emailMessage.count({ where: { status: 'unread' } }),
         prisma.emailMessage.count({ where: { status: 'read' } }),
         prisma.emailMessage.count({ where: { status: 'replied' } }),
         prisma.emailMessage.count({ where: { status: 'archived' } }),
         prisma.emailMessage.count({ where: { status: 'spam' } }),
+        prisma.emailMessage.count({ where: { status: 'needs_human' } }),
+      ]);
+
+    // Get counts by classification category for folder view
+    const [supportCount, bugCount, featureCount, billingCount, partnershipCount, personalCount] =
+      await Promise.all([
+        prisma.emailMessage.count({ where: { classification: 'support_request', status: { notIn: ['deleted', 'spam'] } } }),
+        prisma.emailMessage.count({ where: { classification: 'bug_report', status: { notIn: ['deleted', 'spam'] } } }),
+        prisma.emailMessage.count({ where: { classification: 'feature_request', status: { notIn: ['deleted', 'spam'] } } }),
+        prisma.emailMessage.count({ where: { classification: 'billing_inquiry', status: { notIn: ['deleted', 'spam'] } } }),
+        prisma.emailMessage.count({ where: { classification: 'partnership', status: { notIn: ['deleted', 'spam'] } } }),
+        prisma.emailMessage.count({ where: { classification: 'personal', status: { notIn: ['deleted', 'spam'] } } }),
       ]);
 
     return NextResponse.json({
@@ -77,7 +89,16 @@ export async function GET(request: Request) {
         replied: repliedCount,
         archived: archivedCount,
         spam: spamCount,
-        total: unreadCount + readCount + repliedCount + archivedCount + spamCount,
+        needs_human: needsHumanCount,
+        total: unreadCount + readCount + repliedCount + archivedCount + spamCount + needsHumanCount,
+      },
+      categoryCounts: {
+        support_request: supportCount,
+        bug_report: bugCount,
+        feature_request: featureCount,
+        billing_inquiry: billingCount,
+        partnership: partnershipCount,
+        personal: personalCount,
       },
     });
   } catch (error) {
@@ -104,7 +125,7 @@ export async function PATCH(request: Request) {
       );
     }
 
-    const validStatuses = ['unread', 'read', 'replied', 'archived', 'spam'];
+    const validStatuses = ['unread', 'read', 'replied', 'archived', 'spam', 'needs_human'];
     if (!body.status || !validStatuses.includes(body.status)) {
       return NextResponse.json(
         { error: 'Bad Request', message: `status must be one of: ${validStatuses.join(', ')}` },
