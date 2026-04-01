@@ -170,6 +170,9 @@ async function dispatchWorkflow(jobId: string, type: string, sections: string[])
     }
   } catch (error) {
     const msg = error instanceof Error ? error.message : String(error);
+    // Don't overwrite cancelled status with failed
+    const check = await prisma.contentUpdateJob.findUnique({ where: { id: jobId }, select: { status: true } });
+    if (check?.status === 'cancelled') return;
     await appendLog(jobId, `[${new Date().toISOString()}] ERROR: ${msg}`, {
       status: 'failed',
       error: msg,
@@ -203,6 +206,10 @@ async function simulateJob(jobId: string, type: string, sections: string[]) {
     // Simulate work
     await new Promise((resolve) => setTimeout(resolve, 500));
   }
+
+  // Re-check cancellation before marking complete (avoids race with cancel during last section's sleep)
+  const final = await prisma.contentUpdateJob.findUnique({ where: { id: jobId }, select: { status: true } });
+  if (final?.status === 'cancelled') return;
 
   await appendLog(
     jobId,
