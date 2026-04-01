@@ -27,6 +27,15 @@ const AVAILABLE_SECTIONS = [
   'pricing',
 ];
 
+/** Append a line to a job's logs field (read-then-concat since Prisma String has no append). */
+async function appendLog(jobId: string, line: string, extra: Record<string, unknown> = {}) {
+  const job = await prisma.contentUpdateJob.findUnique({ where: { id: jobId }, select: { logs: true } });
+  await prisma.contentUpdateJob.update({
+    where: { id: jobId },
+    data: { logs: (job?.logs ?? '') + '\n' + line, ...extra },
+  });
+}
+
 export async function GET(request: NextRequest) {
   const session = getAdminSession();
   if (!session) {
@@ -70,12 +79,13 @@ export async function POST(request: NextRequest) {
 
     // Cancel a running job
     if (body.action === 'cancel' && body.jobId) {
+      const existing = await prisma.contentUpdateJob.findUnique({ where: { id: body.jobId }, select: { logs: true } });
       const job = await prisma.contentUpdateJob.update({
         where: { id: body.jobId },
         data: {
           status: 'cancelled',
           completedAt: new Date(),
-          logs: { append: '\n[CANCELLED] Job cancelled by admin' },
+          logs: (existing?.logs ?? '') + '\n[CANCELLED] Job cancelled by admin',
         },
       });
       return NextResponse.json({ ok: true, job });
@@ -126,14 +136,9 @@ export async function POST(request: NextRequest) {
 }
 
 async function dispatchWorkflow(jobId: string, type: string, sections: string[]) {
-  // Update job status to running
-  await prisma.contentUpdateJob.update({
-    where: { id: jobId },
-    data: {
-      status: 'running',
-      startedAt: new Date(),
-      logs: { append: `\n[${new Date().toISOString()}] Dispatching GitHub Actions workflow...` },
-    },
+  await appendLog(jobId, `[${new Date().toISOString()}] Dispatching GitHub Actions workflow...`, {
+    status: 'running',
+    startedAt: new Date(),
   });
 
   try {
@@ -158,39 +163,26 @@ async function dispatchWorkflow(jobId: string, type: string, sections: string[])
     );
 
     if (res.status === 204) {
-      await prisma.contentUpdateJob.update({
-        where: { id: jobId },
-        data: {
-          logs: { append: `\n[${new Date().toISOString()}] Workflow dispatched successfully. Waiting for runner...` },
-        },
-      });
+      await appendLog(jobId, `[${new Date().toISOString()}] Workflow dispatched successfully. Waiting for runner...`);
     } else {
       const errText = await res.text();
       throw new Error(`GitHub API ${res.status}: ${errText}`);
     }
   } catch (error) {
     const msg = error instanceof Error ? error.message : String(error);
-    await prisma.contentUpdateJob.update({
-      where: { id: jobId },
-      data: {
-        status: 'failed',
-        error: msg,
-        completedAt: new Date(),
-        logs: { append: `\n[${new Date().toISOString()}] ERROR: ${msg}` },
-      },
+    await appendLog(jobId, `[${new Date().toISOString()}] ERROR: ${msg}`, {
+      status: 'failed',
+      error: msg,
+      completedAt: new Date(),
     });
   }
 }
 
 // When no GitHub token is available, simulate the job with progress updates
 async function simulateJob(jobId: string, type: string, sections: string[]) {
-  await prisma.contentUpdateJob.update({
-    where: { id: jobId },
-    data: {
-      status: 'running',
-      startedAt: new Date(),
-      logs: { append: `\n[${new Date().toISOString()}] Running locally (no GITHUB_TOKEN)...` },
-    },
+  await appendLog(jobId, `[${new Date().toISOString()}] Running locally (no GITHUB_TOKEN)...`, {
+    status: 'running',
+    startedAt: new Date(),
   });
 
   const totalSections = sections.length;
@@ -202,26 +194,24 @@ async function simulateJob(jobId: string, type: string, sections: string[]) {
     const current = await prisma.contentUpdateJob.findUnique({ where: { id: jobId } });
     if (current?.status === 'cancelled') return;
 
-    await prisma.contentUpdateJob.update({
-      where: { id: jobId },
-      data: {
-        progress,
-        logs: { append: `\n[${new Date().toISOString()}] ${type === 'screenshots' ? 'Capturing' : 'Updating'} section: ${section} (${i + 1}/${totalSections})` },
-      },
-    });
+    await appendLog(
+      jobId,
+      `[${new Date().toISOString()}] ${type === 'screenshots' ? 'Capturing' : 'Updating'} section: ${section} (${i + 1}/${totalSections})`,
+      { progress },
+    );
 
     // Simulate work
     await new Promise((resolve) => setTimeout(resolve, 500));
   }
 
-  await prisma.contentUpdateJob.update({
-    where: { id: jobId },
-    data: {
+  await appendLog(
+    jobId,
+    `[${new Date().toISOString()}] Job completed successfully. ${totalSections} sections processed.`,
+    {
       status: 'completed',
       progress: 100,
       completedAt: new Date(),
       result: JSON.stringify({ sectionsUpdated: sections, type }),
-      logs: { append: `\n[${new Date().toISOString()}] Job completed successfully. ${totalSections} sections processed.` },
     },
-  });
+  );
 }

@@ -74,16 +74,20 @@ export async function POST(request: NextRequest) {
           return NextResponse.json({ error: 'jobId required' }, { status: 400 });
         }
 
+        const existing = await prisma.contentUpdateJob.findUnique({ where: { id: body.jobId } });
+        if (!existing) {
+          return NextResponse.json({ error: 'Job not found' }, { status: 404 });
+        }
+
         const updateData: Record<string, unknown> = {};
         if (body.progress !== undefined) updateData.progress = body.progress;
-        if (body.logs) updateData.logs = { append: `\n${body.logs}` };
+        if (body.logs) updateData.logs = (existing.logs ?? '') + '\n' + body.logs;
         if (body.workflowRunId) updateData.workflowRunId = body.workflowRunId;
 
         // Auto-transition to running
         if (body.progress !== undefined && body.progress > 0) {
           updateData.status = 'running';
-          const job = await prisma.contentUpdateJob.findUnique({ where: { id: body.jobId } });
-          if (job && !job.startedAt) {
+          if (!existing.startedAt) {
             updateData.startedAt = new Date();
           }
         }
@@ -102,6 +106,12 @@ export async function POST(request: NextRequest) {
           return NextResponse.json({ error: 'jobId required' }, { status: 400 });
         }
 
+        let logsUpdate: string | undefined;
+        if (body.logs) {
+          const prev = await prisma.contentUpdateJob.findUnique({ where: { id: body.jobId }, select: { logs: true } });
+          logsUpdate = (prev?.logs ?? '') + '\n' + body.logs;
+        }
+
         await prisma.contentUpdateJob.update({
           where: { id: body.jobId },
           data: {
@@ -109,7 +119,7 @@ export async function POST(request: NextRequest) {
             progress: 100,
             completedAt: new Date(),
             result: body.result || null,
-            logs: body.logs ? { append: `\n${body.logs}` } : undefined,
+            ...(logsUpdate !== undefined ? { logs: logsUpdate } : {}),
           },
         });
 
@@ -122,13 +132,19 @@ export async function POST(request: NextRequest) {
           return NextResponse.json({ error: 'jobId required' }, { status: 400 });
         }
 
+        let failLogsUpdate: string | undefined;
+        if (body.logs) {
+          const prev = await prisma.contentUpdateJob.findUnique({ where: { id: body.jobId }, select: { logs: true } });
+          failLogsUpdate = (prev?.logs ?? '') + '\n' + body.logs;
+        }
+
         await prisma.contentUpdateJob.update({
           where: { id: body.jobId },
           data: {
             status: 'failed',
             completedAt: new Date(),
             error: body.error || 'Unknown error',
-            logs: body.logs ? { append: `\n${body.logs}` } : undefined,
+            ...(failLogsUpdate !== undefined ? { logs: failLogsUpdate } : {}),
           },
         });
 
