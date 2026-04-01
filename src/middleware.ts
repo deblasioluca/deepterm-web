@@ -144,6 +144,7 @@ export function middleware(request: NextRequest) {
       '/api/admin/auth',
       '/api/admin/cockpit/lifecycle/events',
       '/api/admin/cockpit/github-dispatch',
+      '/api/admin/content-update/webhook',
     ];
     if (INTERNAL_API_PATHS.some(p => pathname.startsWith(p))) {
       return NextResponse.next();
