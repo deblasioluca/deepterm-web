@@ -87,7 +87,7 @@ const plans = [
     name: 'Team',
     monthlyPrice: 12.49,
     yearlyPrice: 10,
-    features: ['Everything in Pro', 'SSO/SAML', 'Admin controls', 'Audit logs'],
+    features: ['Everything in Pro', 'Team vaults', 'Admin controls', 'Audit logs'],
   },
   {
     id: 'enterprise',
@@ -113,7 +113,6 @@ const planFeatures: Record<string, string[]> = {
     'Team vaults',
     'MultiKey',
     'Real-time collaboration',
-    'SSO/SAML',
     'Admin controls',
     'Audit logs',
   ],

@@ -73,7 +73,6 @@ export const PLAN_DETAILS = {
       'Team vaults',
       'MultiKey',
       'Real-time collaboration',
-      'SSO/SAML',
       'Admin controls',
       'Audit logs',
     ],

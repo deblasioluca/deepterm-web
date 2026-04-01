@@ -189,13 +189,24 @@ for i in "${!SCREENSHOTS[@]}"; do
 
   echo "[$((i+1))/${#SCREENSHOTS[@]}] Capturing: ${name} (section: ${section})..."
 
-  # Generate and run AppleScript on the Mac
+  # Generate AppleScript and write to temp file (avoids quoting issues with inline -e)
   script=$(generate_applescript "$section" "$remote_path")
-  run_cmd "osascript -e '${script}' 2>/dev/null" || {
-    # Fallback: plain screencapture of the frontmost window
-    echo "  AppleScript failed, falling back to screencapture..."
-    run_cmd "screencapture -o -w '${remote_path}' 2>/dev/null" || true
-  }
+  script_file="/tmp/deepterm-capture-${name}.scpt"
+  if [[ -n "$CI_MAC" ]]; then
+    # Write script to remote temp file, execute, then clean up
+    echo "$script" | ssh -o StrictHostKeyChecking=no "$CI_MAC" "cat > '${script_file}'"
+    ssh -o StrictHostKeyChecking=no "$CI_MAC" "osascript '${script_file}' 2>/dev/null; rm -f '${script_file}'" || {
+      echo "  AppleScript failed, falling back to screencapture..."
+      ssh -o StrictHostKeyChecking=no "$CI_MAC" "screencapture -o -w '${remote_path}' 2>/dev/null" || true
+    }
+  else
+    echo "$script" > "$script_file"
+    osascript "$script_file" 2>/dev/null || {
+      echo "  AppleScript failed, falling back to screencapture..."
+      screencapture -o -w "${remote_path}" 2>/dev/null || true
+    }
+    rm -f "$script_file"
+  fi
 
   # Copy to output
   if copy_from "$remote_path" "$local_path" 2>/dev/null; then

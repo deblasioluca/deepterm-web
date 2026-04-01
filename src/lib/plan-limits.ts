@@ -106,7 +106,7 @@ export const PLAN_FEATURES: Record<PlanKey, PlanFeatures> = {
     portForwarding: true,
     prioritySupport: true,
     teamVaults: true,
-    sso: true,
+    sso: false,           // SSO is Business-only
     auditLogs: true,
     roleBasedAccess: true,
   },

@@ -71,14 +71,14 @@ describe('PLAN_LIMITS', () => {
 // ---------------------------------------------------------------------------
 
 describe('PLAN_FEATURES', () => {
-  it('defines starter plan with all features disabled', () => {
+  it('defines starter plan with basic features enabled', () => {
     const starter = PLAN_FEATURES.starter;
     expect(starter.unlimitedHosts).toBe(false);
-    expect(starter.aiAssistant).toBe(false);
+    expect(starter.aiAssistant).toBe(true);       // Basic AI included
     expect(starter.cloudVault).toBe(false);
     expect(starter.allDevices).toBe(false);
-    expect(starter.sftpClient).toBe(false);
-    expect(starter.portForwarding).toBe(false);
+    expect(starter.sftpClient).toBe(true);         // SFTP included in Starter
+    expect(starter.portForwarding).toBe(true);     // Port Forwarding included in Starter
     expect(starter.prioritySupport).toBe(false);
     expect(starter.teamVaults).toBe(false);
     expect(starter.sso).toBe(false);
@@ -102,11 +102,11 @@ describe('PLAN_FEATURES', () => {
     expect(pro.roleBasedAccess).toBe(false);
   });
 
-  it('defines team plan with all features enabled', () => {
+  it('defines team plan with collaboration features (no SSO)', () => {
     const team = PLAN_FEATURES.team;
     expect(team.unlimitedHosts).toBe(true);
     expect(team.teamVaults).toBe(true);
-    expect(team.sso).toBe(true);
+    expect(team.sso).toBe(false);  // SSO is Business-only
     expect(team.auditLogs).toBe(true);
     expect(team.roleBasedAccess).toBe(true);
   });
