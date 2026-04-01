@@ -1280,6 +1280,29 @@ model EmailMessage {
   @@index([linkedUserId])
 }
 
+/// Tracks page views for web app statistics.
+/// IPs are hashed (SHA-256) for privacy compliance.
+model PageView {
+  id            String   @id @default(cuid())
+  path          String                          // URL path (e.g. "/", "/documentation")
+  ipHash        String                          // SHA-256 hash of visitor IP
+  userAgent     String?                         // Browser user-agent string
+  referrer      String?                         // HTTP Referer header
+  countryCode   String?                         // ISO 3166-1 alpha-2 (e.g. "US", "DE")
+  city          String?                         // Geo city name
+  latitude      Float?                          // Geo latitude
+  longitude     Float?                          // Geo longitude
+  isBot         Boolean  @default(false)        // Detected bot/crawler
+  sessionId     String?                         // Visitor session fingerprint (hashed)
+  createdAt     DateTime @default(now())
+
+  @@index([path, createdAt])
+  @@index([ipHash, createdAt])
+  @@index([countryCode, createdAt])
+  @@index([createdAt])
+  @@index([sessionId, createdAt])
+}
+
 /// LLM-drafted email responses awaiting admin review.
 model EmailDraft {
   id              String    @id @default(cuid())
