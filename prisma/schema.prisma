@@ -1280,6 +1280,28 @@ model EmailMessage {
   @@index([linkedUserId])
 }
 
+/// Tracks admin-triggered content update jobs (screenshot refresh, content sync).
+model ContentUpdateJob {
+  id            String   @id @default(cuid())
+  type          String                          // "screenshots" | "content" | "full"
+  status        String   @default("queued")     // queued, running, completed, failed, cancelled
+  sections      String   @default("[]")         // JSON array of section names to update
+  triggeredBy   String   @default("admin")      // "admin" | "webhook" | "schedule"
+  progress      Int      @default(0)            // 0-100 percentage
+  logs          String   @default("")           // Newline-separated log output
+  result        String?                         // JSON summary of what was updated
+  error         String?                         // Error message if failed
+  workflowRunId String?                         // GitHub Actions run ID (if dispatched)
+  startedAt     DateTime?
+  completedAt   DateTime?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([status, createdAt])
+  @@index([type, createdAt])
+  @@index([createdAt])
+}
+
 /// LLM-drafted email responses awaiting admin review.
 model EmailDraft {
   id              String    @id @default(cuid())
