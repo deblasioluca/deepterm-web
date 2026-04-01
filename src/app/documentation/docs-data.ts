@@ -459,7 +459,7 @@ export const DOC_CATEGORIES: DocCategory[] = [
 
 <div style="margin: 24px 0; border-radius: 12px; overflow: hidden; border: 1px solid #30363d;">
   <img src="/screenshots/app-snippets.png" alt="DeepTerm Snippets library" style="width: 100%; display: block;" />
-  <div style="background: #0d1117; padding: 8px 12px; font-size: 12px; color: #8b949e; text-align: center;">Snippets library — 10 built-in commands for common system administration tasks</div>
+  <div style="background: #0d1117; padding: 8px 12px; font-size: 12px; color: #8b949e; text-align: center;">Snippets library — built-in commands for common system administration tasks</div>
 </div>
 
 <h3>Opening Snippets</h3>
