@@ -73,11 +73,11 @@ export const PLAN_LIMITS: Record<PlanKey, PlanLimits> = {
 export const PLAN_FEATURES: Record<PlanKey, PlanFeatures> = {
   starter: {
     unlimitedHosts: false,
-    aiAssistant: false,
+    aiAssistant: true,      // AI-powered autocomplete (basic)
     cloudVault: false,
     allDevices: false,
-    sftpClient: false,
-    portForwarding: false,
+    sftpClient: true,       // SSH and SFTP included in Starter
+    portForwarding: true,   // Port Forwarding included in Starter
     prioritySupport: false,
     teamVaults: false,
     sso: false,

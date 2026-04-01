@@ -262,3 +262,37 @@ html {
 .docs-prose tr:last-child td {
   border-bottom: none;
 }
+
+/* Screenshot containers — break out of narrow prose column */
+.docs-prose .screenshot-frame {
+  margin: 2rem -2rem;
+  border-radius: 12px;
+  overflow: hidden;
+  border: 1px solid var(--border-color);
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.4);
+  background: #0d1117;
+}
+
+@media (max-width: 768px) {
+  .docs-prose .screenshot-frame {
+    margin-left: -1rem;
+    margin-right: -1rem;
+    border-radius: 8px;
+  }
+}
+
+.docs-prose .screenshot-frame img {
+  width: 100%;
+  height: auto;
+  display: block;
+  image-rendering: auto;
+}
+
+.docs-prose .screenshot-frame .screenshot-caption {
+  background: #0d1117;
+  padding: 8px 12px;
+  font-size: 12px;
+  color: #8b949e;
+  text-align: center;
+  border-top: 1px solid #21262d;
+}

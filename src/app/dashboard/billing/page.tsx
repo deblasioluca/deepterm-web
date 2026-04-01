@@ -78,15 +78,15 @@ const plans = [
   {
     id: 'pro',
     name: 'Pro',
-    monthlyPrice: 12.99,
-    yearlyPrice: 10,
+    monthlyPrice: 6.49,
+    yearlyPrice: 5,
     features: ['Unlimited hosts', 'AI assistant', 'Team vaults', 'All devices'],
   },
   {
     id: 'team',
     name: 'Team',
-    monthlyPrice: 24.99,
-    yearlyPrice: 20,
+    monthlyPrice: 12.49,
+    yearlyPrice: 10,
     features: ['Everything in Pro', 'SSO/SAML', 'Admin controls', 'Audit logs'],
   },
   {
