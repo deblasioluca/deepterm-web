@@ -146,8 +146,8 @@ const TRACK_SKIP_PREFIXES = [
   '/favicon',
   '/robots.txt',
   '/sitemap',
-  '/admin/',
-  '/dashboard/',
+  '/admin',
+  '/dashboard',
 ];
 
 export function middleware(request: NextRequest) {
