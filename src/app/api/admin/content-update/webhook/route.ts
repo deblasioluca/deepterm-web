@@ -84,8 +84,8 @@ export async function POST(request: NextRequest) {
         if (body.logs) updateData.logs = (existing.logs ?? '') + '\n' + body.logs;
         if (body.workflowRunId) updateData.workflowRunId = body.workflowRunId;
 
-        // Auto-transition to running
-        if (body.progress !== undefined && body.progress > 0) {
+        // Auto-transition to running (but don't overwrite cancelled)
+        if (body.progress !== undefined && body.progress > 0 && existing.status !== 'cancelled') {
           updateData.status = 'running';
           if (!existing.startedAt) {
             updateData.startedAt = new Date();
@@ -106,11 +106,17 @@ export async function POST(request: NextRequest) {
           return NextResponse.json({ error: 'jobId required' }, { status: 400 });
         }
 
-        let logsUpdate: string | undefined;
-        if (body.logs) {
-          const prev = await prisma.contentUpdateJob.findUnique({ where: { id: body.jobId }, select: { logs: true } });
-          logsUpdate = (prev?.logs ?? '') + '\n' + body.logs;
+        const completeExisting = await prisma.contentUpdateJob.findUnique({ where: { id: body.jobId }, select: { status: true, logs: true } });
+        if (!completeExisting) {
+          return NextResponse.json({ error: 'Job not found' }, { status: 404 });
         }
+        if (completeExisting.status === 'cancelled') {
+          return NextResponse.json({ ok: true, skipped: 'cancelled' });
+        }
+
+        const logsUpdate = body.logs
+          ? (completeExisting.logs ?? '') + '\n' + body.logs
+          : undefined;
 
         await prisma.contentUpdateJob.update({
           where: { id: body.jobId },
@@ -132,11 +138,17 @@ export async function POST(request: NextRequest) {
           return NextResponse.json({ error: 'jobId required' }, { status: 400 });
         }
 
-        let failLogsUpdate: string | undefined;
-        if (body.logs) {
-          const prev = await prisma.contentUpdateJob.findUnique({ where: { id: body.jobId }, select: { logs: true } });
-          failLogsUpdate = (prev?.logs ?? '') + '\n' + body.logs;
+        const failExisting = await prisma.contentUpdateJob.findUnique({ where: { id: body.jobId }, select: { status: true, logs: true } });
+        if (!failExisting) {
+          return NextResponse.json({ error: 'Job not found' }, { status: 404 });
         }
+        if (failExisting.status === 'cancelled') {
+          return NextResponse.json({ ok: true, skipped: 'cancelled' });
+        }
+
+        const failLogsUpdate = body.logs
+          ? (failExisting.logs ?? '') + '\n' + body.logs
+          : undefined;
 
         await prisma.contentUpdateJob.update({
           where: { id: body.jobId },
