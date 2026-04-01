@@ -72,6 +72,11 @@ export const DOC_CATEGORIES: DocCategory[] = [
         content: `
 <p>DeepTerm is a modern, native macOS SSH client built for developers, DevOps engineers, and system administrators. It combines a powerful terminal emulator with an SFTP file manager, reusable command snippets, port forwarding, and encrypted vault-based credential management — all in a beautiful SwiftUI interface.</p>
 
+<div style="margin: 24px 0; border-radius: 12px; overflow: hidden; border: 1px solid #30363d;">
+  <img src="/screenshots/app-hosts.png" alt="DeepTerm — Hosts view with vault sidebar" style="width: 100%; display: block;" />
+  <div style="background: #0d1117; padding: 8px 12px; font-size: 12px; color: #8b949e; text-align: center;">DeepTerm main window — the Hosts view with the vault sidebar on the left</div>
+</div>
+
 <h3>Core Concepts</h3>
 
 <p><strong>Hosts</strong> — each remote machine you connect to is represented as a Host. A host stores its address, port, and the credentials needed to authenticate. You can connect with SSH or Mosh using passwords, SSH keys, Touch ID, or FIDO2 hardware keys.</p>
@@ -167,6 +172,11 @@ export const DOC_CATEGORIES: DocCategory[] = [
 
 <h3>5. Explore the Interface</h3>
 <p>Use the vault panel sidebar to navigate between Hosts, SFTP, Keychain, Port Forwarding, Snippets, Known Hosts, and History. Connection tabs appear at the top alongside the Vault tab. Toggle the AI chat panel using the chevron button between the terminal and chat areas.</p>
+
+<div style="margin: 24px 0; border-radius: 12px; overflow: hidden; border: 1px solid #30363d;">
+  <img src="/screenshots/app-hosts.png" alt="DeepTerm vault sidebar with hosts" style="width: 100%; display: block;" />
+  <div style="background: #0d1117; padding: 8px 12px; font-size: 12px; color: #8b949e; text-align: center;">The vault sidebar lists Hosts, SFTP, Keychain, Port Forwarding, Snippets, Known Hosts, and History</div>
+</div>
 `,
       },
     ],
@@ -182,6 +192,11 @@ export const DOC_CATEGORIES: DocCategory[] = [
         title: 'SSH Connections',
         description: 'Set up and manage SSH connections.',
         content: `
+<div style="margin: 24px 0; border-radius: 12px; overflow: hidden; border: 1px solid #30363d;">
+  <img src="/screenshots/app-hosts.png" alt="DeepTerm SSH Connections — Hosts view" style="width: 100%; display: block;" />
+  <div style="background: #0d1117; padding: 8px 12px; font-size: 12px; color: #8b949e; text-align: center;">Hosts view — manage your SSH connections from the vault sidebar</div>
+</div>
+
 <h3>Creating a Connection</h3>
 <p>In the vault panel, go to <strong>Hosts</strong> and click <strong>+</strong> to add a new host. Fill in:</p>
 <ul>
@@ -332,6 +347,11 @@ export const DOC_CATEGORIES: DocCategory[] = [
         content: `
 <p>DeepTerm includes a full-featured SFTP file manager with a dual-pane interface for browsing local and remote filesystems side by side. Transfer files with drag and drop, manage permissions, and perform all common file operations.</p>
 
+<div style="margin: 24px 0; border-radius: 12px; overflow: hidden; border: 1px solid #30363d;">
+  <img src="/screenshots/app-sftp.png" alt="DeepTerm SFTP file browser" style="width: 100%; display: block;" />
+  <div style="background: #0d1117; padding: 8px 12px; font-size: 12px; color: #8b949e; text-align: center;">SFTP file browser — browse local and remote filesystems side by side</div>
+</div>
+
 <h3>Opening SFTP</h3>
 <p>In the vault panel sidebar, click <strong>SFTP</strong> (just below Hosts). Select a host to connect to, and the remote pane will show the server's filesystem.</p>
 
@@ -436,6 +456,11 @@ export const DOC_CATEGORIES: DocCategory[] = [
         description: 'Save and reuse shell commands across hosts.',
         content: `
 <p>Snippets are reusable shell commands that you can execute on one or multiple SSH hosts simultaneously. Think of them as your personal command library — organised in folders, tagged for easy search, and ready to run with one click.</p>
+
+<div style="margin: 24px 0; border-radius: 12px; overflow: hidden; border: 1px solid #30363d;">
+  <img src="/screenshots/app-snippets.png" alt="DeepTerm Snippets library" style="width: 100%; display: block;" />
+  <div style="background: #0d1117; padding: 8px 12px; font-size: 12px; color: #8b949e; text-align: center;">Snippets library — built-in commands for common system administration tasks</div>
+</div>
 
 <h3>Opening Snippets</h3>
 <p>In the vault panel sidebar, click <strong>Snippets</strong> to access your snippet library.</p>
@@ -546,6 +571,11 @@ export const DOC_CATEGORIES: DocCategory[] = [
         description: 'Create SSH tunnels for local, remote, and dynamic forwarding.',
         content: `
 <p>Port forwarding (SSH tunneling) lets you securely access services through an encrypted SSH connection. DeepTerm supports all three types: Local, Remote, and Dynamic (SOCKS proxy).</p>
+
+<div style="margin: 24px 0; border-radius: 12px; overflow: hidden; border: 1px solid #30363d;">
+  <img src="/screenshots/app-port-forwarding.png" alt="DeepTerm Port Forwarding" style="width: 100%; display: block;" />
+  <div style="background: #0d1117; padding: 8px 12px; font-size: 12px; color: #8b949e; text-align: center;">Port Forwarding view — create and manage SSH tunnels</div>
+</div>
 
 <h3>Opening Port Forwarding</h3>
 <p>In the vault panel sidebar, click <strong>Port Forwarding</strong>. You'll see a list of your configured forwards with their status (active / inactive).</p>
@@ -734,6 +764,11 @@ export const DOC_CATEGORIES: DocCategory[] = [
         description: 'Centralised management for keys, identities, and credentials.',
         content: `
 <p>The DeepTerm Keychain is a centralised place to manage all your authentication materials. Instead of configuring credentials per-host, create them once in the Keychain and assign them to any number of hosts.</p>
+
+<div style="margin: 24px 0; border-radius: 12px; overflow: hidden; border: 1px solid #30363d;">
+  <img src="/screenshots/app-keychain.png" alt="DeepTerm Keychain" style="width: 100%; display: block;" />
+  <div style="background: #0d1117; padding: 8px 12px; font-size: 12px; color: #8b949e; text-align: center;">Keychain view — manage SSH keys and identities with Keys and Identities tabs</div>
+</div>
 
 <h3>What's in the Keychain</h3>
 <ul>
@@ -1654,6 +1689,11 @@ Subsystem sftp /usr/lib/openssh/sftp-server</code></pre>
         content: `
 <p>The <strong>History</strong> section in the vault panel sidebar keeps a log of all your recent connections.</p>
 
+<div style="margin: 24px 0; border-radius: 12px; overflow: hidden; border: 1px solid #30363d;">
+  <img src="/screenshots/app-history.png" alt="DeepTerm Connection History" style="width: 100%; display: block;" />
+  <div style="background: #0d1117; padding: 8px 12px; font-size: 12px; color: #8b949e; text-align: center;">Connection History — view and reconnect from your recent sessions</div>
+</div>
+
 <h3>Viewing History</h3>
 <p>Click <strong>History</strong> in the vault sidebar to see your recent connections, including:</p>
 <ul>
@@ -1675,6 +1715,11 @@ Subsystem sftp /usr/lib/openssh/sftp-server</code></pre>
         description: 'Manage verified server fingerprints.',
         content: `
 <p>The <strong>Known Hosts</strong> section in the vault panel tracks SSH server fingerprints you've previously verified. This protects against man-in-the-middle attacks.</p>
+
+<div style="margin: 24px 0; border-radius: 12px; overflow: hidden; border: 1px solid #30363d;">
+  <img src="/screenshots/app-known-hosts.png" alt="DeepTerm Known Hosts" style="width: 100%; display: block;" />
+  <div style="background: #0d1117; padding: 8px 12px; font-size: 12px; color: #8b949e; text-align: center;">Known Hosts — verified server fingerprints protect against MITM attacks</div>
+</div>
 
 <h3>First Connection</h3>
 <p>When you connect to a server for the first time, DeepTerm shows the server's fingerprint and asks you to verify it. Once accepted, the fingerprint is saved to your known hosts list.</p>
