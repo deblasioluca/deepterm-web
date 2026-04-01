@@ -182,13 +182,19 @@ export default function ContentUpdatePage() {
   };
 
   const toggleSection = (section: string) => {
-    setSelectAll(false);
-    setSelectedSections((prev) => {
-      const next = new Set(prev);
-      if (next.has(section)) next.delete(section);
-      else next.add(section);
-      return next;
-    });
+    if (selectAll) {
+      // Transitioning out of select-all: fill set with all sections except the toggled one
+      const allSections = data?.availableSections ?? [];
+      setSelectedSections(new Set(allSections.filter(s => s !== section)));
+      setSelectAll(false);
+    } else {
+      setSelectedSections((prev) => {
+        const next = new Set(prev);
+        if (next.has(section)) next.delete(section);
+        else next.add(section);
+        return next;
+      });
+    }
   };
 
   const toggleSelectAll = () => {
