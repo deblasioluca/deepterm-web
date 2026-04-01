@@ -118,13 +118,13 @@ export async function GET(request: NextRequest) {
         city: string;
         count: bigint;
       }>>(
-        `SELECT latitude, longitude, countryCode, city, COUNT(*) as count
+        `SELECT ROUND(latitude, 1) as latitude, ROUND(longitude, 1) as longitude, countryCode, city, COUNT(*) as count
          FROM PageView
          WHERE createdAt >= ?
            AND latitude IS NOT NULL
            AND longitude IS NOT NULL
            ${includeBots ? '' : 'AND isBot = 0'}
-         GROUP BY ROUND(latitude, 1), ROUND(longitude, 1)
+         GROUP BY ROUND(latitude, 1), ROUND(longitude, 1), countryCode, city
          ORDER BY count DESC
          LIMIT 200`,
         startDate.toISOString(),

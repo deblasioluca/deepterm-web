@@ -147,6 +147,7 @@ const TRACK_SKIP_PREFIXES = [
   '/robots.txt',
   '/sitemap',
   '/admin/',
+  '/dashboard/',
 ];
 
 export function middleware(request: NextRequest) {
