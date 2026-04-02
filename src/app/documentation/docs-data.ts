@@ -2,7 +2,7 @@
  * Documentation structure — single source of truth for the sidebar nav,
  * page routing, and content rendering.
  *
- * Updated: 2026-03-28
+ * Updated: 2026-04-01
  * Categories: 24 | Articles: 67
  */
 
@@ -1157,17 +1157,21 @@ export const DOC_CATEGORIES: DocCategory[] = [
       {
         slug: 'plans-and-billing',
         title: 'Plans & Billing',
-        description: 'Free, Pro, and Business plans.',
+        description: 'Starter, Pro, Team, and Business plans.',
         content: `
 <h3>Plans</h3>
 <ul>
-  <li><strong>Free</strong> — up to 3 hosts, 1 vault, single device.</li>
-  <li><strong>Pro</strong> — unlimited hosts, unlimited vaults, unlimited devices, priority support, vault sharing.</li>
-  <li><strong>Business</strong> — everything in Pro + team management, SSO, audit logs, and dedicated support.</li>
+  <li><strong>Starter (Free)</strong> — up to 10 credentials, 3 SSH keys, 3 identities. Great for personal use.</li>
+  <li><strong>Pro ($5/mo)</strong> — unlimited credentials, unlimited keys, unlimited identities, priority support.</li>
+  <li><strong>Team ($10/user/mo)</strong> — everything in Pro + team management, shared vaults, audit logs.</li>
+  <li><strong>Business ($15/user/mo)</strong> — everything in Team + SSO (SAML/OIDC), dedicated support, custom contracts.</li>
 </ul>
 
 <h3>Billing</h3>
-<p>Pro and Business plans are billed monthly or annually via Stripe. Manage your subscription, update payment methods, and download invoices from <a href="/dashboard/billing">Dashboard → Billing</a>.</p>
+<p>Pro, Team, and Business plans are billed monthly via Stripe. Manage your subscription, update payment methods, and download invoices from <a href="/dashboard/billing">Dashboard → Billing</a>.</p>
+
+<h3>Organization Billing</h3>
+<p>When you create or join an organization, billing is managed at the <strong>organization level</strong>. The organization owner subscribes to a Team or Business plan, which covers all members. Individual members who already have their own Pro+ subscription keep it — the organization only covers seats for Free/Starter members.</p>
 `,
       },
     ],

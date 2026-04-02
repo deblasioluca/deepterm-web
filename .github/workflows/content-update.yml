@@ -1,0 +1,259 @@
+name: Content Update
+
+on:
+  workflow_dispatch:
+    inputs:
+      job_id:
+        description: 'Content update job ID (from admin dashboard)'
+        required: true
+        type: string
+      type:
+        description: 'Update type: screenshots, content, or full'
+        required: true
+        default: 'full'
+        type: choice
+        options:
+          - screenshots
+          - content
+          - full
+      sections:
+        description: 'Comma-separated list of sections to update (empty = all)'
+        required: false
+        default: ''
+        type: string
+
+env:
+  NODE_VERSION: '20'
+
+jobs:
+  content-update:
+    name: Update Content
+    runs-on: macos-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - name: Report progress — started
+        env:
+          WEBHOOK_URL: ${{ secrets.CONTENT_UPDATE_WEBHOOK_URL }}
+          WEBHOOK_SECRET: ${{ secrets.CONTENT_UPDATE_WEBHOOK_SECRET }}
+        run: |
+          if [ -n "$WEBHOOK_URL" ] && [ -n "$WEBHOOK_SECRET" ]; then
+            curl -sf -X POST "$WEBHOOK_URL" \
+              -H "Authorization: Bearer $WEBHOOK_SECRET" \
+              -H "Content-Type: application/json" \
+              -d '{
+                "action": "progress",
+                "jobId": "${{ inputs.job_id }}",
+                "progress": 5,
+                "logs": "['"$(date -u +%Y-%m-%dT%H:%M:%SZ)"'] GitHub Actions runner started (run ${{ github.run_id }})",
+                "workflowRunId": "${{ github.run_id }}"
+              }' || echo "Webhook callback failed (non-fatal)"
+          fi
+
+      - name: Parse sections
+        id: sections
+        run: |
+          SECTIONS="${{ inputs.sections }}"
+          if [ -z "$SECTIONS" ]; then
+            SECTIONS="dashboard,connections,vault,terminal,settings,sftp,ai-chat,collaboration,documentation,pricing"
+          fi
+          echo "list=$SECTIONS" >> "$GITHUB_OUTPUT"
+          # Count sections for progress calculation
+          COUNT=$(echo "$SECTIONS" | tr ',' '\n' | wc -l | tr -d ' ')
+          echo "count=$COUNT" >> "$GITHUB_OUTPUT"
+
+      # ── Screenshots capture (macOS only) ─────────────────────
+      - name: Capture screenshots
+        if: inputs.type == 'screenshots' || inputs.type == 'full'
+        env:
+          WEBHOOK_URL: ${{ secrets.CONTENT_UPDATE_WEBHOOK_URL }}
+          WEBHOOK_SECRET: ${{ secrets.CONTENT_UPDATE_WEBHOOK_SECRET }}
+        run: |
+          echo "=== Screenshot Capture ==="
+          echo "Sections: ${{ steps.sections.outputs.list }}"
+
+          # Report progress
+          if [ -n "$WEBHOOK_URL" ] && [ -n "$WEBHOOK_SECRET" ]; then
+            curl -sf -X POST "$WEBHOOK_URL" \
+              -H "Authorization: Bearer $WEBHOOK_SECRET" \
+              -H "Content-Type: application/json" \
+              -d '{
+                "action": "progress",
+                "jobId": "${{ inputs.job_id }}",
+                "progress": 10,
+                "logs": "['"$(date -u +%Y-%m-%dT%H:%M:%SZ)"'] Starting screenshot capture..."
+              }' || true
+          fi
+
+          # Run the screenshot script
+          chmod +x scripts/capture-screenshots.sh
+          ./scripts/capture-screenshots.sh \
+            --output-dir public/screenshots \
+            --width 2000 \
+            --height 1264 \
+            --delay 3 2>&1 | tee /tmp/screenshot-output.log || true
+
+          # Report progress after screenshots
+          if [ -n "$WEBHOOK_URL" ] && [ -n "$WEBHOOK_SECRET" ]; then
+            SCREENSHOT_LOG=$(tail -20 /tmp/screenshot-output.log | sed 's/"/\\"/g' | tr '\n' ' ')
+            curl -sf -X POST "$WEBHOOK_URL" \
+              -H "Authorization: Bearer $WEBHOOK_SECRET" \
+              -H "Content-Type: application/json" \
+              -d '{
+                "action": "progress",
+                "jobId": "${{ inputs.job_id }}",
+                "progress": 50,
+                "logs": "['"$(date -u +%Y-%m-%dT%H:%M:%SZ)"'] Screenshot capture finished. '"$SCREENSHOT_LOG"'"
+              }' || true
+          fi
+
+      # ── Content sync (build + validate docs) ─────────────────
+      - name: Install dependencies
+        if: inputs.type == 'content' || inputs.type == 'full'
+        run: npm ci --legacy-peer-deps
+
+      - name: Validate documentation content
+        if: inputs.type == 'content' || inputs.type == 'full'
+        env:
+          WEBHOOK_URL: ${{ secrets.CONTENT_UPDATE_WEBHOOK_URL }}
+          WEBHOOK_SECRET: ${{ secrets.CONTENT_UPDATE_WEBHOOK_SECRET }}
+        run: |
+          echo "=== Content Validation ==="
+
+          if [ -n "$WEBHOOK_URL" ] && [ -n "$WEBHOOK_SECRET" ]; then
+            curl -sf -X POST "$WEBHOOK_URL" \
+              -H "Authorization: Bearer $WEBHOOK_SECRET" \
+              -H "Content-Type: application/json" \
+              -d '{
+                "action": "progress",
+                "jobId": "${{ inputs.job_id }}",
+                "progress": 60,
+                "logs": "['"$(date -u +%Y-%m-%dT%H:%M:%SZ)"'] Validating documentation content..."
+              }' || true
+          fi
+
+          # Run lint to validate docs changes
+          npx next lint --dir src/app/documentation 2>&1 || true
+
+          if [ -n "$WEBHOOK_URL" ] && [ -n "$WEBHOOK_SECRET" ]; then
+            curl -sf -X POST "$WEBHOOK_URL" \
+              -H "Authorization: Bearer $WEBHOOK_SECRET" \
+              -H "Content-Type: application/json" \
+              -d '{
+                "action": "progress",
+                "jobId": "${{ inputs.job_id }}",
+                "progress": 70,
+                "logs": "['"$(date -u +%Y-%m-%dT%H:%M:%SZ)"'] Content validation complete."
+              }' || true
+          fi
+
+      # ── Commit & push changes ────────────────────────────────
+      - name: Commit changes
+        id: commit
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          # Check for changes
+          if git diff --quiet && git diff --cached --quiet; then
+            echo "No changes to commit"
+            echo "has_changes=false" >> "$GITHUB_OUTPUT"
+          else
+            git add public/screenshots/ src/app/documentation/ 2>/dev/null || true
+            # Only commit if there are staged changes
+            if git diff --cached --quiet; then
+              echo "No staged changes to commit"
+              echo "has_changes=false" >> "$GITHUB_OUTPUT"
+            else
+              TIMESTAMP=$(date -u +%Y%m%d-%H%M%S)
+              git commit -m "chore: update content (${{ inputs.type }}) — ${TIMESTAMP}
+
+Automated content update triggered from admin dashboard.
+Job ID: ${{ inputs.job_id }}
+Type: ${{ inputs.type }}
+Sections: ${{ steps.sections.outputs.list }}
+Run: ${{ github.run_id }}"
+              echo "has_changes=true" >> "$GITHUB_OUTPUT"
+            fi
+          fi
+
+      - name: Push changes
+        if: steps.commit.outputs.has_changes == 'true'
+        env:
+          WEBHOOK_URL: ${{ secrets.CONTENT_UPDATE_WEBHOOK_URL }}
+          WEBHOOK_SECRET: ${{ secrets.CONTENT_UPDATE_WEBHOOK_SECRET }}
+        run: |
+          git push origin main
+
+          if [ -n "$WEBHOOK_URL" ] && [ -n "$WEBHOOK_SECRET" ]; then
+            curl -sf -X POST "$WEBHOOK_URL" \
+              -H "Authorization: Bearer $WEBHOOK_SECRET" \
+              -H "Content-Type: application/json" \
+              -d '{
+                "action": "progress",
+                "jobId": "${{ inputs.job_id }}",
+                "progress": 90,
+                "logs": "['"$(date -u +%Y-%m-%dT%H:%M:%SZ)"'] Changes committed and pushed to main."
+              }' || true
+          fi
+
+      # ── Report completion ────────────────────────────────────
+      - name: Report success
+        if: success()
+        env:
+          WEBHOOK_URL: ${{ secrets.CONTENT_UPDATE_WEBHOOK_URL }}
+          WEBHOOK_SECRET: ${{ secrets.CONTENT_UPDATE_WEBHOOK_SECRET }}
+        run: |
+          HAS_CHANGES="${{ steps.commit.outputs.has_changes }}"
+          RESULT='{"sectionsUpdated":"${{ steps.sections.outputs.list }}","type":"${{ inputs.type }}","hasChanges":"'"$HAS_CHANGES"'","runId":"${{ github.run_id }}"}'
+
+          if [ -n "$WEBHOOK_URL" ] && [ -n "$WEBHOOK_SECRET" ]; then
+            curl -sf -X POST "$WEBHOOK_URL" \
+              -H "Authorization: Bearer $WEBHOOK_SECRET" \
+              -H "Content-Type: application/json" \
+              -d '{
+                "action": "complete",
+                "jobId": "${{ inputs.job_id }}",
+                "logs": "['"$(date -u +%Y-%m-%dT%H:%M:%SZ)"'] Job completed successfully. Changes committed: '"$HAS_CHANGES"'",
+                "result": "'"$RESULT"'"
+              }' || true
+          fi
+
+      - name: Report failure
+        if: failure()
+        env:
+          WEBHOOK_URL: ${{ secrets.CONTENT_UPDATE_WEBHOOK_URL }}
+          WEBHOOK_SECRET: ${{ secrets.CONTENT_UPDATE_WEBHOOK_SECRET }}
+        run: |
+          if [ -n "$WEBHOOK_URL" ] && [ -n "$WEBHOOK_SECRET" ]; then
+            curl -sf -X POST "$WEBHOOK_URL" \
+              -H "Authorization: Bearer $WEBHOOK_SECRET" \
+              -H "Content-Type: application/json" \
+              -d '{
+                "action": "fail",
+                "jobId": "${{ inputs.job_id }}",
+                "error": "GitHub Actions workflow failed (run ${{ github.run_id }})",
+                "logs": "['"$(date -u +%Y-%m-%dT%H:%M:%SZ)"'] ERROR: Workflow failed. Check run ${{ github.run_id }} for details."
+              }' || true
+          fi
+
+      # ── Upload artifacts ─────────────────────────────────────
+      - name: Upload screenshots artifact
+        uses: actions/upload-artifact@v4
+        if: always() && (inputs.type == 'screenshots' || inputs.type == 'full')
+        with:
+          name: screenshots-${{ github.run_id }}
+          path: public/screenshots/
+          retention-days: 30
+          if-no-files-found: ignore

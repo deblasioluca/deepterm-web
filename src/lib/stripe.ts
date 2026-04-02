@@ -3,6 +3,22 @@ import Stripe from 'stripe';
 // Lazy initialization of Stripe to avoid build-time errors
 let stripeInstance: Stripe | null = null;
 
+/**
+ * Returns true when the app is configured to use Stripe's test/sandbox keys.
+ * Stripe test keys always start with "sk_test_" / "pk_test_".
+ */
+export function isStripeSandbox(): boolean {
+  const key = process.env.STRIPE_SECRET_KEY || '';
+  return key.startsWith('sk_test_') || key.startsWith('rk_test_');
+}
+
+/** Dashboard base URL — changes depending on live vs test mode. */
+export function stripeDashboardUrl(): string {
+  return isStripeSandbox()
+    ? 'https://dashboard.stripe.com/test'
+    : 'https://dashboard.stripe.com';
+}
+
 export function getStripe(): Stripe {
   if (!stripeInstance) {
     if (!process.env.STRIPE_SECRET_KEY) {
