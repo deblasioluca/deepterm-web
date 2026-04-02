@@ -170,14 +170,18 @@ async function dispatchWorkflow(jobId: string, type: string, sections: string[])
     }
   } catch (error) {
     const msg = error instanceof Error ? error.message : String(error);
-    // Don't overwrite cancelled status with failed
-    const check = await prisma.contentUpdateJob.findUnique({ where: { id: jobId }, select: { status: true } });
-    if (check?.status === 'cancelled') return;
-    await appendLog(jobId, `[${new Date().toISOString()}] ERROR: ${msg}`, {
-      status: 'failed',
-      error: msg,
-      completedAt: new Date(),
+    // Atomically set failed only if not already cancelled (prevents TOCTOU race)
+    const updated = await prisma.contentUpdateJob.updateMany({
+      where: { id: jobId, status: { not: 'cancelled' } },
+      data: {
+        status: 'failed',
+        error: msg,
+        completedAt: new Date(),
+      },
     });
+    if (updated.count > 0) {
+      await appendLog(jobId, `[${new Date().toISOString()}] ERROR: ${msg}`);
+    }
   }
 }
 
@@ -207,18 +211,17 @@ async function simulateJob(jobId: string, type: string, sections: string[]) {
     await new Promise((resolve) => setTimeout(resolve, 500));
   }
 
-  // Re-check cancellation before marking complete (avoids race with cancel during last section's sleep)
-  const final = await prisma.contentUpdateJob.findUnique({ where: { id: jobId }, select: { status: true } });
-  if (final?.status === 'cancelled') return;
-
-  await appendLog(
-    jobId,
-    `[${new Date().toISOString()}] Job completed successfully. ${totalSections} sections processed.`,
-    {
+  // Atomically mark complete only if not already cancelled (prevents TOCTOU race)
+  const finalResult = await prisma.contentUpdateJob.updateMany({
+    where: { id: jobId, status: { not: 'cancelled' } },
+    data: {
       status: 'completed',
       progress: 100,
       completedAt: new Date(),
       result: JSON.stringify({ sectionsUpdated: sections, type }),
     },
-  );
+  });
+  if (finalResult.count > 0) {
+    await appendLog(jobId, `[${new Date().toISOString()}] Job completed successfully. ${totalSections} sections processed.`);
+  }
 }
