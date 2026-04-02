@@ -22,28 +22,28 @@ describe('PLAN_FEATURES', () => {
 
   it('defines starter plan with correct limits', () => {
     const starter = PLAN_FEATURES.starter;
-    expect(starter.maxVaults).toBe(5);
-    expect(starter.maxCredentials).toBe(50);
-    expect(starter.maxTeamMembers).toBe(3);
+    expect(starter.maxVaults).toBe(1);
+    expect(starter.maxCredentials).toBe(10);
+    expect(starter.maxTeamMembers).toBe(0);
     expect(starter.ssoEnabled).toBe(false);
     expect(starter.prioritySupport).toBe(false);
   });
 
   it('defines pro plan with priority support', () => {
     const pro = PLAN_FEATURES.pro;
-    expect(pro.maxVaults).toBe(20);
-    expect(pro.maxCredentials).toBe(200);
-    expect(pro.maxTeamMembers).toBe(10);
+    expect(pro.maxVaults).toBe(10);
+    expect(pro.maxCredentials).toBe(-1);
+    expect(pro.maxTeamMembers).toBe(0);
     expect(pro.ssoEnabled).toBe(false);
     expect(pro.prioritySupport).toBe(true);
   });
 
-  it('defines team plan with SSO enabled', () => {
+  it('defines team plan without SSO (SSO is Business-only)', () => {
     const team = PLAN_FEATURES.team;
-    expect(team.maxVaults).toBe(100);
-    expect(team.maxCredentials).toBe(1000);
+    expect(team.maxVaults).toBe(-1);
+    expect(team.maxCredentials).toBe(-1);
     expect(team.maxTeamMembers).toBe(50);
-    expect(team.ssoEnabled).toBe(true);
+    expect(team.ssoEnabled).toBe(false);
     expect(team.prioritySupport).toBe(true);
   });
 
