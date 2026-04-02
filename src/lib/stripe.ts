@@ -79,6 +79,7 @@ export async function loadActiveKeySet(): Promise<RuntimeKeys | null> {
   const active = await prisma.stripeKeySet.findFirst({ where: { isActive: true } });
   if (!active) {
     runtimeKeys = null;
+    resetStripeInstance();
     return null;
   }
 
@@ -107,16 +108,19 @@ export async function loadActiveKeySet(): Promise<RuntimeKeys | null> {
 export async function switchStripeMode(mode: 'sandbox' | 'production'): Promise<RuntimeKeys | null> {
   const { prisma } = await import('./prisma');
 
+  // Verify the target mode exists before deactivating anything
+  const target = await prisma.stripeKeySet.findFirst({ where: { mode } });
+  if (!target) return null;
+
   // Deactivate all, then activate the requested mode — in a single transaction
-  const updated = await prisma.$transaction(async (tx) => {
+  await prisma.$transaction(async (tx) => {
     await tx.stripeKeySet.updateMany({ data: { isActive: false } });
-    return tx.stripeKeySet.updateMany({
+    await tx.stripeKeySet.updateMany({
       where: { mode },
       data: { isActive: true },
     });
   });
 
-  if (updated.count === 0) return null;
   return loadActiveKeySet();
 }
 
