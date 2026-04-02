@@ -81,8 +81,10 @@ export async function POST(request: NextRequest) {
         console.log(`App Store: ${user.email} subscription active -> ${isOrgMember ? user.plan + ' (org-preserved)' : applePlan}`);
       } else {
         // App Store subscription not active
-        // Only downgrade if they don't have an active Stripe subscription
-        if (!user.stripeSubscriptionId) {
+        // Only downgrade if they don't have an active org-level or Stripe subscription
+        // (matches the guard in the webhook handler at webhooks/appstore/route.ts)
+        const isOrgMemberInactive = user.subscriptionScope === 'organization' || !!user.stripeSubscriptionId;
+        if (!isOrgMemberInactive) {
           await prisma.user.update({
             where: { id: user.id },
             data: {
@@ -93,7 +95,7 @@ export async function POST(request: NextRequest) {
 
           console.log(`App Store: ${user.email} subscription inactive -> Free`);
         } else {
-          console.log(`App Store: ${user.email} no App Store sub, but has Stripe — keeping Pro`);
+          console.log(`App Store: ${user.email} no App Store sub, but has org/Stripe — keeping ${user.plan}`);
         }
       }
     }
