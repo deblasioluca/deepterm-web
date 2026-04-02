@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getAuthFromRequest } from '@/lib/zk/middleware';
+import { getApplePlan } from '@/lib/zk/apple-plan';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -59,11 +60,12 @@ export async function POST(request: NextRequest) {
 
     if (source === 'appstore') {
       if (hasActiveSubscription) {
-        // App Store subscription active — use the plan tier reported by the client
-        // (pro, team, or business). Fall back to 'pro' for backwards compatibility.
-        const ALLOWED_PLANS = ['pro', 'team', 'business'] as const;
-        const rawPlan = body.plan || 'pro';
-        const applePlan = ALLOWED_PLANS.includes(rawPlan) ? rawPlan : 'pro';
+        // Derive plan server-side from the Apple product ID (not client-supplied plan)
+        // to prevent tier escalation attacks. Falls back to 'pro' for backwards
+        // compatibility with older app versions that don't send productId.
+        const applePlan = body.productId
+          ? getApplePlan(body.productId)
+          : 'pro';
         // Don't overwrite subscriptionSource if user already has active Stripe
         await prisma.user.update({
           where: { id: user.id },

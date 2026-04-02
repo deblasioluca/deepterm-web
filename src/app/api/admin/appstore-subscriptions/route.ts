@@ -145,7 +145,7 @@ export async function GET(request: NextRequest) {
   } catch (error) {
     console.error('Failed to fetch App Store subscriptions:', error);
     return NextResponse.json(
-      { error: 'Failed to fetch App Store subscriptions' },
+      { error: 'Internal Server Error', message: 'Failed to fetch App Store subscriptions' },
       { status: 500 }
     );
   }
