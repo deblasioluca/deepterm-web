@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import Stripe from 'stripe';
-import { getStripe } from '@/lib/stripe';
+import { getStripe, getWebhookSecret } from '@/lib/stripe';
 import { prisma } from '@/lib/prisma';
 
 export const runtime = 'nodejs';
@@ -34,7 +34,7 @@ export async function POST(request: NextRequest) {
     event = stripe.webhooks.constructEvent(
       body,
       signature,
-      process.env.STRIPE_WEBHOOK_SECRET!,
+      getWebhookSecret(),
     );
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Unknown error';

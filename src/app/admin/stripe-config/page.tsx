@@ -123,7 +123,7 @@ export default function AdminStripeConfigPage() {
     fetchConfig();
   }, [fetchConfig]);
 
-  async function handleAction(action: string, body: Record<string, unknown>) {
+  async function handleAction(action: string, body: Record<string, unknown>): Promise<boolean> {
     try {
       setActionLoading(action);
       setActionMessage(null);
@@ -136,8 +136,10 @@ export default function AdminStripeConfigPage() {
       if (!res.ok) throw new Error(data.error || 'Action failed');
       setActionMessage({ type: 'success', text: `${action} succeeded` });
       await fetchConfig();
+      return true;
     } catch (err) {
       setActionMessage({ type: 'error', text: err instanceof Error ? err.message : 'Action failed' });
+      return false;
     } finally {
       setActionLoading(null);
     }
@@ -159,9 +161,11 @@ export default function AdminStripeConfigPage() {
         businessYearly: form.businessYearly || undefined,
       },
     };
-    await handleAction(`Save ${mode}`, body);
-    setShowForm(null);
-    setForm(emptyForm);
+    const ok = await handleAction(`Save ${mode}`, body);
+    if (ok) {
+      setShowForm(null);
+      setForm(emptyForm);
+    }
   }
 
   if (isLoading) {

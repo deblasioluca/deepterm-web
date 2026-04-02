@@ -107,11 +107,13 @@ export async function loadActiveKeySet(): Promise<RuntimeKeys | null> {
 export async function switchStripeMode(mode: 'sandbox' | 'production'): Promise<RuntimeKeys | null> {
   const { prisma } = await import('./prisma');
 
-  // Deactivate all, then activate the requested mode
-  await prisma.stripeKeySet.updateMany({ data: { isActive: false } });
-  const updated = await prisma.stripeKeySet.updateMany({
-    where: { mode },
-    data: { isActive: true },
+  // Deactivate all, then activate the requested mode — in a single transaction
+  const updated = await prisma.$transaction(async (tx) => {
+    await tx.stripeKeySet.updateMany({ data: { isActive: false } });
+    return tx.stripeKeySet.updateMany({
+      where: { mode },
+      data: { isActive: true },
+    });
   });
 
   if (updated.count === 0) return null;
@@ -122,6 +124,13 @@ export async function switchStripeMode(mode: 'sandbox' | 'production'): Promise<
 export function getPublishableKey(): string {
   return runtimeKeys?.publishableKey
     || process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY
+    || '';
+}
+
+/** Get the webhook secret — prefers DB key set, falls back to env var. */
+export function getWebhookSecret(): string {
+  return runtimeKeys?.webhookSecret
+    || process.env.STRIPE_WEBHOOK_SECRET
     || '';
 }
 
@@ -158,9 +167,18 @@ function resolvePriceIds(): Record<string, { monthly: string; yearly: string } |
 }
 
 // Exported as a getter so it always reflects the active key set
+const PRICE_ID_KEYS = ['starter', 'pro', 'team', 'business'];
 export const PRICE_IDS: Record<string, { monthly: string; yearly: string } | null> = new Proxy(
   {} as Record<string, { monthly: string; yearly: string } | null>,
-  { get: (_target, prop: string) => resolvePriceIds()[prop] ?? undefined },
+  {
+    get: (_target, prop: string) => resolvePriceIds()[prop] ?? undefined,
+    ownKeys: () => PRICE_ID_KEYS,
+    getOwnPropertyDescriptor: (_target, prop: string) => ({
+      configurable: true,
+      enumerable: true,
+      value: resolvePriceIds()[prop as string] ?? undefined,
+    }),
+  },
 );
 
 // PLAN_DETAILS is derived from the single source of truth in pricing.ts.
