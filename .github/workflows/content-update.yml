@@ -1,0 +1,292 @@
+name: Content Update
+
+on:
+  workflow_dispatch:
+    inputs:
+      job_id:
+        description: 'Content update job ID (from admin dashboard)'
+        required: true
+        type: string
+      type:
+        description: 'Update type: screenshots, content, or full'
+        required: true
+        default: 'full'
+        type: choice
+        options:
+          - screenshots
+          - content
+          - full
+      sections:
+        description: 'Comma-separated list of sections to update (empty = all)'
+        required: false
+        default: ''
+        type: string
+
+env:
+  NODE_VERSION: '20'
+
+jobs:
+  content-update:
+    name: Update Content
+    runs-on: macos-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - name: Report progress — started
+        env:
+          WEBHOOK_URL: ${{ secrets.CONTENT_UPDATE_WEBHOOK_URL }}
+          WEBHOOK_SECRET: ${{ secrets.CONTENT_UPDATE_WEBHOOK_SECRET }}
+          JOB_ID: ${{ inputs.job_id }}
+          RUN_ID: ${{ github.run_id }}
+        run: |
+          if [ -n "$WEBHOOK_URL" ] && [ -n "$WEBHOOK_SECRET" ]; then
+            TIMESTAMP=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+            curl -sf -X POST "$WEBHOOK_URL" \
+              -H "Authorization: Bearer $WEBHOOK_SECRET" \
+              -H "Content-Type: application/json" \
+              -d "$(jq -n \
+                --arg action "progress" \
+                --arg jobId "$JOB_ID" \
+                --argjson progress 5 \
+                --arg logs "[$TIMESTAMP] GitHub Actions runner started (run $RUN_ID)" \
+                --arg workflowRunId "$RUN_ID" \
+                '{action: $action, jobId: $jobId, progress: $progress, logs: $logs, workflowRunId: $workflowRunId}'
+              )" || echo "Webhook callback failed (non-fatal)"
+          fi
+
+      - name: Parse sections
+        id: sections
+        env:
+          SECTIONS_INPUT: ${{ inputs.sections }}
+        run: |
+          SECTIONS="$SECTIONS_INPUT"
+          if [ -z "$SECTIONS" ]; then
+            SECTIONS="dashboard,connections,vault,terminal,settings,sftp,ai-chat,collaboration,documentation,pricing"
+          fi
+          echo "list=$SECTIONS" >> "$GITHUB_OUTPUT"
+          # Count sections for progress calculation
+          COUNT=$(echo "$SECTIONS" | tr ',' '\n' | wc -l | tr -d ' ')
+          echo "count=$COUNT" >> "$GITHUB_OUTPUT"
+
+      # ── Screenshots capture (macOS only) ─────────────────────
+      - name: Capture screenshots
+        if: inputs.type == 'screenshots' || inputs.type == 'full'
+        env:
+          WEBHOOK_URL: ${{ secrets.CONTENT_UPDATE_WEBHOOK_URL }}
+          WEBHOOK_SECRET: ${{ secrets.CONTENT_UPDATE_WEBHOOK_SECRET }}
+          JOB_ID: ${{ inputs.job_id }}
+          SECTION_LIST: ${{ steps.sections.outputs.list }}
+        run: |
+          echo "=== Screenshot Capture ==="
+          echo "Sections: $SECTION_LIST"
+
+          # Report progress
+          if [ -n "$WEBHOOK_URL" ] && [ -n "$WEBHOOK_SECRET" ]; then
+            TIMESTAMP=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+            curl -sf -X POST "$WEBHOOK_URL" \
+              -H "Authorization: Bearer $WEBHOOK_SECRET" \
+              -H "Content-Type: application/json" \
+              -d "$(jq -n \
+                --arg action "progress" \
+                --arg jobId "$JOB_ID" \
+                --argjson progress 10 \
+                --arg logs "[$TIMESTAMP] Starting screenshot capture..." \
+                '{action: $action, jobId: $jobId, progress: $progress, logs: $logs}'
+              )" || true
+          fi
+
+          # Run the screenshot script
+          chmod +x scripts/capture-screenshots.sh
+          ./scripts/capture-screenshots.sh \
+            --output-dir public/screenshots \
+            --width 2000 \
+            --height 1264 \
+            --delay 3 2>&1 | tee /tmp/screenshot-output.log || true
+
+          # Report progress after screenshots
+          if [ -n "$WEBHOOK_URL" ] && [ -n "$WEBHOOK_SECRET" ]; then
+            SCREENSHOT_LOG=$(tail -20 /tmp/screenshot-output.log | head -c 500)
+            TIMESTAMP=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+            curl -sf -X POST "$WEBHOOK_URL" \
+              -H "Authorization: Bearer $WEBHOOK_SECRET" \
+              -H "Content-Type: application/json" \
+              -d "$(jq -n \
+                --arg action "progress" \
+                --arg jobId "$JOB_ID" \
+                --argjson progress 50 \
+                --arg logs "[$TIMESTAMP] Screenshot capture finished. $SCREENSHOT_LOG" \
+                '{action: $action, jobId: $jobId, progress: $progress, logs: $logs}'
+              )" || true
+          fi
+
+      # ── Content sync (build + validate docs) ─────────────────
+      - name: Install dependencies
+        if: inputs.type == 'content' || inputs.type == 'full'
+        run: npm ci --legacy-peer-deps
+
+      - name: Validate documentation content
+        if: inputs.type == 'content' || inputs.type == 'full'
+        env:
+          WEBHOOK_URL: ${{ secrets.CONTENT_UPDATE_WEBHOOK_URL }}
+          WEBHOOK_SECRET: ${{ secrets.CONTENT_UPDATE_WEBHOOK_SECRET }}
+          JOB_ID: ${{ inputs.job_id }}
+        run: |
+          echo "=== Content Validation ==="
+
+          if [ -n "$WEBHOOK_URL" ] && [ -n "$WEBHOOK_SECRET" ]; then
+            TIMESTAMP=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+            curl -sf -X POST "$WEBHOOK_URL" \
+              -H "Authorization: Bearer $WEBHOOK_SECRET" \
+              -H "Content-Type: application/json" \
+              -d "$(jq -n \
+                --arg action "progress" \
+                --arg jobId "$JOB_ID" \
+                --argjson progress 60 \
+                --arg logs "[$TIMESTAMP] Validating documentation content..." \
+                '{action: $action, jobId: $jobId, progress: $progress, logs: $logs}'
+              )" || true
+          fi
+
+          # Run lint to validate docs changes
+          npx next lint --dir src/app/documentation 2>&1 || true
+
+          if [ -n "$WEBHOOK_URL" ] && [ -n "$WEBHOOK_SECRET" ]; then
+            TIMESTAMP=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+            curl -sf -X POST "$WEBHOOK_URL" \
+              -H "Authorization: Bearer $WEBHOOK_SECRET" \
+              -H "Content-Type: application/json" \
+              -d "$(jq -n \
+                --arg action "progress" \
+                --arg jobId "$JOB_ID" \
+                --argjson progress 70 \
+                --arg logs "[$TIMESTAMP] Content validation complete." \
+                '{action: $action, jobId: $jobId, progress: $progress, logs: $logs}'
+              )" || true
+          fi
+
+      # ── Commit & push changes ────────────────────────────────
+      - name: Commit changes
+        id: commit
+        env:
+          JOB_ID: ${{ inputs.job_id }}
+          UPDATE_TYPE: ${{ inputs.type }}
+          SECTION_LIST: ${{ steps.sections.outputs.list }}
+          RUN_ID: ${{ github.run_id }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          # Check for changes
+          if git diff --quiet && git diff --cached --quiet; then
+            echo "No changes to commit"
+            echo "has_changes=false" >> "$GITHUB_OUTPUT"
+          else
+            git add public/screenshots/ src/app/documentation/ 2>/dev/null || true
+            # Only commit if there are staged changes
+            if git diff --cached --quiet; then
+              echo "No staged changes to commit"
+              echo "has_changes=false" >> "$GITHUB_OUTPUT"
+            else
+              TIMESTAMP=$(date -u +%Y%m%d-%H%M%S)
+              git commit -m "chore: update content ($UPDATE_TYPE) — ${TIMESTAMP}
+
+Automated content update triggered from admin dashboard.
+Job ID: $JOB_ID
+Type: $UPDATE_TYPE
+Sections: $SECTION_LIST
+Run: $RUN_ID"
+              echo "has_changes=true" >> "$GITHUB_OUTPUT"
+            fi
+          fi
+
+      - name: Push changes
+        if: steps.commit.outputs.has_changes == 'true'
+        env:
+          WEBHOOK_URL: ${{ secrets.CONTENT_UPDATE_WEBHOOK_URL }}
+          WEBHOOK_SECRET: ${{ secrets.CONTENT_UPDATE_WEBHOOK_SECRET }}
+          JOB_ID: ${{ inputs.job_id }}
+        run: |
+          git push origin main
+
+          if [ -n "$WEBHOOK_URL" ] && [ -n "$WEBHOOK_SECRET" ]; then
+            TIMESTAMP=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+            curl -sf -X POST "$WEBHOOK_URL" \
+              -H "Authorization: Bearer $WEBHOOK_SECRET" \
+              -H "Content-Type: application/json" \
+              -d "$(jq -n \
+                --arg action "progress" \
+                --arg jobId "$JOB_ID" \
+                --argjson progress 90 \
+                --arg logs "[$TIMESTAMP] Changes committed and pushed to main." \
+                '{action: $action, jobId: $jobId, progress: $progress, logs: $logs}'
+              )" || true
+          fi
+
+      # ── Report completion ────────────────────────────────────
+      - name: Report success
+        if: success()
+        env:
+          WEBHOOK_URL: ${{ secrets.CONTENT_UPDATE_WEBHOOK_URL }}
+          WEBHOOK_SECRET: ${{ secrets.CONTENT_UPDATE_WEBHOOK_SECRET }}
+          JOB_ID: ${{ inputs.job_id }}
+          UPDATE_TYPE: ${{ inputs.type }}
+          RUN_ID: ${{ github.run_id }}
+          SECTION_LIST: ${{ steps.sections.outputs.list }}
+          HAS_CHANGES: ${{ steps.commit.outputs.has_changes }}
+        run: |
+          if [ -n "$WEBHOOK_URL" ] && [ -n "$WEBHOOK_SECRET" ]; then
+            TIMESTAMP=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+            curl -sf -X POST "$WEBHOOK_URL" \
+              -H "Authorization: Bearer $WEBHOOK_SECRET" \
+              -H "Content-Type: application/json" \
+              -d "$(jq -n \
+                --arg action "complete" \
+                --arg jobId "$JOB_ID" \
+                --arg logs "[$TIMESTAMP] Job completed successfully. Changes committed: $HAS_CHANGES" \
+                --arg result "{\"sectionsUpdated\":\"$SECTION_LIST\",\"type\":\"$UPDATE_TYPE\",\"hasChanges\":\"$HAS_CHANGES\",\"runId\":\"$RUN_ID\"}" \
+                '{action: $action, jobId: $jobId, logs: $logs, result: $result}'
+              )" || true
+          fi
+
+      - name: Report failure
+        if: failure()
+        env:
+          WEBHOOK_URL: ${{ secrets.CONTENT_UPDATE_WEBHOOK_URL }}
+          WEBHOOK_SECRET: ${{ secrets.CONTENT_UPDATE_WEBHOOK_SECRET }}
+          JOB_ID: ${{ inputs.job_id }}
+          RUN_ID: ${{ github.run_id }}
+        run: |
+          if [ -n "$WEBHOOK_URL" ] && [ -n "$WEBHOOK_SECRET" ]; then
+            TIMESTAMP=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+            curl -sf -X POST "$WEBHOOK_URL" \
+              -H "Authorization: Bearer $WEBHOOK_SECRET" \
+              -H "Content-Type: application/json" \
+              -d "$(jq -n \
+                --arg action "fail" \
+                --arg jobId "$JOB_ID" \
+                --arg error "GitHub Actions workflow failed (run $RUN_ID)" \
+                --arg logs "[$TIMESTAMP] ERROR: Workflow failed. Check run $RUN_ID for details." \
+                '{action: $action, jobId: $jobId, error: $error, logs: $logs}'
+              )" || true
+          fi
+
+      # ── Upload artifacts ─────────────────────────────────────
+      - name: Upload screenshots artifact
+        uses: actions/upload-artifact@v4
+        if: always() && (inputs.type == 'screenshots' || inputs.type == 'full')
+        with:
+          name: screenshots-${{ github.run_id }}
+          path: public/screenshots/
+          retention-days: 30
+          if-no-files-found: ignore

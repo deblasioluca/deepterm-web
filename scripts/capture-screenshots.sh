@@ -2,7 +2,7 @@
 # capture-screenshots.sh — Repeatable screenshot capture for DeepTerm documentation
 #
 # Usage:
-#   ./scripts/capture-screenshots.sh [--ci-mac USER@HOST] [--output-dir DIR]
+#   ./scripts/capture-screenshots.sh [--ci-mac USER@HOST] [--output-dir DIR] [--webhook-url URL] [--webhook-secret SECRET] [--job-id ID]
 #
 # This script captures screenshots of the DeepTerm macOS app for use in the
 # user documentation. It connects to a Mac (local or CI runner) via SSH,
@@ -35,6 +35,9 @@ DEEPTERM_APP="/Applications/DeepTerm.app"
 WINDOW_WIDTH=2000
 WINDOW_HEIGHT=1264
 DELAY_BETWEEN=2  # seconds between captures to allow UI to settle
+WEBHOOK_URL="${WEBHOOK_URL:-${CONTENT_UPDATE_WEBHOOK_URL:-}}"
+WEBHOOK_SECRET="${WEBHOOK_SECRET:-${CONTENT_UPDATE_WEBHOOK_SECRET:-}}"
+JOB_ID="${JOB_ID:-}"
 
 # ── Parse arguments ──────────────────────────────────────────
 while [[ $# -gt 0 ]]; do
@@ -59,6 +62,18 @@ while [[ $# -gt 0 ]]; do
       DELAY_BETWEEN="$2"
       shift 2
       ;;
+    --webhook-url)
+      WEBHOOK_URL="$2"
+      shift 2
+      ;;
+    --webhook-secret)
+      WEBHOOK_SECRET="$2"
+      shift 2
+      ;;
+    --job-id)
+      JOB_ID="$2"
+      shift 2
+      ;;
     -h|--help)
       echo "Usage: $0 [--ci-mac USER@HOST] [--output-dir DIR] [--width W] [--height H] [--delay S]"
       echo ""
@@ -68,6 +83,9 @@ while [[ $# -gt 0 ]]; do
       echo "  --width W            Window width in pixels (default: 2000)"
       echo "  --height H           Window height in pixels (default: 1264)"
       echo "  --delay S            Delay between captures in seconds (default: 2)"
+      echo "  --webhook-url URL    Webhook URL for progress callbacks (or CONTENT_UPDATE_WEBHOOK_URL env)"
+      echo "  --webhook-secret S   Webhook bearer token (or CONTENT_UPDATE_WEBHOOK_SECRET env)"
+      echo "  --job-id ID          Content update job ID for webhook callbacks"
       exit 0
       ;;
     *)
@@ -109,6 +127,19 @@ run_cmd() {
     ssh -o StrictHostKeyChecking=no "$CI_MAC" "$@"
   else
     eval "$@"
+  fi
+}
+
+# ── Helper: report progress via webhook ──────────────────────
+report_progress() {
+  local progress="$1"
+  local log_msg="$2"
+  if [[ -n "$WEBHOOK_URL" && -n "$WEBHOOK_SECRET" && -n "$JOB_ID" ]]; then
+    curl -sf -X POST "$WEBHOOK_URL" \
+      -H "Authorization: Bearer $WEBHOOK_SECRET" \
+      -H "Content-Type: application/json" \
+      -d "$(jq -n --arg action progress --arg jobId "$JOB_ID" --argjson progress "$progress" --arg logs "$log_msg" '{action: $action, jobId: $jobId, progress: $progress, logs: $logs}')" \
+      2>/dev/null || echo "  (webhook callback failed, continuing)"
   fi
 }
 
@@ -171,7 +202,10 @@ echo "=== DeepTerm Screenshot Capture ==="
 echo "Output: $OUTPUT_DIR"
 echo "Window: ${WINDOW_WIDTH}x${WINDOW_HEIGHT}"
 [[ -n "$CI_MAC" ]] && echo "Target: $CI_MAC" || echo "Target: localhost"
+[[ -n "$JOB_ID" ]] && echo "Job ID: $JOB_ID" || true
 echo ""
+
+report_progress 5 "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] Screenshot capture starting..."
 
 # Ensure DeepTerm is running
 echo "Launching DeepTerm..."
@@ -187,7 +221,9 @@ for i in "${!SCREENSHOTS[@]}"; do
   remote_path="${REMOTE_TMP}/${name}.png"
   local_path="${OUTPUT_DIR}/${name}.png"
 
+  PROGRESS=$(( 10 + (80 * (i + 1)) / ${#SCREENSHOTS[@]} ))
   echo "[$((i+1))/${#SCREENSHOTS[@]}] Capturing: ${name} (section: ${section})..."
+  report_progress "$PROGRESS" "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] Capturing: ${name} ($((i+1))/${#SCREENSHOTS[@]})"
 
   # Generate AppleScript and write to temp file (avoids quoting issues with inline -e)
   script=$(generate_applescript "$section" "$remote_path")
@@ -225,3 +261,5 @@ echo ""
 echo "=== Done! Captured ${#SCREENSHOTS[@]} screenshots ==="
 echo "Files in: $OUTPUT_DIR"
 ls -la "$OUTPUT_DIR"/*.png 2>/dev/null || echo "(no screenshots found)"
+
+report_progress 95 "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] Screenshot capture complete. ${#SCREENSHOTS[@]} screenshots processed."
