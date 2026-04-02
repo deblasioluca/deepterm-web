@@ -92,8 +92,9 @@ export async function POST(request: NextRequest) {
           }
         }
 
-        await prisma.contentUpdateJob.update({
-          where: { id: body.jobId },
+        // Atomically update only if not cancelled (prevents TOCTOU race)
+        await prisma.contentUpdateJob.updateMany({
+          where: { id: body.jobId, status: { not: 'cancelled' } },
           data: updateData,
         });
 
@@ -118,8 +119,9 @@ export async function POST(request: NextRequest) {
           ? (completeExisting.logs ?? '') + '\n' + body.logs
           : undefined;
 
-        await prisma.contentUpdateJob.update({
-          where: { id: body.jobId },
+        // Atomically update only if not cancelled (prevents TOCTOU race)
+        await prisma.contentUpdateJob.updateMany({
+          where: { id: body.jobId, status: { not: 'cancelled' } },
           data: {
             status: 'completed',
             progress: 100,
@@ -150,8 +152,9 @@ export async function POST(request: NextRequest) {
           ? (failExisting.logs ?? '') + '\n' + body.logs
           : undefined;
 
-        await prisma.contentUpdateJob.update({
-          where: { id: body.jobId },
+        // Atomically update only if not cancelled (prevents TOCTOU race)
+        await prisma.contentUpdateJob.updateMany({
+          where: { id: body.jobId, status: { not: 'cancelled' } },
           data: {
             status: 'failed',
             completedAt: new Date(),
