@@ -4,79 +4,7 @@ import { motion } from 'framer-motion';
 import Link from 'next/link';
 import { Button, Badge, Card } from '@/components/ui';
 import { Check, X } from 'lucide-react';
-
-const plans = [
-  {
-    name: 'Starter',
-    price: 'Free',
-    period: '',
-    subtitle: 'available for commercial usage',
-    tagline: 'For home lab enthusiasts seeking a modern SSH client.',
-    features: [
-      'SSH and SFTP',
-      'Local vault',
-      'AI-powered autocomplete',
-      'Port Forwarding',
-    ],
-    cta: 'Get Started',
-    ctaVariant: 'secondary' as const,
-    popular: false,
-    showQuoteLink: false,
-  },
-  {
-    name: 'Pro',
-    price: '$5',
-    period: '/month',
-    subtitle: 'when paid annually',
-    tagline: 'For individuals responsible for keeping the infrastructure up and running 24/7.',
-    features: [
-      'All Starter features',
-      'Personal vault',
-      'Sync across mobile and desktop',
-      'Snippets Automation',
-    ],
-    cta: 'Try for Free',
-    ctaVariant: 'primary' as const,
-    popular: true,
-    showQuoteLink: false,
-  },
-  {
-    name: 'Team',
-    price: '$10',
-    period: '/user/month',
-    subtitle: 'when paid annually',
-    tagline: 'For teams that need to manage infrastructure together and stay on the same page.',
-    features: [
-      'All Pro features',
-      'Team vault for simple, secure sharing',
-      'Real-time collaboration',
-      'Consolidated billing',
-      'Invite free-tier users — org covers their seat'
-    ],
-    cta: 'Try for Free',
-    ctaVariant: 'primary' as const,
-    popular: false,
-    showQuoteLink: true,
-  },
-  {
-    name: 'Business',
-    price: '$15',
-    period: '/user/month',
-    subtitle: 'when paid annually',
-    tagline: 'For companies requiring access control and advanced security.',
-    features: [
-      'All Team features',
-      'Multiple vaults with granular permissions',
-      'SOC2 Type II report',
-      'Org covers seats for invited members',
-      'SAML SSO',
-    ],
-    cta: 'Try for Free',
-    ctaVariant: 'primary' as const,
-    popular: false,
-    showQuoteLink: true,
-  },
-];
+import { PLANS, displayPrice } from '@/lib/pricing';
 
 export function PricingCards() {
   return (
@@ -98,7 +26,7 @@ export function PricingCards() {
         </motion.div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-          {plans.map((plan, index) => (
+          {PLANS.map((plan, index) => (
             <motion.div
               key={plan.name}
               initial={{ opacity: 0, y: 20 }}
@@ -126,7 +54,7 @@ export function PricingCards() {
                   </h3>
                   <div className="flex items-baseline gap-1">
                     <span className="text-3xl font-bold text-text-primary">
-                      {plan.price}
+                      {displayPrice(plan.key)}
                     </span>
                     {plan.period && (
                       <span className="text-text-secondary text-sm">
@@ -134,16 +62,14 @@ export function PricingCards() {
                       </span>
                     )}
                   </div>
-                  {plan.subtitle && (
-                    <p className="text-xs text-text-tertiary mt-1">{plan.subtitle}</p>
-                  )}
+                  <p className="text-xs text-text-tertiary mt-1">{plan.billingNote}</p>
                   <p className="mt-3 text-sm text-text-secondary">
                     {plan.tagline}
                   </p>
                 </div>
 
                 <ul className="space-y-3 mb-8">
-                  {plan.features.map((feature) => (
+                  {plan.highlights.map((feature) => (
                     <li key={feature} className="flex items-start gap-2">
                       <Check className="w-5 h-5 text-accent-secondary flex-shrink-0 mt-0.5" />
                       <span className="text-sm text-text-secondary">{feature}</span>

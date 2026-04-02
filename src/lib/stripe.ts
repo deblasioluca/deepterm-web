@@ -60,68 +60,35 @@ export const PRICE_IDS: Record<string, { monthly: string; yearly: string } | nul
   },
 };
 
-export const PLAN_DETAILS = {
-  starter: {
-    name: 'Starter',
-    price: 0,
-    features: ['5 hosts', 'Basic terminal', 'Single device', 'Local vault'],
-  },
-  pro: {
-    name: 'Pro',
-    price: 5, // per seat/month (annual)
-    monthlyPrice: 6.49,
-    features: [
-      'Unlimited hosts',
-      'AI terminal assistant',
-      'Cloud encrypted vault',
-      'All devices',
-      'SFTP client',
-      'Port forwarding',
-      'Priority support',
-    ],
-  },
-  team: {
-    name: 'Team',
-    price: 10, // per seat/month (annual)
-    monthlyPrice: 12.49,
-    features: [
-      'Everything in Pro',
-      'Team vaults',
-      'MultiKey',
-      'Real-time collaboration',
-      'Admin controls',
-      'Audit logs',
-    ],
-  },
-  enterprise: {
-    name: 'Business',
-    price: 15, // per user/month (annual)
-    monthlyPrice: 19.99,
-    features: [
-      'Everything in Team',
-      'Multiple vaults with granular permissions',
-      'SOC2 Type II report',
-      'SAML SSO',
-      'Dedicated support',
-      'SLA guarantee',
-    ],
-  },
-  business: {
-    name: 'Business',
-    price: 15, // per user/month (annual)
-    monthlyPrice: 19.99,
-    features: [
-      'Everything in Team',
-      'Multiple vaults with granular permissions',
-      'SOC2 Type II report',
-      'SAML SSO',
-      'Dedicated support',
-      'SLA guarantee',
-    ],
-  },
-};
+// PLAN_DETAILS is derived from the single source of truth in pricing.ts.
+// Do NOT hardcode prices here — update src/lib/pricing.ts instead.
+import { PLANS, PRICING, type PlanKey } from '@/lib/pricing';
 
-export type PlanType = keyof typeof PLAN_DETAILS;
+function buildPlanDetails() {
+  const details: Record<string, {
+    name: string;
+    price: number;
+    monthlyPrice?: number;
+    features: string[];
+  }> = {};
+
+  for (const plan of PLANS) {
+    const pr = PRICING[plan.key];
+    details[plan.key] = {
+      name: plan.name,
+      price: pr?.yearlyPerMonth ?? 0,
+      ...(pr ? { monthlyPrice: pr.monthly } : {}),
+      features: plan.features,
+    };
+  }
+  // Keep legacy 'enterprise' alias pointing to 'business'
+  details['enterprise'] = details['business'];
+  return details;
+}
+
+export const PLAN_DETAILS = buildPlanDetails();
+
+export type PlanType = PlanKey | 'enterprise';
 
 // Create or get a Stripe customer for an organization
 export async function getOrCreateStripeCustomer(

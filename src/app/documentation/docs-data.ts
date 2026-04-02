@@ -1158,6 +1158,7 @@ export const DOC_CATEGORIES: DocCategory[] = [
         slug: 'plans-and-billing',
         title: 'Plans & Billing',
         description: 'Starter, Pro, Team, and Business plans.',
+        // NOTE: Prices below must stay in sync with src/lib/pricing.ts (single source of truth).
         content: `
 <h3>Plans</h3>
 <ul>

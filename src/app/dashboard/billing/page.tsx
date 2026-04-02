@@ -68,63 +68,32 @@ interface SubscriptionData {
   } | null;
 }
 
-const plans = [
-  {
-    id: 'starter',
-    name: 'Starter',
-    price: 0,
-    features: ['5 hosts', 'Basic terminal', 'Single device'],
-  },
-  {
-    id: 'pro',
-    name: 'Pro',
-    monthlyPrice: 6.49,
-    yearlyPrice: 5,
-    features: ['Unlimited hosts', 'AI assistant', 'Team vaults', 'All devices'],
-  },
-  {
-    id: 'team',
-    name: 'Team',
-    monthlyPrice: 12.49,
-    yearlyPrice: 10,
-    features: ['Everything in Pro', 'Team vaults', 'Admin controls', 'Audit logs'],
-  },
-  {
-    id: 'enterprise',
-    name: 'Enterprise',
-    price: null,
-    features: ['Custom deployment', 'Dedicated support', 'SLA guarantee'],
-  },
-];
+import { PLANS, PRICING, type PlanKey } from '@/lib/pricing';
 
-const planFeatures: Record<string, string[]> = {
-  starter: ['5 hosts', 'Basic terminal', 'Single device', 'Local vault'],
-  pro: [
-    'Unlimited hosts',
-    'AI terminal assistant',
-    'Cloud encrypted vault',
-    'All devices',
-    'SFTP client',
-    'Port forwarding',
-    'Priority support',
-  ],
-  team: [
-    'Everything in Pro',
-    'Team vaults',
-    'MultiKey',
-    'Real-time collaboration',
-    'Admin controls',
-    'Audit logs',
-  ],
-  enterprise: [
-    'Everything in Team',
-    'Multiple shared vaults',
-    'SOC2 report',
-    'Enterprise SSO',
-    'Dedicated support',
-    'SLA guarantee',
-  ],
-};
+interface BillingPlan {
+  id: string;
+  name: string;
+  price: number | null;
+  monthlyPrice?: number;
+  yearlyPrice?: number;
+  features: string[];
+}
+
+const plans: BillingPlan[] = PLANS.map((p) => {
+  const pr = PRICING[p.key];
+  return {
+    id: p.key,
+    name: p.name,
+    price: pr ? pr.yearlyPerMonth : 0,
+    monthlyPrice: pr?.monthly,
+    yearlyPrice: pr?.yearlyPerMonth,
+    features: p.highlights.slice(0, 4),
+  };
+});
+
+const planFeatures: Record<string, string[]> = Object.fromEntries(
+  PLANS.map((p) => [p.key, p.features]),
+);
 
 // Helper function to get payment method display info
 function getPaymentMethodDisplay(method: PaymentMethodData) {
