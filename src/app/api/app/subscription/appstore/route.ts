@@ -61,7 +61,9 @@ export async function POST(request: NextRequest) {
       if (hasActiveSubscription) {
         // App Store subscription active — use the plan tier reported by the client
         // (pro, team, or business). Fall back to 'pro' for backwards compatibility.
-        const applePlan = body.plan || 'pro';
+        const ALLOWED_PLANS = ['pro', 'team', 'business'] as const;
+        const rawPlan = body.plan || 'pro';
+        const applePlan = ALLOWED_PLANS.includes(rawPlan) ? rawPlan : 'pro';
         // Don't overwrite subscriptionSource if user already has active Stripe
         await prisma.user.update({
           where: { id: user.id },

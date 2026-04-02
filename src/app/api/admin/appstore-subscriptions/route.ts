@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { getAdminSession } from '@/lib/admin-session';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -10,6 +11,11 @@ export const dynamic = 'force-dynamic';
  * Queries both User and ZKUser tables for Apple subscription fields.
  */
 export async function GET(request: NextRequest) {
+  const session = getAdminSession();
+  if (!session) {
+    return NextResponse.json({ error: 'Unauthorized', message: 'Valid admin session required' }, { status: 401 });
+  }
+
   try {
     const { searchParams } = new URL(request.url);
     const page = parseInt(searchParams.get('page') || '1');
