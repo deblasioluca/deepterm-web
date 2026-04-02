@@ -24,7 +24,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Resolve user via ZK auth or email
-    let user: { id: string; email: string; stripeSubscriptionId: string | null } | null = null;
+    let user: { id: string; email: string; plan: string; stripeSubscriptionId: string | null; subscriptionScope: string | null } | null = null;
 
     const zkAuth = getAuthFromRequest(request);
     if (zkAuth) {
@@ -36,13 +36,13 @@ export async function POST(request: NextRequest) {
       if (zkUser?.webUserId) {
         user = await prisma.user.findUnique({
           where: { id: zkUser.webUserId },
-          select: { id: true, email: true, stripeSubscriptionId: true },
+          select: { id: true, email: true, plan: true, stripeSubscriptionId: true, subscriptionScope: true },
         });
       }
       if (!user && zkUser) {
         user = await prisma.user.findUnique({
           where: { email: zkUser.email },
-          select: { id: true, email: true, stripeSubscriptionId: true },
+          select: { id: true, email: true, plan: true, stripeSubscriptionId: true, subscriptionScope: true },
         });
       }
     }
@@ -50,7 +50,7 @@ export async function POST(request: NextRequest) {
     if (!user) {
       user = await prisma.user.findUnique({
         where: { email },
-        select: { id: true, email: true, stripeSubscriptionId: true },
+        select: { id: true, email: true, plan: true, stripeSubscriptionId: true, subscriptionScope: true },
       });
     }
 
@@ -66,17 +66,19 @@ export async function POST(request: NextRequest) {
         const applePlan = body.productId
           ? getApplePlan(body.productId)
           : 'pro';
-        // Don't overwrite subscriptionSource if user already has active Stripe
+        // Don't overwrite plan if user has an active org-level or Stripe subscription
+        // (matches the guard in the webhook handler at webhooks/appstore/route.ts)
+        const isOrgMember = user.subscriptionScope === 'organization' || !!user.stripeSubscriptionId;
         await prisma.user.update({
           where: { id: user.id },
           data: {
-            plan: applePlan,
+            plan: isOrgMember ? user.plan : applePlan,
             subscriptionSource: user.stripeSubscriptionId ? 'stripe' : 'appstore',
             appStoreOriginalTransactionId: originalTransactionId || undefined,
           },
         });
 
-        console.log(`App Store: ${user.email} subscription active -> ${applePlan}`);
+        console.log(`App Store: ${user.email} subscription active -> ${isOrgMember ? user.plan + ' (org-preserved)' : applePlan}`);
       } else {
         // App Store subscription not active
         // Only downgrade if they don't have an active Stripe subscription
