@@ -38,7 +38,9 @@ let keysLoadedPromise: Promise<void> | null = null;
  */
 export function ensureKeysLoaded(): Promise<void> {
   if (!keysLoadedPromise) {
-    keysLoadedPromise = loadActiveKeySet().then(() => {});
+    keysLoadedPromise = loadActiveKeySet().then(() => {}).catch(() => {
+      keysLoadedPromise = null; // Allow retry on next call
+    });
   }
   return keysLoadedPromise;
 }

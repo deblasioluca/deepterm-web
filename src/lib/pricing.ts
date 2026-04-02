@@ -40,10 +40,10 @@ export const PRICING: Record<PlanKey, PlanPricing | null> = {
   business: { yearlyPerMonth: 15, monthly: 19.99 },
 };
 
-/** Convert a plan's annual price to cents (for MRR calculations, Stripe, etc.) */
+/** Convert a plan's annual price to cents (total yearly amount, for Stripe / tiers fallback) */
 export function yearlyPriceCents(plan: PlanKey): number {
   const p = PRICING[plan];
-  return p ? Math.round(p.yearlyPerMonth * 100) : 0;
+  return p ? Math.round(p.yearlyPerMonth * 12 * 100) : 0;
 }
 
 /** Convert a plan's monthly price to cents */
