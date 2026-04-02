@@ -8,6 +8,8 @@ const APPLE_PRODUCT_PLAN_MAP: Record<string, string> = {
   'com.deepterm.pro.yearly': 'pro',
   'com.deepterm.team.monthly': 'team',
   'com.deepterm.team.yearly': 'team',
+  'com.deepterm.business.monthly': 'business',
+  'com.deepterm.business.yearly': 'business',
 };
 
 /**

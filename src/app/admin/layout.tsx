@@ -29,6 +29,7 @@ import {
   AreaChart,
   RefreshCw,
   Wallet,
+  Apple,
 } from 'lucide-react';
 
 // Custom GitHub mark — the lucide `Github` icon is deprecated and barely visible
@@ -52,6 +53,7 @@ const navItems = [
   { label: 'Organizations', href: '/admin/teams',        icon: Building2 },
   { label: 'Licenses',     href: '/admin/licenses',     icon: Key },
   { label: 'Subscriptions',href: '/admin/subscriptions',icon: CreditCard },
+  { label: 'Apple Subs',   href: '/admin/apple-subscriptions', icon: Apple },
   { label: 'Analytics',    href: '/admin/analytics',    icon: BarChart3 },
   { label: 'Statistics',   href: '/admin/statistics',   icon: AreaChart },
   { label: 'Content Update',href: '/admin/content-update',icon: RefreshCw },

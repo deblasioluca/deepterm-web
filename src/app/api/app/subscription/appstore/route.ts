@@ -59,18 +59,20 @@ export async function POST(request: NextRequest) {
 
     if (source === 'appstore') {
       if (hasActiveSubscription) {
-        // App Store subscription active — upgrade to Pro
+        // App Store subscription active — use the plan tier reported by the client
+        // (pro, team, or business). Fall back to 'pro' for backwards compatibility.
+        const applePlan = body.plan || 'pro';
         // Don't overwrite subscriptionSource if user already has active Stripe
         await prisma.user.update({
           where: { id: user.id },
           data: {
-            plan: 'pro',
+            plan: applePlan,
             subscriptionSource: user.stripeSubscriptionId ? 'stripe' : 'appstore',
             appStoreOriginalTransactionId: originalTransactionId || undefined,
           },
         });
 
-        console.log(`App Store: ${user.email} subscription active -> Pro`);
+        console.log(`App Store: ${user.email} subscription active -> ${applePlan}`);
       } else {
         // App Store subscription not active
         // Only downgrade if they don't have an active Stripe subscription
