@@ -1,64 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getLimitsForPlan, getFeaturesForPlan } from '@/lib/plan-limits';
+import { PLANS, PRICING, monthlyPriceCents, yearlyPriceCents } from '@/lib/pricing';
 
 const APP_API_KEY = process.env.APP_API_KEY || '';
-
-const TIER_ORDER = ['starter', 'pro', 'team', 'business'] as const;
-type TierKey = (typeof TIER_ORDER)[number];
-
-const TIER_METADATA: Record<TierKey, {
-  name: string;
-  description: string;
-  highlights: string[];
-}> = {
-  starter: {
-    name: 'Starter',
-    description: 'For individuals getting started with DeepTerm.',
-    highlights: [
-      '3 SSH hosts',
-      'Basic terminal',
-      'Single device',
-      'Local vault',
-    ],
-  },
-  pro: {
-    name: 'Pro',
-    description: 'For professional developers who need full power and cloud sync.',
-    highlights: [
-      'Unlimited hosts',
-      'AI terminal assistant',
-      'Cloud encrypted vault',
-      'All devices',
-      'SFTP client',
-      'Port forwarding',
-      'Priority support',
-    ],
-  },
-  team: {
-    name: 'Team',
-    description: 'For teams that need shared vaults, collaboration, and audit logs.',
-    highlights: [
-      'Everything in Pro',
-      'Team vaults',
-      'Real-time collaboration',
-      'Admin controls',
-      'Audit logs',
-    ],
-  },
-  business: {
-    name: 'Business',
-    description: 'For enterprises requiring advanced security, compliance, and dedicated support.',
-    highlights: [
-      'Everything in Team',
-      'Granular vault permissions',
-      'SOC2 Type II report',
-      'SAML SSO',
-      'Dedicated support',
-      'SLA guarantee',
-    ],
-  },
-};
 
 /**
  * GET /api/app/tiers
@@ -98,8 +43,8 @@ export async function GET(request: NextRequest) {
       };
     }
 
-    const tiers = TIER_ORDER.map((key) => {
-      const meta = TIER_METADATA[key];
+    const tiers = PLANS.map((plan) => {
+      const key = plan.key;
       const isStarter = key === 'starter';
       const limits = getLimitsForPlan(key);
       const features = getFeaturesForPlan(key);
@@ -109,9 +54,9 @@ export async function GET(request: NextRequest) {
 
       return {
         key,
-        name: meta.name,
-        description: meta.description,
-        highlights: meta.highlights,
+        name: plan.name,
+        description: plan.tagline,
+        highlights: plan.highlights,
         features,
         limits: {
           maxHosts: limits.maxHosts,
@@ -129,7 +74,7 @@ export async function GET(request: NextRequest) {
               }
             : isStarter
             ? { priceCents: 0, currency: 'usd', stripePriceId: null }
-            : null,
+            : { priceCents: monthlyPriceCents(key), currency: 'usd', stripePriceId: null },
           yearly: yearlyOffering
             ? {
                 priceCents: yearlyOffering.priceCents,
@@ -138,7 +83,7 @@ export async function GET(request: NextRequest) {
               }
             : isStarter
             ? { priceCents: 0, currency: 'usd', stripePriceId: null }
-            : null,
+            : { priceCents: yearlyPriceCents(key), currency: 'usd', stripePriceId: null },
         },
       };
     });

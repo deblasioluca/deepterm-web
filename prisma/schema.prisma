@@ -444,6 +444,18 @@ model AuditLog {
   @@index([adminId])
 }
 
+model StripeKeySet {
+  id              String   @id @default(cuid())
+  mode            String   @unique // 'sandbox' | 'production'
+  secretKey       String
+  publishableKey  String
+  webhookSecret   String?
+  priceIds        String?  // JSON: { proMonthly, proYearly, teamMonthly, teamYearly, businessMonthly, businessYearly }
+  isActive        Boolean  @default(false)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
 model SystemSettings {
   id        String   @id @default(cuid())
   key       String   @unique

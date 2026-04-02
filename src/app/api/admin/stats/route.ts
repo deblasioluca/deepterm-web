@@ -44,6 +44,7 @@ export async function GET() {
     });
 
     // Calculate MRR (Monthly Recurring Revenue)
+    // Read live offerings from DB (admin-configurable) with fallback to pricing.ts
     const paidTeams = await prisma.organization.findMany({
       where: {
         subscriptionStatus: 'active',
@@ -52,10 +53,25 @@ export async function GET() {
       select: { plan: true, seats: true },
     });
 
-    const planPrices: Record<string, number> = {
-      pro: 1000, // $10 in cents
-      team: 2000, // $20 in cents
-    };
+    const liveOfferings = await prisma.subscriptionOffering.findMany({
+      where: { stage: 'live', isActive: true, interval: 'monthly' },
+      select: { key: true, priceCents: true },
+    });
+
+    // Build price map from DB offerings, fall back to pricing.ts constants
+    const { monthlyPriceCents } = await import('@/lib/pricing');
+    const planPrices: Record<string, number> = {};
+    for (const o of liveOfferings) {
+      planPrices[o.key] = o.priceCents;
+    }
+    // Fill in any missing plans with fallback pricing
+    for (const key of ['pro', 'team', 'business'] as const) {
+      if (!(key in planPrices)) {
+        planPrices[key] = monthlyPriceCents(key);
+      }
+    }
+    // enterprise is alias for business
+    planPrices['enterprise'] = planPrices['business'] || 0;
 
     const mrr = paidTeams.reduce((total, team) => {
       const pricePerSeat = planPrices[team.plan] || 0;

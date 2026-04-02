@@ -14,72 +14,16 @@ import {
   AccordionContent,
 } from '@/components/ui';
 import { Check, X, Star } from 'lucide-react';
-
-const plans = [
-  {
-    name: 'Starter',
-    price: 'Free',
-    period: '',
-    subtitle: 'available for commercial usage',
-    tagline: 'For home lab enthusiasts seeking a modern SSH client.',
-    highlights: ['SSH and SFTP', 'Local vault', 'AI-powered autocomplete', 'Port Forwarding'],
-    cta: 'Get Started',
-    ctaVariant: 'secondary' as const,
-    popular: false,
-    showQuoteLink: false,
-  },
-  {
-    name: 'Pro',
-    price: '$10',
-    period: '/month',
-    billing: 'when paid annually',
-    tagline: 'For individuals responsible for keeping the infrastructure up and running 24/7.',
-    highlights: [
-      'All Starter features',
-      'Personal vault',
-      'Sync across mobile and desktop',
-      'Snippets Automation',
-    ],
-    cta: 'Try for Free',
-    ctaVariant: 'primary' as const,
-    popular: true,
-    showQuoteLink: false,
-  },
-  {
-    name: 'Team',
-    price: '$20',
-    period: '/user/month',
-    billing: 'when paid annually',
-    tagline: 'For teams that need to manage infrastructure together and stay on the same page.',
-    highlights: [
-      'All Pro features',
-      'Team vault for simple, secure sharing',
-      'Real-time collaboration',
-      'Consolidated billing',
-    ],
-    cta: 'Try for Free',
-    ctaVariant: 'primary' as const,
-    popular: false,
-    showQuoteLink: true,
-  },
-  {
-    name: 'Business',
-    price: '$30',
-    period: '/user/month',
-    billing: 'when paid annually',
-    tagline: 'For companies requiring access control and advanced security.',
-    highlights: [
-      'All Team features',
-      'Multiple vaults with granular permissions',
-      'SOC2 Type II report',
-      'SAML SSO',
-    ],
-    cta: 'Try for Free',
-    ctaVariant: 'primary' as const,
-    popular: false,
-    showQuoteLink: true,
-  },
-];
+import {
+  PLANS,
+  PRICING,
+  FEATURE_COMPARISON,
+  TESTIMONIALS,
+  PRICING_FAQS,
+  displayPrice,
+  formatUsdFromCents,
+  type PlanKey,
+} from '@/lib/pricing';
 
 type LiveOffering = {
   key: string;
@@ -89,111 +33,6 @@ type LiveOffering = {
   priceCents: number;
   currency: string;
 };
-
-function formatUsdFromCents(cents: number): string {
-  const dollars = cents / 100;
-  const fixed = dollars % 1 === 0 ? dollars.toFixed(0) : dollars.toFixed(2);
-  return `$${fixed}`;
-}
-
-const featureComparison = [
-  {
-    category: 'Protocols',
-    features: [
-      { name: 'SSH', starter: true, pro: true, team: true, business: true },
-      { name: 'SFTP', starter: true, pro: true, team: true, business: true },
-      { name: 'Telnet', starter: true, pro: true, team: true, business: true },
-      { name: 'Serial', starter: true, pro: true, team: true, business: true },
-    ],
-  },
-  {
-    category: 'Terminal',
-    features: [
-      { name: 'Split View', starter: true, pro: true, team: true, business: true },
-      { name: 'Unlimited Tabs', starter: true, pro: true, team: true, business: true },
-      { name: 'Command Snippets', starter: true, pro: true, team: true, business: true },
-      { name: 'AI-powered autocomplete', starter: true, pro: true, team: true, business: true },
-      { name: 'AI Chat Assistant', starter: false, pro: true, team: true, business: true },
-      { name: 'Snippets Automation', starter: false, pro: true, team: true, business: true },
-    ],
-  },
-  {
-    category: 'Sync & Sharing',
-    features: [
-      { name: 'Local Vault', starter: true, pro: true, team: true, business: true },
-      { name: 'Personal Vault (Cloud)', starter: false, pro: true, team: true, business: true },
-      { name: 'Sync across mobile and desktop', starter: false, pro: true, team: true, business: true },
-      { name: 'Team Vault', starter: false, pro: false, team: true, business: true },
-      { name: 'Multiple Vaults with granular permissions', starter: false, pro: false, team: false, business: true },
-    ],
-  },
-  {
-    category: 'Integrations',
-    features: [
-      { name: 'AWS', starter: false, pro: true, team: true, business: true },
-      { name: 'DigitalOcean', starter: false, pro: true, team: true, business: true },
-    ],
-  },
-  {
-    category: 'Security',
-    features: [
-      { name: 'macOS Keychain Storage', starter: true, pro: true, team: true, business: true },
-      { name: 'Biometric Keys (TouchID/FaceID)', starter: true, pro: true, team: true, business: true },
-      { name: 'PIN Lock', starter: true, pro: true, team: true, business: true },
-      { name: 'Session Logs', starter: false, pro: true, team: true, business: true },
-      { name: 'SSH Certificates', starter: false, pro: false, team: true, business: true },
-      { name: 'FIDO2', starter: false, pro: false, team: true, business: true },
-      { name: 'SAML SSO', starter: false, pro: false, team: false, business: true },
-      { name: 'SOC 2 Type II Report', starter: false, pro: false, team: false, business: true },
-    ],
-  },
-];
-
-const testimonials = [
-  {
-    quote: "DeepTerm has become essential for our DevOps team. The split terminal views alone save us hours every week.",
-    author: 'Michael Torres',
-    title: 'VP of Engineering',
-    company: 'CloudOps Solutions',
-  },
-  {
-    quote: "Finally, an SSH client that takes security seriously. The Keychain integration gives us peace of mind.",
-    author: 'Amanda Lee',
-    title: 'Security Architect',
-    company: 'FinSecure Inc.',
-  },
-];
-
-const faqs = [
-  {
-    q: 'What payment methods do you accept?',
-    a: 'Credit card on our website, or purchase order with invoice payable by check or bank transfer for annual plans.',
-  },
-  {
-    q: 'Can I switch plans later?',
-    a: 'Yes, you can upgrade or downgrade at any time. Changes are prorated.',
-  },
-  {
-    q: 'Is there a discount for annual billing?',
-    a: 'Yes, all listed prices reflect annual billing. Monthly billing is available at a higher rate.',
-  },
-  {
-    q: 'Do you offer academic/student pricing?',
-    a: 'Yes! Eligible students get DeepTerm Pro for free through our student program. Verify your student status in the dashboard.',
-  },
-  {
-    q: 'Does DeepTerm require a subscription?',
-    a: 'The Starter plan is completely free. Pro, Team, and Business are subscription-based. We also offer a one-time purchase option for the macOS desktop app at $19.99.',
-  },
-  {
-    q: 'Can I try before I buy?',
-    a: 'Absolutely. All paid plans include a free trial period. No credit card required to start.',
-  },
-  {
-    q: 'What happens to my data if I cancel?',
-    a: 'Your data remains in your local vault. Cloud vault data can be exported before cancellation.',
-  },
-];
 
 export default function PricingPage() {
   const [offerings, setOfferings] = useState<LiveOffering[]>([]);
@@ -212,30 +51,28 @@ export default function PricingPage() {
   }, []);
 
   const displayPlans = useMemo(() => {
-    const proYearly = offerings.find((o) => o.key === 'pro' && o.interval === 'yearly');
-    const teamYearly = offerings.find((o) => o.key === 'team' && o.interval === 'yearly');
-    const businessYearly = offerings.find((o) => o.key === 'business' && o.interval === 'yearly');
+    return PLANS.map((plan) => {
+      // Try to overlay live DB price; fall back to pricing.ts constant
+      const yearlyOffering = offerings.find(
+        (o) => o.key === plan.key && o.interval === 'yearly',
+      );
+      const price = yearlyOffering
+        ? formatUsdFromCents(yearlyOffering.priceCents)
+        : displayPrice(plan.key);
 
-    return plans.map((p) => {
-      if (p.name === 'Pro' && proYearly) {
-        return {
-          ...p,
-          price: formatUsdFromCents(proYearly.priceCents),
-        };
-      }
-      if (p.name === 'Team' && teamYearly) {
-        return {
-          ...p,
-          price: formatUsdFromCents(teamYearly.priceCents),
-        };
-      }
-      if (p.name === 'Business' && businessYearly) {
-        return {
-          ...p,
-          price: formatUsdFromCents(businessYearly.priceCents),
-        };
-      }
-      return p;
+      return {
+        name: plan.name,
+        price,
+        period: plan.period,
+        subtitle: plan.key === 'starter' ? plan.billingNote : undefined,
+        billing: plan.key !== 'starter' ? plan.billingNote : undefined,
+        tagline: plan.tagline,
+        highlights: plan.highlights,
+        cta: plan.cta,
+        ctaVariant: plan.ctaVariant,
+        popular: plan.popular,
+        showQuoteLink: plan.showQuoteLink,
+      };
     });
   }, [offerings]);
 
@@ -383,9 +220,9 @@ export default function PricingPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {featureComparison.map((category) => (
-                    <>
-                      <tr key={category.category} className="bg-background-tertiary/50">
+                          {FEATURE_COMPARISON.map((category) => (
+                            <>
+                              <tr key={category.category} className="bg-background-tertiary/50">
                         <td
                           colSpan={5}
                           className="py-3 px-4 text-sm font-semibold text-text-primary"
@@ -435,7 +272,7 @@ export default function PricingPage() {
             {/* Mobile Accordion */}
             <div className="lg:hidden">
               <Accordion multiple>
-                {featureComparison.map((category) => (
+                {FEATURE_COMPARISON.map((category) => (
                   <AccordionItem key={category.category} value={category.category}>
                     <AccordionTrigger value={category.category}>
                       {category.category}
@@ -497,7 +334,7 @@ export default function PricingPage() {
         <section className="py-section">
           <div className="max-w-content mx-auto px-4 sm:px-6 lg:px-8">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {testimonials.map((testimonial, index) => (
+              {TESTIMONIALS.map((testimonial, index) => (
                 <motion.div
                   key={testimonial.author}
                   initial={{ opacity: 0, y: 20 }}
@@ -544,7 +381,7 @@ export default function PricingPage() {
 
             <div className="max-w-2xl mx-auto">
               <Accordion>
-                {faqs.map((faq, index) => (
+                {PRICING_FAQS.map((faq, index) => (
                   <AccordionItem key={index} value={`faq-${index}`}>
                     <AccordionTrigger value={`faq-${index}`}>{faq.q}</AccordionTrigger>
                     <AccordionContent value={`faq-${index}`}>{faq.a}</AccordionContent>

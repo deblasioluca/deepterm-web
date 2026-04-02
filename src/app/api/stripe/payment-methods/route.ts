@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
-import { stripe } from '@/lib/stripe';
+import { stripe, ensureKeysLoaded } from '@/lib/stripe';
 import Stripe from 'stripe';
 
 /**
@@ -68,6 +68,7 @@ export async function GET() {
  * Create a setup intent for adding a new payment method
  */
 export async function POST(request: NextRequest) {
+  await ensureKeysLoaded();
   try {
     const session = await auth();
 
@@ -168,6 +169,7 @@ export async function POST(request: NextRequest) {
  * Update payment method (set as default)
  */
 export async function PATCH(request: NextRequest) {
+  await ensureKeysLoaded();
   try {
     const session = await auth();
 
@@ -273,6 +275,7 @@ export async function PATCH(request: NextRequest) {
  * Remove a payment method
  */
 export async function DELETE(request: NextRequest) {
+  await ensureKeysLoaded();
   try {
     const session = await auth();
 

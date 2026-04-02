@@ -68,63 +68,47 @@ interface SubscriptionData {
   } | null;
 }
 
-const plans = [
-  {
-    id: 'starter',
-    name: 'Starter',
-    price: 0,
-    features: ['5 hosts', 'Basic terminal', 'Single device'],
-  },
-  {
-    id: 'pro',
-    name: 'Pro',
-    monthlyPrice: 6.49,
-    yearlyPrice: 5,
-    features: ['Unlimited hosts', 'AI assistant', 'Team vaults', 'All devices'],
-  },
-  {
-    id: 'team',
-    name: 'Team',
-    monthlyPrice: 12.49,
-    yearlyPrice: 10,
-    features: ['Everything in Pro', 'Team vaults', 'Admin controls', 'Audit logs'],
-  },
+import { PLANS, PRICING, type PlanKey } from '@/lib/pricing';
+
+interface BillingPlan {
+  id: string;
+  name: string;
+  price: number | null;
+  monthlyPrice?: number;
+  yearlyPrice?: number;
+  features: string[];
+}
+
+const plans: BillingPlan[] = [
+  ...PLANS.map((p) => {
+    const pr = PRICING[p.key];
+    return {
+      id: p.key,
+      name: p.name,
+      price: pr ? pr.yearlyPerMonth : 0,
+      monthlyPrice: pr?.monthly,
+      yearlyPrice: pr?.yearlyPerMonth,
+      features: p.highlights.slice(0, 4),
+    };
+  }),
+  // Legacy alias — orgs stored as 'enterprise' should resolve to Business
   {
     id: 'enterprise',
-    name: 'Enterprise',
-    price: null,
-    features: ['Custom deployment', 'Dedicated support', 'SLA guarantee'],
+    name: 'Business',
+    price: PRICING.business?.yearlyPerMonth ?? 15,
+    monthlyPrice: PRICING.business?.monthly,
+    yearlyPrice: PRICING.business?.yearlyPerMonth,
+    features: PLANS.find((p) => p.key === 'business')!.highlights.slice(0, 4),
   },
 ];
 
-const planFeatures: Record<string, string[]> = {
-  starter: ['5 hosts', 'Basic terminal', 'Single device', 'Local vault'],
-  pro: [
-    'Unlimited hosts',
-    'AI terminal assistant',
-    'Cloud encrypted vault',
-    'All devices',
-    'SFTP client',
-    'Port forwarding',
-    'Priority support',
-  ],
-  team: [
-    'Everything in Pro',
-    'Team vaults',
-    'MultiKey',
-    'Real-time collaboration',
-    'Admin controls',
-    'Audit logs',
-  ],
-  enterprise: [
-    'Everything in Team',
-    'Multiple shared vaults',
-    'SOC2 report',
-    'Enterprise SSO',
-    'Dedicated support',
-    'SLA guarantee',
-  ],
-};
+const planFeatures: Record<string, string[]> = Object.fromEntries(
+  PLANS.flatMap((p) =>
+    p.key === 'business'
+      ? [['business', p.features], ['enterprise', p.features]]
+      : [[p.key, p.features]]
+  ),
+);
 
 // Helper function to get payment method display info
 function getPaymentMethodDisplay(method: PaymentMethodData) {
@@ -730,7 +714,7 @@ export default function BillingPage() {
         </div>
 
         <div className="space-y-3">
-          {plans.map((plan) => (
+          {plans.filter((p) => p.id !== 'enterprise').map((plan) => (
             <div
               key={plan.id}
               onClick={() => setSelectedPlan(plan.id)}
@@ -768,8 +752,8 @@ export default function BillingPage() {
         </div>
         <div className="flex gap-3 pt-6">
           <Button variant="secondary" className="flex-1" onClick={() => setIsChangePlanOpen(false)}>Cancel</Button>
-          <Button variant="primary" className="flex-1" onClick={handleChangePlan} disabled={isActionLoading || !selectedPlan || selectedPlan === currentPlan || selectedPlan === 'enterprise'}>
-            {isActionLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : selectedPlan === 'enterprise' ? 'Contact Sales' : 'Confirm Change'}
+          <Button variant="primary" className="flex-1" onClick={handleChangePlan} disabled={isActionLoading || !selectedPlan || selectedPlan === currentPlan || selectedPlan === 'business' || selectedPlan === 'enterprise'}>
+            {isActionLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : (selectedPlan === 'business' || selectedPlan === 'enterprise') ? 'Contact Sales' : 'Confirm Change'}
           </Button>
         </div>
       </Modal>

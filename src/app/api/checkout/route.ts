@@ -1,10 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getStripe } from '@/lib/stripe';
+import { getStripe, ensureKeysLoaded } from '@/lib/stripe';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 export async function POST(request: NextRequest) {
+  await ensureKeysLoaded();
   try {
     const { email, plan } = await request.json();
 

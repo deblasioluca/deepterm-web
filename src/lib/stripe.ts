@@ -1,14 +1,61 @@
 import Stripe from 'stripe';
 
-// Lazy initialization of Stripe to avoid build-time errors
+// ---------------------------------------------------------------------------
+// Runtime Stripe key management
+//
+// Keys are resolved in this priority order:
+//   1. Active StripeKeySet row in the DB  (admin-configurable)
+//   2. process.env.STRIPE_SECRET_KEY      (fallback / legacy)
+//
+// Call `switchStripeMode('sandbox' | 'production')` from the admin API
+// to toggle the active key set. This resets the cached Stripe instance
+// so the next call to getStripe() picks up the new keys.
+// ---------------------------------------------------------------------------
+
+interface RuntimeKeys {
+  secretKey: string;
+  publishableKey: string;
+  webhookSecret: string | null;
+  priceIds: StripePriceIds;
+}
+
+export interface StripePriceIds {
+  proMonthly: string;
+  proYearly: string;
+  teamMonthly: string;
+  teamYearly: string;
+  businessMonthly: string;
+  businessYearly: string;
+}
+
 let stripeInstance: Stripe | null = null;
+let runtimeKeys: RuntimeKeys | null = null;
+let keysLoadedPromise: Promise<void> | null = null;
+
+/**
+ * Ensure DB key set is loaded once after server restart.
+ * Safe to call from every route — only hits DB on the first invocation.
+ */
+export function ensureKeysLoaded(): Promise<void> {
+  if (!keysLoadedPromise) {
+    keysLoadedPromise = loadActiveKeySet().then(() => {}).catch(() => {
+      keysLoadedPromise = null; // Allow retry on next call
+    });
+  }
+  return keysLoadedPromise;
+}
+
+/** Resolve the secret key currently in use (DB override or env). */
+export function activeSecretKey(): string {
+  return runtimeKeys?.secretKey || process.env.STRIPE_SECRET_KEY || '';
+}
 
 /**
  * Returns true when the app is configured to use Stripe's test/sandbox keys.
  * Stripe test keys always start with "sk_test_" / "pk_test_".
  */
 export function isStripeSandbox(): boolean {
-  const key = process.env.STRIPE_SECRET_KEY || '';
+  const key = activeSecretKey();
   return key.startsWith('sk_test_') || key.startsWith('rk_test_');
 }
 
@@ -21,14 +68,88 @@ export function stripeDashboardUrl(): string {
 
 export function getStripe(): Stripe {
   if (!stripeInstance) {
-    if (!process.env.STRIPE_SECRET_KEY) {
-      throw new Error('STRIPE_SECRET_KEY is not set in environment variables');
+    const key = activeSecretKey();
+    if (!key) {
+      throw new Error('STRIPE_SECRET_KEY is not set in environment variables or StripeKeySet DB');
     }
-    stripeInstance = new Stripe(process.env.STRIPE_SECRET_KEY, {
+    stripeInstance = new Stripe(key, {
       typescript: true,
     });
   }
   return stripeInstance;
+}
+
+/** Reset the cached Stripe client — call after switching keys. */
+export function resetStripeInstance(): void {
+  stripeInstance = null;
+}
+
+/**
+ * Load the active StripeKeySet from the DB and cache it in memory.
+ * Called on first request and after mode switches.
+ */
+export async function loadActiveKeySet(): Promise<RuntimeKeys | null> {
+  const { prisma } = await import('./prisma');
+  const active = await prisma.stripeKeySet.findFirst({ where: { isActive: true } });
+  if (!active) {
+    runtimeKeys = null;
+    resetStripeInstance();
+    return null;
+  }
+
+  const parsed = active.priceIds ? JSON.parse(active.priceIds) as Partial<StripePriceIds> : {};
+  runtimeKeys = {
+    secretKey: active.secretKey,
+    publishableKey: active.publishableKey,
+    webhookSecret: active.webhookSecret,
+    priceIds: {
+      proMonthly: parsed.proMonthly || process.env.STRIPE_PRO_MONTHLY_PRICE_ID || 'price_pro_monthly',
+      proYearly: parsed.proYearly || process.env.STRIPE_PRO_YEARLY_PRICE_ID || 'price_pro_yearly',
+      teamMonthly: parsed.teamMonthly || process.env.STRIPE_TEAM_MONTHLY_PRICE_ID || 'price_team_monthly',
+      teamYearly: parsed.teamYearly || process.env.STRIPE_TEAM_YEARLY_PRICE_ID || 'price_team_yearly',
+      businessMonthly: parsed.businessMonthly || process.env.STRIPE_BUSINESS_MONTHLY_PRICE_ID || 'price_business_monthly',
+      businessYearly: parsed.businessYearly || process.env.STRIPE_BUSINESS_YEARLY_PRICE_ID || 'price_business_yearly',
+    },
+  };
+  resetStripeInstance();
+  return runtimeKeys;
+}
+
+/**
+ * Switch Stripe mode by activating the given key set and deactivating others.
+ * Returns the newly-active key set, or null if the mode doesn't exist.
+ */
+export async function switchStripeMode(mode: 'sandbox' | 'production'): Promise<RuntimeKeys | null> {
+  const { prisma } = await import('./prisma');
+
+  // Verify the target mode exists before deactivating anything
+  const target = await prisma.stripeKeySet.findFirst({ where: { mode } });
+  if (!target) return null;
+
+  // Deactivate all, then activate the requested mode — in a single transaction
+  await prisma.$transaction(async (tx) => {
+    await tx.stripeKeySet.updateMany({ data: { isActive: false } });
+    await tx.stripeKeySet.updateMany({
+      where: { mode },
+      data: { isActive: true },
+    });
+  });
+
+  return loadActiveKeySet();
+}
+
+/** Get the publishable key for client-side use. */
+export function getPublishableKey(): string {
+  return runtimeKeys?.publishableKey
+    || process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY
+    || '';
+}
+
+/** Get the webhook secret — prefers DB key set, falls back to env var. */
+export function getWebhookSecret(): string {
+  return runtimeKeys?.webhookSecret
+    || process.env.STRIPE_WEBHOOK_SECRET
+    || '';
 }
 
 // Keep backward compatibility
@@ -43,85 +164,70 @@ export const stripe = {
   get setupIntents() { return getStripe().setupIntents; },
 };
 
-// Price IDs for each plan (configure these in Stripe Dashboard)
-export const PRICE_IDS: Record<string, { monthly: string; yearly: string } | null> = {
-  starter: null, // Free plan
-  pro: {
-    monthly: process.env.STRIPE_PRO_MONTHLY_PRICE_ID || 'price_pro_monthly',
-    yearly: process.env.STRIPE_PRO_YEARLY_PRICE_ID || 'price_pro_yearly',
-  },
-  team: {
-    monthly: process.env.STRIPE_TEAM_MONTHLY_PRICE_ID || 'price_team_monthly',
-    yearly: process.env.STRIPE_TEAM_YEARLY_PRICE_ID || 'price_team_yearly',
-  },
-  business: {
-    monthly: process.env.STRIPE_BUSINESS_MONTHLY_PRICE_ID || 'price_business_monthly',
-    yearly: process.env.STRIPE_BUSINESS_YEARLY_PRICE_ID || 'price_business_yearly',
-  },
-};
+// Price IDs for each plan — resolved from DB key set first, then env vars
+function resolvePriceIds(): Record<string, { monthly: string; yearly: string } | null> {
+  const ids = runtimeKeys?.priceIds;
+  return {
+    starter: null,
+    pro: {
+      monthly: ids?.proMonthly || process.env.STRIPE_PRO_MONTHLY_PRICE_ID || 'price_pro_monthly',
+      yearly: ids?.proYearly || process.env.STRIPE_PRO_YEARLY_PRICE_ID || 'price_pro_yearly',
+    },
+    team: {
+      monthly: ids?.teamMonthly || process.env.STRIPE_TEAM_MONTHLY_PRICE_ID || 'price_team_monthly',
+      yearly: ids?.teamYearly || process.env.STRIPE_TEAM_YEARLY_PRICE_ID || 'price_team_yearly',
+    },
+    business: {
+      monthly: ids?.businessMonthly || process.env.STRIPE_BUSINESS_MONTHLY_PRICE_ID || 'price_business_monthly',
+      yearly: ids?.businessYearly || process.env.STRIPE_BUSINESS_YEARLY_PRICE_ID || 'price_business_yearly',
+    },
+  };
+}
 
-export const PLAN_DETAILS = {
-  starter: {
-    name: 'Starter',
-    price: 0,
-    features: ['5 hosts', 'Basic terminal', 'Single device', 'Local vault'],
+// Exported as a getter so it always reflects the active key set
+const PRICE_ID_KEYS = ['starter', 'pro', 'team', 'business'];
+export const PRICE_IDS: Record<string, { monthly: string; yearly: string } | null> = new Proxy(
+  {} as Record<string, { monthly: string; yearly: string } | null>,
+  {
+    get: (_target, prop: string) => resolvePriceIds()[prop],
+    ownKeys: () => PRICE_ID_KEYS,
+    getOwnPropertyDescriptor: (_target, prop: string) => ({
+      configurable: true,
+      enumerable: true,
+      value: resolvePriceIds()[prop as string],
+    }),
   },
-  pro: {
-    name: 'Pro',
-    price: 5, // per seat/month (annual)
-    monthlyPrice: 6.49,
-    features: [
-      'Unlimited hosts',
-      'AI terminal assistant',
-      'Cloud encrypted vault',
-      'All devices',
-      'SFTP client',
-      'Port forwarding',
-      'Priority support',
-    ],
-  },
-  team: {
-    name: 'Team',
-    price: 10, // per seat/month (annual)
-    monthlyPrice: 12.49,
-    features: [
-      'Everything in Pro',
-      'Team vaults',
-      'MultiKey',
-      'Real-time collaboration',
-      'Admin controls',
-      'Audit logs',
-    ],
-  },
-  enterprise: {
-    name: 'Business',
-    price: 15, // per user/month (annual)
-    monthlyPrice: 19.99,
-    features: [
-      'Everything in Team',
-      'Multiple vaults with granular permissions',
-      'SOC2 Type II report',
-      'SAML SSO',
-      'Dedicated support',
-      'SLA guarantee',
-    ],
-  },
-  business: {
-    name: 'Business',
-    price: 15, // per user/month (annual)
-    monthlyPrice: 19.99,
-    features: [
-      'Everything in Team',
-      'Multiple vaults with granular permissions',
-      'SOC2 Type II report',
-      'SAML SSO',
-      'Dedicated support',
-      'SLA guarantee',
-    ],
-  },
-};
+);
 
-export type PlanType = keyof typeof PLAN_DETAILS;
+// PLAN_DETAILS is derived from the single source of truth in pricing.ts.
+// Do NOT hardcode prices here — update src/lib/pricing.ts instead.
+import { PLANS, PRICING, type PlanKey } from '@/lib/pricing';
+
+function buildPlanDetails() {
+  const details: Record<string, {
+    name: string;
+    price: number;
+    monthlyPrice?: number;
+    features: string[];
+  }> = {};
+
+  for (const plan of PLANS) {
+    const pr = PRICING[plan.key];
+    details[plan.key] = {
+      name: plan.name,
+      price: pr?.yearlyPerMonth ?? 0,
+      ...(pr ? { monthlyPrice: pr.monthly } : {}),
+      features: plan.features,
+    };
+  }
+  // Keep legacy 'enterprise' alias pointing to 'business'
+  details['enterprise'] = details['business'];
+  return details;
+}
+
+export const PLAN_DETAILS = buildPlanDetails();
+
+export type PlanType = PlanKey | 'enterprise';
 
 // Create or get a Stripe customer for an organization
 export async function getOrCreateStripeCustomer(

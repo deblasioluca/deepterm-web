@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import Stripe from 'stripe';
-import { getStripe } from '@/lib/stripe';
+import { getStripe, getWebhookSecret, ensureKeysLoaded } from '@/lib/stripe';
 import { prisma } from '@/lib/prisma';
 
 export const runtime = 'nodejs';
@@ -20,6 +20,7 @@ function notifyPayment(event: string, email: string, plan: string, amount?: numb
 }
 
 export async function POST(request: NextRequest) {
+  await ensureKeysLoaded();
   const body = await request.text();
   const signature = request.headers.get('stripe-signature');
 
@@ -34,7 +35,7 @@ export async function POST(request: NextRequest) {
     event = stripe.webhooks.constructEvent(
       body,
       signature,
-      process.env.STRIPE_WEBHOOK_SECRET!,
+      getWebhookSecret(),
     );
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Unknown error';
