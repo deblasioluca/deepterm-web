@@ -15,7 +15,7 @@ export const dynamic = 'force-dynamic';
 export async function GET() {
   const session = getAdminSession();
   if (!session) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    return NextResponse.json({ error: 'Unauthorized', message: 'Valid admin session required' }, { status: 401 });
   }
 
   const sandbox = isStripeSandbox();
@@ -63,7 +63,9 @@ export async function GET() {
     publishablePrefix,
     envStatus,
     priceIds,
-    plans: Object.entries(PLAN_DETAILS).map(([key, detail]) => ({
+    plans: Object.entries(PLAN_DETAILS)
+      .filter(([key]) => key !== 'enterprise') // 'enterprise' is a legacy alias for 'business'
+      .map(([key, detail]) => ({
       key,
       name: detail.name,
       price: detail.price,

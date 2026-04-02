@@ -138,7 +138,7 @@ report_progress() {
     curl -sf -X POST "$WEBHOOK_URL" \
       -H "Authorization: Bearer $WEBHOOK_SECRET" \
       -H "Content-Type: application/json" \
-      -d "$(printf '{"action":"progress","jobId":"%s","progress":%d,"logs":"%s"}' "$JOB_ID" "$progress" "$log_msg")" \
+      -d "$(jq -n --arg action progress --arg jobId "$JOB_ID" --argjson progress "$progress" --arg logs "$log_msg" '{action: $action, jobId: $jobId, progress: $progress, logs: $logs}')" \
       2>/dev/null || echo "  (webhook callback failed, continuing)"
   fi
 }
