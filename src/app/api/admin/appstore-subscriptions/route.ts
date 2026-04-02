@@ -31,26 +31,23 @@ export async function GET(request: NextRequest) {
       appStoreOriginalTransactionId: { not: null },
     };
     if (search) {
-      userWhere.email = { contains: search, mode: 'insensitive' };
+      userWhere.email = { contains: search };
     }
 
-    const [users, totalUsers] = await Promise.all([
-      prisma.user.findMany({
-        where: userWhere,
-        select: {
-          id: true,
-          email: true,
-          name: true,
-          plan: true,
-          subscriptionSource: true,
-          subscriptionExpiresAt: true,
-          appStoreOriginalTransactionId: true,
-          createdAt: true,
-        },
-        orderBy: { createdAt: 'desc' },
-      }),
-      prisma.user.count({ where: userWhere }),
-    ]);
+    const users = await prisma.user.findMany({
+      where: userWhere,
+      select: {
+        id: true,
+        email: true,
+        name: true,
+        plan: true,
+        subscriptionSource: true,
+        subscriptionExpiresAt: true,
+        appStoreOriginalTransactionId: true,
+        createdAt: true,
+      },
+      orderBy: { createdAt: 'desc' },
+    });
 
     // Query ZKUser table for Apple IAP details (product ID, purchase/expiry dates)
     const zkUsers = await prisma.zKUser.findMany({
