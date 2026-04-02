@@ -30,6 +30,18 @@ export interface StripePriceIds {
 
 let stripeInstance: Stripe | null = null;
 let runtimeKeys: RuntimeKeys | null = null;
+let keysLoadedPromise: Promise<void> | null = null;
+
+/**
+ * Ensure DB key set is loaded once after server restart.
+ * Safe to call from every route — only hits DB on the first invocation.
+ */
+export function ensureKeysLoaded(): Promise<void> {
+  if (!keysLoadedPromise) {
+    keysLoadedPromise = loadActiveKeySet().then(() => {});
+  }
+  return keysLoadedPromise;
+}
 
 /** Resolve the secret key currently in use (DB override or env). */
 export function activeSecretKey(): string {
@@ -175,12 +187,12 @@ const PRICE_ID_KEYS = ['starter', 'pro', 'team', 'business'];
 export const PRICE_IDS: Record<string, { monthly: string; yearly: string } | null> = new Proxy(
   {} as Record<string, { monthly: string; yearly: string } | null>,
   {
-    get: (_target, prop: string) => resolvePriceIds()[prop] ?? undefined,
+    get: (_target, prop: string) => resolvePriceIds()[prop],
     ownKeys: () => PRICE_ID_KEYS,
     getOwnPropertyDescriptor: (_target, prop: string) => ({
       configurable: true,
       enumerable: true,
-      value: resolvePriceIds()[prop as string] ?? undefined,
+      value: resolvePriceIds()[prop as string],
     }),
   },
 );

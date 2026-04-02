@@ -1,12 +1,13 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getAdminSession } from '@/lib/admin-session';
-import { getStripe } from '@/lib/stripe';
+import { getStripe, ensureKeysLoaded } from '@/lib/stripe';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 export async function POST() {
+  await ensureKeysLoaded();
   try {
     const session = getAdminSession();
     if (!session) {

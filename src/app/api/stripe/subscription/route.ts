@@ -8,6 +8,7 @@ import {
   changeSubscriptionPlan,
   PRICE_IDS,
   PlanType,
+  ensureKeysLoaded,
 } from '@/lib/stripe';
 
 // GET - Get current subscription details
@@ -101,6 +102,7 @@ export async function GET() {
 
 // PATCH - Update subscription (cancel, resume, change seats/plan)
 export async function PATCH(request: NextRequest) {
+  await ensureKeysLoaded();
   try {
     const session = await auth();
     

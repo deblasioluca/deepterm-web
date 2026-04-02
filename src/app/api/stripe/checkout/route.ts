@@ -6,9 +6,11 @@ import {
   createCheckoutSession,
   PRICE_IDS,
   PlanType,
+  ensureKeysLoaded,
 } from '@/lib/stripe';
 
 export async function POST(request: NextRequest) {
+  await ensureKeysLoaded();
   try {
     const session = await auth();
     

@@ -1,12 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { headers } from 'next/headers';
 import Stripe from 'stripe';
-import { stripe, getWebhookSecret } from '@/lib/stripe';
+import { stripe, getWebhookSecret, ensureKeysLoaded } from '@/lib/stripe';
 import { prisma } from '@/lib/prisma';
 import { notifyPayment } from '@/lib/node-red';
 import { syncOrgMemberPlans } from '@/lib/zk/sync-org-plans';
 
 export async function POST(request: NextRequest) {
+  await ensureKeysLoaded();
   const body = await request.text();
   const headersList = await headers();
   const signature = headersList.get('stripe-signature');
