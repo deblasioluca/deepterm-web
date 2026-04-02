@@ -79,20 +79,35 @@ interface BillingPlan {
   features: string[];
 }
 
-const plans: BillingPlan[] = PLANS.map((p) => {
-  const pr = PRICING[p.key];
-  return {
-    id: p.key,
-    name: p.name,
-    price: pr ? pr.yearlyPerMonth : 0,
-    monthlyPrice: pr?.monthly,
-    yearlyPrice: pr?.yearlyPerMonth,
-    features: p.highlights.slice(0, 4),
-  };
-});
+const plans: BillingPlan[] = [
+  ...PLANS.map((p) => {
+    const pr = PRICING[p.key];
+    return {
+      id: p.key,
+      name: p.name,
+      price: pr ? pr.yearlyPerMonth : 0,
+      monthlyPrice: pr?.monthly,
+      yearlyPrice: pr?.yearlyPerMonth,
+      features: p.highlights.slice(0, 4),
+    };
+  }),
+  // Legacy alias — orgs stored as 'enterprise' should resolve to Business
+  {
+    id: 'enterprise',
+    name: 'Business',
+    price: PRICING.business?.yearlyPerMonth ?? 15,
+    monthlyPrice: PRICING.business?.monthly,
+    yearlyPrice: PRICING.business?.yearlyPerMonth,
+    features: PLANS.find((p) => p.key === 'business')!.highlights.slice(0, 4),
+  },
+];
 
 const planFeatures: Record<string, string[]> = Object.fromEntries(
-  PLANS.map((p) => [p.key, p.features]),
+  PLANS.flatMap((p) =>
+    p.key === 'business'
+      ? [['business', p.features], ['enterprise', p.features]]
+      : [[p.key, p.features]]
+  ),
 );
 
 // Helper function to get payment method display info
@@ -737,8 +752,8 @@ export default function BillingPage() {
         </div>
         <div className="flex gap-3 pt-6">
           <Button variant="secondary" className="flex-1" onClick={() => setIsChangePlanOpen(false)}>Cancel</Button>
-          <Button variant="primary" className="flex-1" onClick={handleChangePlan} disabled={isActionLoading || !selectedPlan || selectedPlan === currentPlan || selectedPlan === 'enterprise'}>
-            {isActionLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : selectedPlan === 'enterprise' ? 'Contact Sales' : 'Confirm Change'}
+          <Button variant="primary" className="flex-1" onClick={handleChangePlan} disabled={isActionLoading || !selectedPlan || selectedPlan === currentPlan || selectedPlan === 'business' || selectedPlan === 'enterprise'}>
+            {isActionLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : (selectedPlan === 'business' || selectedPlan === 'enterprise') ? 'Contact Sales' : 'Confirm Change'}
           </Button>
         </div>
       </Modal>
