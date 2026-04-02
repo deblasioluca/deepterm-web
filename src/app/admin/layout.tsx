@@ -27,6 +27,7 @@ import {
   Bot,
   Mail,
   AreaChart,
+  RefreshCw,
 } from 'lucide-react';
 
 // Custom GitHub mark — the lucide `Github` icon is deprecated and barely visible
@@ -52,6 +53,7 @@ const navItems = [
   { label: 'Subscriptions',href: '/admin/subscriptions',icon: CreditCard },
   { label: 'Analytics',    href: '/admin/analytics',    icon: BarChart3 },
   { label: 'Statistics',   href: '/admin/statistics',   icon: AreaChart },
+  { label: 'Content Update',href: '/admin/content-update',icon: RefreshCw },
   { label: 'Audit Logs',   href: '/admin/audit-logs',   icon: FileText },
   { label: 'Feedback',     href: '/admin/feedback',     icon: MessageSquare },
   { label: 'Issues',       href: '/admin/issues',       icon: HelpCircle },
