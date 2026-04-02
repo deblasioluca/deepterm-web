@@ -116,9 +116,48 @@ function isIntranetRequest(request: NextRequest): boolean {
   return isPrivateIpv4(ip) || isPrivateIpv6(ip);
 }
 
+/**
+ * Fire-and-forget: record a page view for analytics.
+ * Middleware can't import Prisma (Edge Runtime), so we delegate
+ * to a server-side route, identical to reportSecurityEvent.
+ */
+function trackPageView(request: NextRequest) {
+  const ip = getClientIp(request);
+  const origin = request.nextUrl.origin;
+
+  fetch(`${origin}/api/internal/track`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      path: request.nextUrl.pathname,
+      ip,
+      userAgent: request.headers.get('user-agent') ?? undefined,
+      referrer: request.headers.get('referer') ?? undefined,
+    }),
+  }).catch(() => {
+    // Analytics must never break user requests
+  });
+}
+
+// Paths to skip when tracking page views (API routes, static assets, internal)
+const TRACK_SKIP_PREFIXES = [
+  '/api/',
+  '/_next/',
+  '/favicon',
+  '/robots.txt',
+  '/sitemap',
+  '/admin',
+  '/dashboard',
+];
+
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
   const locale = resolveLocale(request);
+
+  // Track page views for public pages (fire-and-forget)
+  if (!TRACK_SKIP_PREFIXES.some((p) => pathname.startsWith(p))) {
+    trackPageView(request);
+  }
 
   if (pathname === '/admin/login' || pathname === '/api/admin/auth/login') {
     if (!isIntranetRequest(request)) {
@@ -231,5 +270,5 @@ export function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ['/', '/dashboard/:path*', '/admin/:path*', '/api/admin/:path*', '/login', '/register'],
+  matcher: ['/', '/dashboard/:path*', '/admin/:path*', '/api/admin/:path*', '/login', '/register', '/documentation/:path*', '/pricing/:path*', '/features/:path*', '/download/:path*', '/about/:path*', '/changelog/:path*', '/invite/:path*'],
 };

@@ -37,12 +37,11 @@ const TIER_METADATA: Record<TierKey, {
   },
   team: {
     name: 'Team',
-    description: 'For teams that need shared vaults, SSO, and audit logs.',
+    description: 'For teams that need shared vaults, collaboration, and audit logs.',
     highlights: [
       'Everything in Pro',
       'Team vaults',
       'Real-time collaboration',
-      'SSO / SAML',
       'Admin controls',
       'Audit logs',
     ],

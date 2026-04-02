@@ -25,7 +25,7 @@ const plans = [
   },
   {
     name: 'Pro',
-    price: '$10',
+    price: '$5',
     period: '/month',
     subtitle: 'when paid annually',
     tagline: 'For individuals responsible for keeping the infrastructure up and running 24/7.',
@@ -42,7 +42,7 @@ const plans = [
   },
   {
     name: 'Team',
-    price: '$20',
+    price: '$10',
     period: '/user/month',
     subtitle: 'when paid annually',
     tagline: 'For teams that need to manage infrastructure together and stay on the same page.',
@@ -60,7 +60,7 @@ const plans = [
   },
   {
     name: 'Business',
-    price: '$30',
+    price: '$15',
     period: '/user/month',
     subtitle: 'when paid annually',
     tagline: 'For companies requiring access control and advanced security.',

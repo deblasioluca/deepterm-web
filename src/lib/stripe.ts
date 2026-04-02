@@ -52,8 +52,8 @@ export const PLAN_DETAILS = {
   },
   pro: {
     name: 'Pro',
-    price: 10, // per seat/month (annual)
-    monthlyPrice: 12.99,
+    price: 5, // per seat/month (annual)
+    monthlyPrice: 6.49,
     features: [
       'Unlimited hosts',
       'AI terminal assistant',
@@ -66,22 +66,21 @@ export const PLAN_DETAILS = {
   },
   team: {
     name: 'Team',
-    price: 20, // per seat/month (annual)
-    monthlyPrice: 24.99,
+    price: 10, // per seat/month (annual)
+    monthlyPrice: 12.49,
     features: [
       'Everything in Pro',
       'Team vaults',
       'MultiKey',
       'Real-time collaboration',
-      'SSO/SAML',
       'Admin controls',
       'Audit logs',
     ],
   },
   enterprise: {
     name: 'Business',
-    price: 30, // per user/month (annual)
-    monthlyPrice: 39.99,
+    price: 15, // per user/month (annual)
+    monthlyPrice: 19.99,
     features: [
       'Everything in Team',
       'Multiple vaults with granular permissions',
@@ -93,8 +92,8 @@ export const PLAN_DETAILS = {
   },
   business: {
     name: 'Business',
-    price: 30, // per user/month (annual)
-    monthlyPrice: 39.99,
+    price: 15, // per user/month (annual)
+    monthlyPrice: 19.99,
     features: [
       'Everything in Team',
       'Multiple vaults with granular permissions',

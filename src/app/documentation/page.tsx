@@ -308,7 +308,7 @@ function DocumentationContent() {
         </AnimatePresence>
 
         {/* Content */}
-        <main className="flex-1 min-w-0 px-6 py-10 sm:px-10 lg:px-16 max-w-3xl">
+        <main className="flex-1 min-w-0 px-6 py-10 sm:px-10 lg:px-16 max-w-4xl">
           <ArticleContent article={article} category={category} />
 
           {/* Prev / Next */}
