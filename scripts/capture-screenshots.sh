@@ -35,9 +35,9 @@ DEEPTERM_APP="/Applications/DeepTerm.app"
 WINDOW_WIDTH=2000
 WINDOW_HEIGHT=1264
 DELAY_BETWEEN=2  # seconds between captures to allow UI to settle
-WEBHOOK_URL="${CONTENT_UPDATE_WEBHOOK_URL:-}"
-WEBHOOK_SECRET="${CONTENT_UPDATE_WEBHOOK_SECRET:-}"
-JOB_ID=""
+WEBHOOK_URL="${WEBHOOK_URL:-${CONTENT_UPDATE_WEBHOOK_URL:-}}"
+WEBHOOK_SECRET="${WEBHOOK_SECRET:-${CONTENT_UPDATE_WEBHOOK_SECRET:-}}"
+JOB_ID="${JOB_ID:-}"
 
 # ── Parse arguments ──────────────────────────────────────────
 while [[ $# -gt 0 ]]; do
