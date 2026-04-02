@@ -18,58 +18,63 @@ export async function GET() {
     return NextResponse.json({ error: 'Unauthorized', message: 'Valid admin session required' }, { status: 401 });
   }
 
-  const sandbox = isStripeSandbox();
-  const keyPrefix = (process.env.STRIPE_SECRET_KEY || '').slice(0, 8) + '...';
-  const publishablePrefix = (process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY || '').slice(0, 8) + '...';
+  try {
+    const sandbox = isStripeSandbox();
+    const keyPrefix = (process.env.STRIPE_SECRET_KEY || '').slice(0, 8) + '...';
+    const publishablePrefix = (process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY || '').slice(0, 8) + '...';
 
-  // Check which env vars are set
-  const envStatus = {
-    STRIPE_SECRET_KEY: !!process.env.STRIPE_SECRET_KEY,
-    NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: !!process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY,
-    STRIPE_WEBHOOK_SECRET: !!process.env.STRIPE_WEBHOOK_SECRET,
-    STRIPE_PRO_MONTHLY_PRICE_ID: !!process.env.STRIPE_PRO_MONTHLY_PRICE_ID,
-    STRIPE_PRO_YEARLY_PRICE_ID: !!process.env.STRIPE_PRO_YEARLY_PRICE_ID,
-    STRIPE_TEAM_MONTHLY_PRICE_ID: !!process.env.STRIPE_TEAM_MONTHLY_PRICE_ID,
-    STRIPE_TEAM_YEARLY_PRICE_ID: !!process.env.STRIPE_TEAM_YEARLY_PRICE_ID,
-    STRIPE_BUSINESS_MONTHLY_PRICE_ID: !!process.env.STRIPE_BUSINESS_MONTHLY_PRICE_ID,
-    STRIPE_BUSINESS_YEARLY_PRICE_ID: !!process.env.STRIPE_BUSINESS_YEARLY_PRICE_ID,
-  };
+    // Check which env vars are set
+    const envStatus = {
+      STRIPE_SECRET_KEY: !!process.env.STRIPE_SECRET_KEY,
+      NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: !!process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY,
+      STRIPE_WEBHOOK_SECRET: !!process.env.STRIPE_WEBHOOK_SECRET,
+      STRIPE_PRO_MONTHLY_PRICE_ID: !!process.env.STRIPE_PRO_MONTHLY_PRICE_ID,
+      STRIPE_PRO_YEARLY_PRICE_ID: !!process.env.STRIPE_PRO_YEARLY_PRICE_ID,
+      STRIPE_TEAM_MONTHLY_PRICE_ID: !!process.env.STRIPE_TEAM_MONTHLY_PRICE_ID,
+      STRIPE_TEAM_YEARLY_PRICE_ID: !!process.env.STRIPE_TEAM_YEARLY_PRICE_ID,
+      STRIPE_BUSINESS_MONTHLY_PRICE_ID: !!process.env.STRIPE_BUSINESS_MONTHLY_PRICE_ID,
+      STRIPE_BUSINESS_YEARLY_PRICE_ID: !!process.env.STRIPE_BUSINESS_YEARLY_PRICE_ID,
+    };
 
-  // Price IDs (masked — only show if placeholder or real)
-  const priceIds = Object.entries(PRICE_IDS).reduce(
-    (acc, [plan, ids]) => {
-      if (!ids) {
-        acc[plan] = null;
+    // Price IDs (masked — only show if placeholder or real)
+    const priceIds = Object.entries(PRICE_IDS).reduce(
+      (acc, [plan, ids]) => {
+        if (!ids) {
+          acc[plan] = null;
+          return acc;
+        }
+        acc[plan] = {
+          monthly: ids.monthly.startsWith('price_') && ids.monthly.length > 20
+            ? ids.monthly.slice(0, 12) + '...'
+            : ids.monthly + ' (placeholder)',
+          yearly: ids.yearly.startsWith('price_') && ids.yearly.length > 20
+            ? ids.yearly.slice(0, 12) + '...'
+            : ids.yearly + ' (placeholder)',
+        };
         return acc;
-      }
-      acc[plan] = {
-        monthly: ids.monthly.startsWith('price_') && ids.monthly.length > 20
-          ? ids.monthly.slice(0, 12) + '...'
-          : ids.monthly + ' (placeholder)',
-        yearly: ids.yearly.startsWith('price_') && ids.yearly.length > 20
-          ? ids.yearly.slice(0, 12) + '...'
-          : ids.yearly + ' (placeholder)',
-      };
-      return acc;
-    },
-    {} as Record<string, { monthly: string; yearly: string } | null>,
-  );
+      },
+      {} as Record<string, { monthly: string; yearly: string } | null>,
+    );
 
-  return NextResponse.json({
-    sandbox,
-    mode: sandbox ? 'test' : 'live',
-    dashboardUrl: stripeDashboardUrl(),
-    keyPrefix,
-    publishablePrefix,
-    envStatus,
-    priceIds,
-    plans: Object.entries(PLAN_DETAILS)
-      .filter(([key]) => key !== 'enterprise') // 'enterprise' is a legacy alias for 'business'
-      .map(([key, detail]) => ({
-      key,
-      name: detail.name,
-      price: detail.price,
-      monthlyPrice: 'monthlyPrice' in detail ? detail.monthlyPrice : null,
-    })),
-  });
+    return NextResponse.json({
+      sandbox,
+      mode: sandbox ? 'test' : 'live',
+      dashboardUrl: stripeDashboardUrl(),
+      keyPrefix,
+      publishablePrefix,
+      envStatus,
+      priceIds,
+      plans: Object.entries(PLAN_DETAILS)
+        .filter(([key]) => key !== 'enterprise') // 'enterprise' is a legacy alias for 'business'
+        .map(([key, detail]) => ({
+        key,
+        name: detail.name,
+        price: detail.price,
+        monthlyPrice: 'monthlyPrice' in detail ? detail.monthlyPrice : null,
+      })),
+    });
+  } catch (error) {
+    console.error('Failed to fetch Stripe config:', error);
+    return NextResponse.json({ error: 'Internal Server Error', message: 'Failed to fetch Stripe config' }, { status: 500 });
+  }
 }
