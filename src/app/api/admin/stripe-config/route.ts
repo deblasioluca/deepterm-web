@@ -14,6 +14,7 @@ import {
   loadActiveKeySet,
   switchStripeMode,
   getPublishableKey,
+  activeSecretKey,
 } from '@/lib/stripe';
 
 export const runtime = 'nodejs';
@@ -30,7 +31,7 @@ export async function GET() {
     await loadActiveKeySet();
 
     const sandbox = isStripeSandbox();
-    const secretKey = process.env.STRIPE_SECRET_KEY || '';
+    const secretKey = activeSecretKey();
     const pubKey = getPublishableKey();
     const keyPrefix = secretKey ? secretKey.slice(0, 8) + '...' : '(none)';
     const publishablePrefix = pubKey ? pubKey.slice(0, 8) + '...' : '(none)';
@@ -167,10 +168,18 @@ export async function POST(request: NextRequest) {
         );
       }
 
-      const expectedPrefix = body.mode === 'sandbox' ? 'sk_test_' : 'sk_live_';
-      if (!body.secretKey.startsWith(expectedPrefix)) {
+      const expectedSkPrefix = body.mode === 'sandbox' ? 'sk_test_' : 'sk_live_';
+      if (!body.secretKey.startsWith(expectedSkPrefix)) {
         return NextResponse.json(
-          { error: `Secret key must start with "${expectedPrefix}" for ${body.mode} mode` },
+          { error: `Secret key must start with "${expectedSkPrefix}" for ${body.mode} mode` },
+          { status: 400 },
+        );
+      }
+
+      const expectedPkPrefix = body.mode === 'sandbox' ? 'pk_test_' : 'pk_live_';
+      if (!body.publishableKey.startsWith(expectedPkPrefix)) {
+        return NextResponse.json(
+          { error: `Publishable key must start with "${expectedPkPrefix}" for ${body.mode} mode` },
           { status: 400 },
         );
       }

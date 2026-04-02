@@ -32,7 +32,7 @@ let stripeInstance: Stripe | null = null;
 let runtimeKeys: RuntimeKeys | null = null;
 
 /** Resolve the secret key currently in use (DB override or env). */
-function activeSecretKey(): string {
+export function activeSecretKey(): string {
   return runtimeKeys?.secretKey || process.env.STRIPE_SECRET_KEY || '';
 }
 
