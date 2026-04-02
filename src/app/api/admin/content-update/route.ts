@@ -27,13 +27,25 @@ const AVAILABLE_SECTIONS = [
   'pricing',
 ];
 
-/** Append a line to a job's logs field (read-then-concat since Prisma String has no append). */
+/** Append a line to a job's logs field (read-then-concat since Prisma String has no append).
+ *  Uses updateMany with status guard when extra fields are provided to prevent
+ *  overwriting a cancelled job's status (TOCTOU race protection). */
 async function appendLog(jobId: string, line: string, extra: Record<string, unknown> = {}) {
   const job = await prisma.contentUpdateJob.findUnique({ where: { id: jobId }, select: { logs: true } });
-  await prisma.contentUpdateJob.update({
-    where: { id: jobId },
-    data: { logs: (job?.logs ?? '') + '\n' + line, ...extra },
-  });
+  const data = { logs: (job?.logs ?? '') + '\n' + line, ...extra };
+  if (Object.keys(extra).length > 0) {
+    // Use updateMany with status guard to prevent overwriting cancelled status
+    await prisma.contentUpdateJob.updateMany({
+      where: { id: jobId, status: { not: 'cancelled' } },
+      data,
+    });
+  } else {
+    // Log-only updates are safe to apply unconditionally
+    await prisma.contentUpdateJob.update({
+      where: { id: jobId },
+      data,
+    });
+  }
 }
 
 export async function GET(request: NextRequest) {
@@ -42,25 +54,31 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  const { searchParams } = new URL(request.url);
-  const limit = Math.min(parseInt(searchParams.get('limit') || '20', 10), 100);
+  try {
+    const { searchParams } = new URL(request.url);
+    const parsed = parseInt(searchParams.get('limit') || '20', 10);
+    const limit = Math.min(Number.isNaN(parsed) ? 20 : parsed, 100);
 
-  const [jobs, activeJob] = await Promise.all([
-    prisma.contentUpdateJob.findMany({
-      orderBy: { createdAt: 'desc' },
-      take: limit,
-    }),
-    prisma.contentUpdateJob.findFirst({
-      where: { status: { in: ['queued', 'running'] } },
-      orderBy: { createdAt: 'desc' },
-    }),
-  ]);
+    const [jobs, activeJob] = await Promise.all([
+      prisma.contentUpdateJob.findMany({
+        orderBy: { createdAt: 'desc' },
+        take: limit,
+      }),
+      prisma.contentUpdateJob.findFirst({
+        where: { status: { in: ['queued', 'running'] } },
+        orderBy: { createdAt: 'desc' },
+      }),
+    ]);
 
-  return NextResponse.json({
-    jobs,
-    activeJob,
-    availableSections: AVAILABLE_SECTIONS,
-  });
+    return NextResponse.json({
+      jobs,
+      activeJob,
+      availableSections: AVAILABLE_SECTIONS,
+    });
+  } catch (error) {
+    console.error('Content update GET error:', error);
+    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+  }
 }
 
 export async function POST(request: NextRequest) {
