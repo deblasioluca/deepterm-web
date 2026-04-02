@@ -714,7 +714,7 @@ export default function BillingPage() {
         </div>
 
         <div className="space-y-3">
-          {plans.map((plan) => (
+          {plans.filter((p) => p.id !== 'enterprise').map((plan) => (
             <div
               key={plan.id}
               onClick={() => setSelectedPlan(plan.id)}
