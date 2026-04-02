@@ -1168,7 +1168,7 @@ export const DOC_CATEGORIES: DocCategory[] = [
 </ul>
 
 <h3>Billing</h3>
-<p>Pro, Team, and Business plans are billed monthly via Stripe. Manage your subscription, update payment methods, and download invoices from <a href="/dashboard/billing">Dashboard → Billing</a>.</p>
+<p>Pro, Team, and Business plans are billed monthly or annually via Stripe. Manage your subscription, update payment methods, and download invoices from <a href="/dashboard/billing">Dashboard → Billing</a>.</p>
 
 <h3>Organization Billing</h3>
 <p>When you create or join an organization, billing is managed at the <strong>organization level</strong>. The organization owner subscribes to a Team or Business plan, which covers all members. Individual members who already have their own Pro+ subscription keep it — the organization only covers seats for Free/Starter members.</p>
