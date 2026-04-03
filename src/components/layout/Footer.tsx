@@ -29,7 +29,7 @@ export function Footer() {
     ],
     legal: [
       { label: messages.footer.termsOfUse, href: '#' },
-      { label: messages.footer.privacy, href: '#' },
+      { label: messages.footer.privacy, href: '/privacy' },
       { label: messages.navbar.security, href: '/security' },
     ],
   };
