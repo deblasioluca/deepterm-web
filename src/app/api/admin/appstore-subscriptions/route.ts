@@ -26,7 +26,19 @@ export async function GET(request: NextRequest) {
     const skip = (page - 1) * limit;
     const now = new Date();
 
-    // Query users with App Store subscriptions (via User table)
+    // Query ALL App Store users (unfiltered) for global stats
+    const allAppStoreUsers = await prisma.user.findMany({
+      where: { appStoreOriginalTransactionId: { not: null } },
+      select: {
+        id: true,
+        email: true,
+        plan: true,
+        subscriptionSource: true,
+        subscriptionExpiresAt: true,
+      },
+    });
+
+    // Query users with App Store subscriptions (with search filter for paginated results)
     const userWhere: Record<string, unknown> = {
       appStoreOriginalTransactionId: { not: null },
     };
@@ -103,21 +115,28 @@ export async function GET(request: NextRequest) {
       ? merged.filter((s) => s.status === statusFilter)
       : merged;
 
-    // Calculate stats
-    const allActive = merged.filter((s) => s.isActive);
-    const allExpired = merged.filter((s) => !s.isActive);
-
-    const planBreakdown: Record<string, number> = {};
-    for (const sub of allActive) {
-      const plan = sub.plan || 'unknown';
-      planBreakdown[plan] = (planBreakdown[plan] || 0) + 1;
-    }
-
-    // Expiring soon (within 7 days)
+    // Calculate global stats from ALL App Store users (unfiltered)
     const sevenDaysFromNow = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
-    const expiringSoon = allActive.filter(
-      (s) => s.expiresAt && new Date(s.expiresAt) <= sevenDaysFromNow
-    );
+    let statsActive = 0;
+    let statsExpired = 0;
+    let statsExpiringSoon = 0;
+    const planBreakdown: Record<string, number> = {};
+
+    for (const u of allAppStoreUsers) {
+      const zkData = zkByWebUserId.get(u.id) || zkByEmail.get(u.email);
+      const exp = u.subscriptionExpiresAt || zkData?.appleExpiresDate || null;
+      const active = exp ? new Date(exp) > now : u.subscriptionSource === 'appstore';
+      if (active) {
+        statsActive++;
+        const plan = u.plan || 'unknown';
+        planBreakdown[plan] = (planBreakdown[plan] || 0) + 1;
+        if (exp && new Date(exp) <= sevenDaysFromNow) {
+          statsExpiringSoon++;
+        }
+      } else {
+        statsExpired++;
+      }
+    }
 
     // Paginate the filtered results
     const paginated = filtered.slice(skip, skip + limit);
@@ -126,10 +145,10 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({
       subscriptions: paginated,
       stats: {
-        totalAppStore: merged.length,
-        totalActive: allActive.length,
-        totalExpired: allExpired.length,
-        expiringSoon: expiringSoon.length,
+        totalAppStore: allAppStoreUsers.length,
+        totalActive: statsActive,
+        totalExpired: statsExpired,
+        expiringSoon: statsExpiringSoon,
         planBreakdown,
       },
       pagination: {
