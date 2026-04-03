@@ -24,7 +24,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Resolve user via ZK auth or email
-    let user: { id: string; email: string; plan: string; stripeSubscriptionId: string | null; subscriptionScope: string | null } | null = null;
+    let user: { id: string; email: string; plan: string; stripeSubscriptionId: string | null; subscriptionScope: string | null; subscriptionSource: string | null } | null = null;
 
     const zkAuth = getAuthFromRequest(request);
     if (zkAuth) {
@@ -36,13 +36,13 @@ export async function POST(request: NextRequest) {
       if (zkUser?.webUserId) {
         user = await prisma.user.findUnique({
           where: { id: zkUser.webUserId },
-          select: { id: true, email: true, plan: true, stripeSubscriptionId: true, subscriptionScope: true },
+          select: { id: true, email: true, plan: true, stripeSubscriptionId: true, subscriptionScope: true, subscriptionSource: true },
         });
       }
       if (!user && zkUser) {
         user = await prisma.user.findUnique({
           where: { email: zkUser.email },
-          select: { id: true, email: true, plan: true, stripeSubscriptionId: true, subscriptionScope: true },
+          select: { id: true, email: true, plan: true, stripeSubscriptionId: true, subscriptionScope: true, subscriptionSource: true },
         });
       }
     }
@@ -50,7 +50,7 @@ export async function POST(request: NextRequest) {
     if (!user) {
       user = await prisma.user.findUnique({
         where: { email },
-        select: { id: true, email: true, plan: true, stripeSubscriptionId: true, subscriptionScope: true },
+        select: { id: true, email: true, plan: true, stripeSubscriptionId: true, subscriptionScope: true, subscriptionSource: true },
       });
     }
 
@@ -73,7 +73,7 @@ export async function POST(request: NextRequest) {
           where: { id: user.id },
           data: {
             plan: isOrgMember ? user.plan : applePlan,
-            subscriptionSource: isOrgMember ? (user.subscriptionScope ?? 'appstore') : 'appstore',
+            subscriptionSource: isOrgMember ? (user.subscriptionSource ?? 'appstore') : 'appstore',
             appStoreOriginalTransactionId: originalTransactionId || undefined,
           },
         });
