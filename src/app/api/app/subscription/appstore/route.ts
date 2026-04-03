@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getAuthFromRequest } from '@/lib/zk/middleware';
+import { getApplePlan } from '@/lib/zk/apple-plan';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -23,7 +24,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Resolve user via ZK auth or email
-    let user: { id: string; email: string; stripeSubscriptionId: string | null } | null = null;
+    let user: { id: string; email: string; plan: string; stripeSubscriptionId: string | null; subscriptionScope: string | null; subscriptionSource: string | null } | null = null;
 
     const zkAuth = getAuthFromRequest(request);
     if (zkAuth) {
@@ -35,13 +36,13 @@ export async function POST(request: NextRequest) {
       if (zkUser?.webUserId) {
         user = await prisma.user.findUnique({
           where: { id: zkUser.webUserId },
-          select: { id: true, email: true, stripeSubscriptionId: true },
+          select: { id: true, email: true, plan: true, stripeSubscriptionId: true, subscriptionScope: true, subscriptionSource: true },
         });
       }
       if (!user && zkUser) {
         user = await prisma.user.findUnique({
           where: { email: zkUser.email },
-          select: { id: true, email: true, stripeSubscriptionId: true },
+          select: { id: true, email: true, plan: true, stripeSubscriptionId: true, subscriptionScope: true, subscriptionSource: true },
         });
       }
     }
@@ -49,7 +50,7 @@ export async function POST(request: NextRequest) {
     if (!user) {
       user = await prisma.user.findUnique({
         where: { email },
-        select: { id: true, email: true, stripeSubscriptionId: true },
+        select: { id: true, email: true, plan: true, stripeSubscriptionId: true, subscriptionScope: true, subscriptionSource: true },
       });
     }
 
@@ -59,22 +60,31 @@ export async function POST(request: NextRequest) {
 
     if (source === 'appstore') {
       if (hasActiveSubscription) {
-        // App Store subscription active — upgrade to Pro
-        // Don't overwrite subscriptionSource if user already has active Stripe
+        // Derive plan server-side from the Apple product ID (not client-supplied plan)
+        // to prevent tier escalation attacks. Falls back to 'pro' for backwards
+        // compatibility with older app versions that don't send productId.
+        const applePlan = body.productId
+          ? getApplePlan(body.productId)
+          : 'pro';
+        // Don't overwrite plan if user has an active org-level or Stripe subscription
+        // (matches the guard in the webhook handler at webhooks/appstore/route.ts)
+        const isOrgMember = user.subscriptionScope === 'organization' || !!user.stripeSubscriptionId;
         await prisma.user.update({
           where: { id: user.id },
           data: {
-            plan: 'pro',
-            subscriptionSource: user.stripeSubscriptionId ? 'stripe' : 'appstore',
+            plan: isOrgMember ? user.plan : applePlan,
+            subscriptionSource: isOrgMember ? (user.subscriptionSource ?? 'appstore') : 'appstore',
             appStoreOriginalTransactionId: originalTransactionId || undefined,
           },
         });
 
-        console.log(`App Store: ${user.email} subscription active -> Pro`);
+        console.log(`App Store: ${user.email} subscription active -> ${isOrgMember ? user.plan + ' (org-preserved)' : applePlan}`);
       } else {
         // App Store subscription not active
-        // Only downgrade if they don't have an active Stripe subscription
-        if (!user.stripeSubscriptionId) {
+        // Only downgrade if they don't have an active org-level or Stripe subscription
+        // (matches the guard in the webhook handler at webhooks/appstore/route.ts)
+        const isOrgMemberInactive = user.subscriptionScope === 'organization' || !!user.stripeSubscriptionId;
+        if (!isOrgMemberInactive) {
           await prisma.user.update({
             where: { id: user.id },
             data: {
@@ -85,7 +95,7 @@ export async function POST(request: NextRequest) {
 
           console.log(`App Store: ${user.email} subscription inactive -> Free`);
         } else {
-          console.log(`App Store: ${user.email} no App Store sub, but has Stripe — keeping Pro`);
+          console.log(`App Store: ${user.email} no App Store sub, but has org/Stripe — keeping ${user.plan}`);
         }
       }
     }
