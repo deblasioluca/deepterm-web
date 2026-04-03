@@ -40,7 +40,7 @@ export default function PrivacyPolicyPage() {
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.5, delay: 0.1 }}
-              className="prose prose-invert max-w-none space-y-8"
+              className="max-w-none space-y-8"
             >
               {/* Introduction */}
               <div>
