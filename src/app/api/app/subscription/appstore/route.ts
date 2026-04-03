@@ -73,7 +73,7 @@ export async function POST(request: NextRequest) {
           where: { id: user.id },
           data: {
             plan: isOrgMember ? user.plan : applePlan,
-            subscriptionSource: user.stripeSubscriptionId ? 'stripe' : 'appstore',
+            subscriptionSource: isOrgMember ? (user.subscriptionScope ?? 'appstore') : 'appstore',
             appStoreOriginalTransactionId: originalTransactionId || undefined,
           },
         });

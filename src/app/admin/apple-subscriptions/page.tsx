@@ -77,6 +77,7 @@ export default function AdminAppleSubscriptionsPage() {
   const fetchSubscriptions = useCallback(async () => {
     try {
       setIsLoading(true);
+      setError(null);
       const params = new URLSearchParams({
         page: pagination.page.toString(),
         limit: pagination.limit.toString(),
