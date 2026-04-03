@@ -209,7 +209,7 @@ export default function SecurityPage() {
                 <Link href="/dashboard/security-assessment">
                   <Button variant="primary">Request Security Assessment</Button>
                 </Link>
-                <Link href="#">
+                <Link href="/privacy">
                   <Button variant="secondary">View Privacy Policy</Button>
                 </Link>
               </div>
