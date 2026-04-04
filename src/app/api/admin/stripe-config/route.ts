@@ -40,6 +40,7 @@ export async function GET() {
       const envLivePk = process.env.STRIPE_LIVE_PUBLISHABLE_KEY;
 
       // Seed sandbox key set from STRIPE_SECRET_KEY (sk_test_...)
+      let sandboxSeeded = false;
       if (envTestSk?.startsWith('sk_test_') && envTestPk?.startsWith('pk_test_')) {
         await prisma.stripeKeySet.create({
           data: {
@@ -58,9 +59,11 @@ export async function GET() {
             isActive: true,
           },
         });
+        sandboxSeeded = true;
       }
 
       // Seed production key set from STRIPE_LIVE_SECRET_KEY (sk_live_...)
+      // If sandbox was not seeded, make production the active key set
       if (envLiveSk?.startsWith('sk_live_') && envLivePk?.startsWith('pk_live_')) {
         await prisma.stripeKeySet.create({
           data: {
@@ -76,7 +79,7 @@ export async function GET() {
               businessMonthly: process.env.STRIPE_LIVE_BUSINESS_MONTHLY_PRICE_ID || '',
               businessYearly: process.env.STRIPE_LIVE_BUSINESS_YEARLY_PRICE_ID || '',
             }),
-            isActive: false,
+            isActive: !sandboxSeeded,
           },
         });
       }
