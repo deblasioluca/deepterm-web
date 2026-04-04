@@ -30,6 +30,61 @@ export async function GET() {
     // Ensure DB key set is loaded (first request after restart)
     await loadActiveKeySet();
 
+    // Auto-seed DB key sets from .env if none exist yet
+    // This ensures the toggle buttons appear without manual "Add" steps
+    const existingKeySets = await prisma.stripeKeySet.count();
+    if (existingKeySets === 0) {
+      const envTestSk = process.env.STRIPE_SECRET_KEY;
+      const envTestPk = process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY;
+      const envLiveSk = process.env.STRIPE_LIVE_SECRET_KEY;
+      const envLivePk = process.env.STRIPE_LIVE_PUBLISHABLE_KEY;
+
+      // Seed sandbox key set from STRIPE_SECRET_KEY (sk_test_...)
+      if (envTestSk?.startsWith('sk_test_') && envTestPk?.startsWith('pk_test_')) {
+        await prisma.stripeKeySet.create({
+          data: {
+            mode: 'sandbox',
+            secretKey: envTestSk,
+            publishableKey: envTestPk,
+            webhookSecret: process.env.STRIPE_WEBHOOK_SECRET || null,
+            priceIds: JSON.stringify({
+              proMonthly: process.env.STRIPE_PRO_MONTHLY_PRICE_ID || '',
+              proYearly: process.env.STRIPE_PRO_YEARLY_PRICE_ID || '',
+              teamMonthly: process.env.STRIPE_TEAM_MONTHLY_PRICE_ID || '',
+              teamYearly: process.env.STRIPE_TEAM_YEARLY_PRICE_ID || '',
+              businessMonthly: process.env.STRIPE_BUSINESS_MONTHLY_PRICE_ID || '',
+              businessYearly: process.env.STRIPE_BUSINESS_YEARLY_PRICE_ID || '',
+            }),
+            isActive: true,
+          },
+        });
+      }
+
+      // Seed production key set from STRIPE_LIVE_SECRET_KEY (sk_live_...)
+      if (envLiveSk?.startsWith('sk_live_') && envLivePk?.startsWith('pk_live_')) {
+        await prisma.stripeKeySet.create({
+          data: {
+            mode: 'production',
+            secretKey: envLiveSk,
+            publishableKey: envLivePk,
+            webhookSecret: process.env.STRIPE_LIVE_WEBHOOK_SECRET || null,
+            priceIds: JSON.stringify({
+              proMonthly: process.env.STRIPE_LIVE_PRO_MONTHLY_PRICE_ID || '',
+              proYearly: process.env.STRIPE_LIVE_PRO_YEARLY_PRICE_ID || '',
+              teamMonthly: process.env.STRIPE_LIVE_TEAM_MONTHLY_PRICE_ID || '',
+              teamYearly: process.env.STRIPE_LIVE_TEAM_YEARLY_PRICE_ID || '',
+              businessMonthly: process.env.STRIPE_LIVE_BUSINESS_MONTHLY_PRICE_ID || '',
+              businessYearly: process.env.STRIPE_LIVE_BUSINESS_YEARLY_PRICE_ID || '',
+            }),
+            isActive: false,
+          },
+        });
+      }
+
+      // Reload after seeding
+      await loadActiveKeySet();
+    }
+
     const sandbox = isStripeSandbox();
     const secretKey = activeSecretKey();
     const pubKey = getPublishableKey();
