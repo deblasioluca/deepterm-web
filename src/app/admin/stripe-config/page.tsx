@@ -47,6 +47,7 @@ interface StripeConfig {
     name: string;
     price: number;
     monthlyPrice: number | null;
+    yearlyTotal: number | null;
   }>;
 }
 
@@ -517,7 +518,7 @@ export default function AdminStripeConfigPage() {
                       <span className="text-xs text-text-tertiary ml-2">({plan.key})</span>
                     </td>
                     <td className="py-3 px-4 text-text-primary">
-                      {plan.price === 0 ? 'Free' : `$${plan.price}/mo`}
+                      {plan.yearlyTotal ? `$${plan.yearlyTotal}/yr` : 'Free'}
                     </td>
                     <td className="py-3 px-4 text-text-primary">
                       {plan.monthlyPrice ? `$${plan.monthlyPrice}/mo` : '\u2014'}

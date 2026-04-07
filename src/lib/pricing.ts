@@ -27,23 +27,23 @@ export type PlanKey = 'starter' | 'pro' | 'team' | 'business';
 // ---------------------------------------------------------------------------
 
 export interface PlanPricing {
-  /** Annual price per seat/month (e.g. $5 = billed $60/year) */
-  yearlyPerMonth: number;
+  /** Total annual price (e.g. $49.99/year) — matches Apple App Store tier */
+  yearly: number;
   /** Monthly price per seat/month when paying month-to-month */
   monthly: number;
 }
 
 export const PRICING: Record<PlanKey, PlanPricing | null> = {
   starter: null, // Free
-  pro:      { yearlyPerMonth: 5,  monthly: 6.49  },
-  team:     { yearlyPerMonth: 10, monthly: 12.49 },
-  business: { yearlyPerMonth: 15, monthly: 19.99 },
+  pro:      { yearly: 49.99,  monthly: 4.99  },
+  team:     { yearly: 99.99,  monthly: 9.99  },
+  business: { yearly: 149.99, monthly: 14.99 },
 };
 
 /** Convert a plan's annual price to cents (total yearly amount, for Stripe / tiers fallback) */
 export function yearlyPriceCents(plan: PlanKey): number {
   const p = PRICING[plan];
-  return p ? Math.round(p.yearlyPerMonth * 12 * 100) : 0;
+  return p ? Math.round(p.yearly * 100) : 0;
 }
 
 /** Convert a plan's monthly price to cents */
@@ -121,7 +121,7 @@ export const PLANS: PlanMeta[] = [
       'Priority support',
     ],
     period: '/month',
-    billingNote: 'when paid annually',
+    billingNote: 'billed monthly or annually',
     cta: 'Try for Free',
     ctaVariant: 'primary',
     popular: true,
@@ -147,7 +147,7 @@ export const PLANS: PlanMeta[] = [
       'Audit logs',
     ],
     period: '/user/month',
-    billingNote: 'when paid annually',
+    billingNote: 'billed monthly or annually',
     cta: 'Try for Free',
     ctaVariant: 'primary',
     popular: false,
@@ -173,7 +173,7 @@ export const PLANS: PlanMeta[] = [
       'SLA guarantee',
     ],
     period: '/user/month',
-    billingNote: 'when paid annually',
+    billingNote: 'billed monthly or annually',
     cta: 'Try for Free',
     ctaVariant: 'primary',
     popular: false,
@@ -197,10 +197,16 @@ export function formatUsdFromCents(cents: number): string {
   return formatUsd(cents / 100);
 }
 
-/** Get the display price string for a plan (annual rate). Returns "Free" for starter. */
+/** Get the display price string for a plan (monthly rate). Returns "Free" for starter. */
 export function displayPrice(key: PlanKey): string {
   const p = PRICING[key];
-  return p ? formatUsd(p.yearlyPerMonth) : 'Free';
+  return p ? formatUsd(p.monthly) : 'Free';
+}
+
+/** Get the annual-per-month display price (yearly / 12). Used when showing "billed annually" equivalent. */
+export function displayAnnualPerMonth(key: PlanKey): string {
+  const p = PRICING[key];
+  return p ? formatUsd(Math.round(p.yearly / 12 * 100) / 100) : 'Free';
 }
 
 // ---------------------------------------------------------------------------
@@ -286,7 +292,7 @@ export const PRICING_FAQS = [
   },
   {
     q: 'Is there a discount for annual billing?',
-    a: 'Yes, all listed prices reflect annual billing. Monthly billing is available at a higher rate.',
+    a: 'Yes! Annual billing saves you about 17% compared to month-to-month. Listed prices show the monthly rate — choose annual at checkout to save.',
   },
   {
     q: 'Do you offer academic/student pricing?',
@@ -334,7 +340,7 @@ export function pricingDocsHtml(): string {
   const lines = paid.map((p) => {
     const pr = PRICING[p.key]!;
     const perUser = p.key === 'team' || p.key === 'business' ? '/user' : '';
-    return `<li><strong>${p.name} (${formatUsd(pr.yearlyPerMonth)}${perUser}/mo)</strong> \u2014 ${p.features.join(', ').toLowerCase()}.</li>`;
+    return `<li><strong>${p.name} (${formatUsd(pr.monthly)}${perUser}/mo)</strong> \u2014 ${p.features.join(', ').toLowerCase()}.</li>`;
   });
   return `<ul>\n  ${lines.join('\n  ')}\n</ul>`;
 }

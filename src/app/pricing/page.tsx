@@ -52,12 +52,14 @@ export default function PricingPage() {
 
   const displayPlans = useMemo(() => {
     return PLANS.map((plan) => {
-      // Try to overlay live DB price; fall back to pricing.ts constant
-      const yearlyOffering = offerings.find(
-        (o) => o.key === plan.key && o.interval === 'yearly',
+      // Try to overlay live DB price; fall back to pricing.ts constant.
+      // Use the monthly offering so the displayed price matches the monthly
+      // rate ($4.99) — consistent with the displayPrice() fallback.
+      const monthlyOffering = offerings.find(
+        (o) => o.key === plan.key && o.interval === 'monthly',
       );
-      const price = yearlyOffering
-        ? formatUsdFromCents(yearlyOffering.priceCents)
+      const price = monthlyOffering
+        ? formatUsdFromCents(monthlyOffering.priceCents)
         : displayPrice(plan.key);
 
       return {
@@ -110,7 +112,7 @@ export default function PricingPage() {
                   transition={{ duration: 0.5, delay: index * 0.1 }}
                 >
                   <Card
-                    className={`h-full relative flex flex-col ${
+                    className={`h-full relative flex flex-col overflow-visible ${
                       plan.popular ? 'border-accent-primary' : ''
                     }`}
                   >
