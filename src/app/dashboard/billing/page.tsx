@@ -712,7 +712,7 @@ export default function BillingPage() {
         <div className="mb-4">
           <div className="flex bg-background-tertiary rounded-lg p-1">
             <button className={`flex-1 py-2 px-4 rounded-md text-sm font-medium transition-colors ${billingPeriod === 'monthly' ? 'bg-accent-primary text-white' : 'text-text-secondary hover:text-text-primary'}`} onClick={() => setBillingPeriod('monthly')}>Monthly</button>
-            <button className={`flex-1 py-2 px-4 rounded-md text-sm font-medium transition-colors ${billingPeriod === 'yearly' ? 'bg-accent-primary text-white' : 'text-text-secondary hover:text-text-primary'}`} onClick={() => setBillingPeriod('yearly')}>Yearly <span className="text-accent-secondary ml-1">Save 20%</span></button>
+            <button className={`flex-1 py-2 px-4 rounded-md text-sm font-medium transition-colors ${billingPeriod === 'yearly' ? 'bg-accent-primary text-white' : 'text-text-secondary hover:text-text-primary'}`} onClick={() => setBillingPeriod('yearly')}>Yearly <span className="text-accent-secondary ml-1">Save ~17%</span></button>
           </div>
         </div>
 
