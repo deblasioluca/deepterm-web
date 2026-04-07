@@ -76,6 +76,7 @@ interface BillingPlan {
   price: number | null;
   monthlyPrice?: number;
   yearlyPrice?: number;
+  yearlyTotal?: number;
   features: string[];
 }
 
@@ -88,6 +89,7 @@ const plans: BillingPlan[] = [
       price: pr ? pr.monthly : 0,
       monthlyPrice: pr?.monthly,
       yearlyPrice: pr ? Math.round(pr.yearly / 12 * 100) / 100 : undefined,
+      yearlyTotal: pr?.yearly,
       features: p.highlights.slice(0, 4),
     };
   }),
@@ -98,6 +100,7 @@ const plans: BillingPlan[] = [
     price: PRICING.business?.monthly ?? 14.99,
     monthlyPrice: PRICING.business?.monthly,
     yearlyPrice: PRICING.business ? Math.round(PRICING.business.yearly / 12 * 100) / 100 : undefined,
+    yearlyTotal: PRICING.business?.yearly,
     features: PLANS.find((p) => p.key === 'business')!.highlights.slice(0, 4),
   },
 ];
@@ -506,9 +509,9 @@ export default function BillingPage() {
                   {currentPlan === 'starter' ? 'Free forever' : (
                     billingPeriod === 'yearly' ? (
                       <>
-                        ${(currentPlanDetails as any).yearlyPrice}/user/month • <span className="text-accent-primary font-medium">${(currentPlanDetails as any).yearlyPrice * 12}/year</span>
+                        ${(currentPlanDetails as any).yearlyPrice}/user/month • <span className="text-accent-primary font-medium">${(currentPlanDetails as any).yearlyTotal}/year</span>
                         <span className="text-green-400 ml-2">
-                          (Save ${(((currentPlanDetails as any).monthlyPrice - (currentPlanDetails as any).yearlyPrice) * 12).toFixed(0)}/year)
+                          (Save ${(((currentPlanDetails as any).monthlyPrice * 12) - ((currentPlanDetails as any).yearlyTotal || 0)).toFixed(0)}/year)
                         </span>
                       </>
                     ) : (
@@ -553,7 +556,7 @@ export default function BillingPage() {
               {data?.subscription && !data.subscription.cancelAtPeriodEnd && (
                 <p className="text-sm text-text-secondary mt-1">
                   Est. charge: ${billingPeriod === 'yearly' 
-                    ? ((currentPlanDetails as any).yearlyPrice * 12 * (data?.seats || 1)).toFixed(2)
+                    ? (((currentPlanDetails as any).yearlyTotal || 0) * (data?.seats || 1)).toFixed(2)
                     : ((currentPlanDetails as any).monthlyPrice * (data?.seats || 1)).toFixed(2)
                   }
                   {billingPeriod === 'yearly' && <span className="text-text-tertiary"> (billed annually)</span>}
@@ -730,13 +733,13 @@ export default function BillingPage() {
                     {plan.price === null ? 'Custom' : plan.price === 0 ? 'Free' : billingPeriod === 'yearly' ? `$${(plan as any).yearlyPrice}/mo` : `$${(plan as any).monthlyPrice}/mo`}
                   </span>
                   {plan.price !== null && plan.price !== 0 && billingPeriod === 'yearly' && (
-                    <p className="text-xs text-text-tertiary">${(plan as any).yearlyPrice * 12}/year</p>
+                    <p className="text-xs text-text-tertiary">${(plan as any).yearlyTotal}/year</p>
                   )}
                 </div>
               </div>
               {plan.price !== null && plan.price !== 0 && billingPeriod === 'yearly' && (
                 <p className="text-xs text-green-400 mb-2">
-                  Save ${(((plan as any).monthlyPrice - (plan as any).yearlyPrice) * 12).toFixed(0)}/year vs monthly
+                  Save ${(((plan as any).monthlyPrice * 12) - ((plan as any).yearlyTotal || 0)).toFixed(0)}/year vs monthly
                 </p>
               )}
               <ul className="space-y-1">

@@ -57,7 +57,7 @@ export default function PricingPage() {
         (o) => o.key === plan.key && o.interval === 'yearly',
       );
       const price = yearlyOffering
-        ? formatUsdFromCents(yearlyOffering.priceCents)
+        ? formatUsdFromCents(Math.round(yearlyOffering.priceCents / 12))
         : displayPrice(plan.key);
 
       return {
