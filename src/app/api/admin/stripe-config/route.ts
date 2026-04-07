@@ -156,6 +156,7 @@ export async function GET() {
           name: detail.name,
           price: detail.price,
           monthlyPrice: 'monthlyPrice' in detail ? detail.monthlyPrice : null,
+          yearlyTotal: 'yearlyTotal' in detail ? detail.yearlyTotal : null,
         })),
     });
   } catch (error) {

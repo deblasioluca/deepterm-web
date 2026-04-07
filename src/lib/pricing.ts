@@ -121,7 +121,7 @@ export const PLANS: PlanMeta[] = [
       'Priority support',
     ],
     period: '/month',
-    billingNote: 'when paid annually',
+    billingNote: 'billed monthly or annually',
     cta: 'Try for Free',
     ctaVariant: 'primary',
     popular: true,
@@ -147,7 +147,7 @@ export const PLANS: PlanMeta[] = [
       'Audit logs',
     ],
     period: '/user/month',
-    billingNote: 'when paid annually',
+    billingNote: 'billed monthly or annually',
     cta: 'Try for Free',
     ctaVariant: 'primary',
     popular: false,
@@ -173,7 +173,7 @@ export const PLANS: PlanMeta[] = [
       'SLA guarantee',
     ],
     period: '/user/month',
-    billingNote: 'when paid annually',
+    billingNote: 'billed monthly or annually',
     cta: 'Try for Free',
     ctaVariant: 'primary',
     popular: false,
@@ -201,6 +201,12 @@ export function formatUsdFromCents(cents: number): string {
 export function displayPrice(key: PlanKey): string {
   const p = PRICING[key];
   return p ? formatUsd(p.monthly) : 'Free';
+}
+
+/** Get the annual-per-month display price (yearly / 12). Used when showing "billed annually" equivalent. */
+export function displayAnnualPerMonth(key: PlanKey): string {
+  const p = PRICING[key];
+  return p ? formatUsd(Math.round(p.yearly / 12 * 100) / 100) : 'Free';
 }
 
 // ---------------------------------------------------------------------------
@@ -286,7 +292,7 @@ export const PRICING_FAQS = [
   },
   {
     q: 'Is there a discount for annual billing?',
-    a: 'Yes, all listed prices reflect annual billing. Monthly billing is available at a higher rate.',
+    a: 'Yes! Annual billing saves you about 17% compared to month-to-month. Listed prices show the monthly rate — choose annual at checkout to save.',
   },
   {
     q: 'Do you offer academic/student pricing?',
