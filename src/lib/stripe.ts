@@ -215,7 +215,7 @@ function buildPlanDetails() {
     const pr = PRICING[plan.key];
     details[plan.key] = {
       name: plan.name,
-      price: pr?.yearlyPerMonth ?? 0,
+      price: pr?.monthly ?? 0,
       ...(pr ? { monthlyPrice: pr.monthly } : {}),
       features: plan.features,
     };

@@ -85,9 +85,9 @@ const plans: BillingPlan[] = [
     return {
       id: p.key,
       name: p.name,
-      price: pr ? pr.yearlyPerMonth : 0,
+      price: pr ? pr.monthly : 0,
       monthlyPrice: pr?.monthly,
-      yearlyPrice: pr?.yearlyPerMonth,
+      yearlyPrice: pr ? pr.yearly / 12 : undefined,
       features: p.highlights.slice(0, 4),
     };
   }),
@@ -95,9 +95,9 @@ const plans: BillingPlan[] = [
   {
     id: 'enterprise',
     name: 'Business',
-    price: PRICING.business?.yearlyPerMonth ?? 15,
+    price: PRICING.business?.monthly ?? 14.99,
     monthlyPrice: PRICING.business?.monthly,
-    yearlyPrice: PRICING.business?.yearlyPerMonth,
+    yearlyPrice: PRICING.business ? PRICING.business.yearly / 12 : undefined,
     features: PLANS.find((p) => p.key === 'business')!.highlights.slice(0, 4),
   },
 ];

@@ -110,7 +110,7 @@ export default function PricingPage() {
                   transition={{ duration: 0.5, delay: index * 0.1 }}
                 >
                   <Card
-                    className={`h-full relative flex flex-col ${
+                    className={`h-full relative flex flex-col overflow-visible ${
                       plan.popular ? 'border-accent-primary' : ''
                     }`}
                   >
